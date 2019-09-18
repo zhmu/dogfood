@@ -4,6 +4,9 @@
 
 namespace amd64
 {
+    inline constexpr unsigned int PageSize = 4096;
+    inline constexpr uint64_t KernelBase = 0xffffffff80000000;
+
     enum class Selector {
         KernelCode = 0x08,
         KernelData = 0x10,

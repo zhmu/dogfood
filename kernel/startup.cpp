@@ -2,6 +2,7 @@
 #include "lib.h"
 #include "multiboot.h"
 #include "amd64.h"
+#include "vm.h"
 
 amd64::TSS kernel_tss;
 
@@ -31,8 +32,28 @@ extern "C" void exception17();
 extern "C" void exception18();
 extern "C" void exception19();
 
+extern "C" void* __entry;
+extern "C" void* __end;
+
+int foo()
+{
+    volatile int x = 3;
+    return x++;
+}
+
+void memset(void* p, int c, uint64_t n)
+{
+    for (auto ptr = static_cast<char*>(p); n != 0; --n, ++ptr)
+        *ptr = c;
+}
+
 namespace
 {
+    inline constexpr uint64_t Page_P = (1 << 0);
+    inline constexpr uint64_t Page_RW = (1 << 1); // 1 = r/w, 0 = r/0
+    inline constexpr uint64_t Page_US = (1 << 2); // 1 = u/s, 0 = s
+    inline constexpr uint64_t Page_G = (1 << 8);
+
     void SetupDescriptors()
     {
         using namespace amd64;
@@ -110,6 +131,119 @@ namespace
         __asm __volatile("lidt (%%rax)" : : "a"(&idtr));
     }
 
+    uint64_t* GetNextPage(uint64_t& next_page)
+    {
+        auto ptr = reinterpret_cast<uint64_t*>(next_page);
+        memset(ptr, 0, sizeof(amd64::PageSize));
+        next_page += amd64::PageSize;
+        return ptr;
+    }
+
+    uint64_t* CreateOrGetPage(uint64_t& entry, uint64_t& next_page)
+    {
+        if ((entry & Page_P) == 0) {
+            entry = reinterpret_cast<uint64_t>(GetNextPage(next_page)) | Page_P | Page_RW;
+        }
+        return reinterpret_cast<uint64_t*>(entry & 0xffffffffff000);
+    };
+
+
+    void MapMemoryArea(uint64_t* pml4, uint64_t& next_page, uint64_t start, uint64_t end, uint64_t base)
+    {
+        printf("MapMemoryArea: start %lx end %lx base %lx\n", start, end, base);
+        for(uint64_t addr = start; addr < end;  addr += amd64::PageSize) {
+            const auto pml4Offset = (addr >> 39) & 0x1ff;
+            const auto pdpeOffset = (addr >> 30) & 0x1ff;
+            const auto pdpOffset = (addr >> 21) & 0x1ff;
+            const auto pteOffset = (addr >> 12) & 0x1ff;
+
+            auto pdpe = CreateOrGetPage(pml4[pml4Offset], next_page);
+            auto pdp = CreateOrGetPage(pdpe[pdpeOffset], next_page);
+            auto pte = CreateOrGetPage(pdp[pdpOffset], next_page);
+            pte[pteOffset] = (addr - start + base) | Page_G | Page_RW | Page_P;
+        }
+    }
+
+    void InitializeMemory(const MULTIBOOT& mb)
+    {
+        // Determine where the kernel resides in memory - we need to
+        // exclude this range from our memory map
+        const uint64_t kernel_phys_start = []() {
+            auto addr = reinterpret_cast<uint64_t>(&__entry) - amd64::KernelBase;
+            addr &= ~(amd64::PageSize - 1); // round down
+            return addr;
+        }();
+        const uint64_t kernel_phys_end = []() {
+            auto addr = reinterpret_cast<uint64_t>(&__end) - amd64::KernelBase;
+            addr = (addr | (amd64::PageSize - 1)) + 1; // round up
+            return addr;
+        }();
+        printf("kernel physical memory: %lx .. %lx\n", kernel_phys_start, kernel_phys_end);
+
+        // Convert the memory into regions
+        struct Region {
+            uint64_t base{};
+            uint64_t length{};
+        };
+
+        constexpr int maxRegions = 16;
+        int currentRegion = 0;
+        Region regions[maxRegions];
+        auto addRegion = [&](const auto& region) {
+            if (currentRegion == maxRegions) return;
+            regions[currentRegion] = region;
+            ++currentRegion;
+        };
+
+        {
+            const auto mm_end = reinterpret_cast<const char*>(mb.mb_mmap_addr + mb.mb_mmap_length);
+            for (auto mm_ptr = reinterpret_cast<const char*>(mb.mb_mmap_addr); mm_ptr < mm_end;
+                 /* nothing */) {
+                const auto mm = reinterpret_cast<const MULTIBOOT_MMAP*>(mm_ptr);
+                const auto entry_len = mm->mm_entry_len + sizeof(uint32_t);
+                mm_ptr += entry_len;
+                if (mm->mm_type != MULTIBOOT_MMAP_AVAIL) continue;
+
+                // Combine the multiboot mmap to a base/length pair
+                const auto base = static_cast<uint64_t>(mm->mm_base_hi) << 32 | mm->mm_base_lo;
+                const auto length = (static_cast<uint64_t>(mm->mm_len_hi) << 32 | mm->mm_len_lo);
+
+                if (base >= kernel_phys_start && kernel_phys_end <= base + length) {
+                    // Range overlaps with the kernel - split it
+                    const Region region1{ base, kernel_phys_start - base };
+                    const Region region2{ kernel_phys_end, (base + length) - kernel_phys_end };
+                    if (region1.length > 0) addRegion(region1);
+                    if (region2.length > 0) addRegion(region2);
+                } else {
+                    // No overlap; add as-is
+                    addRegion(Region{ base, length });
+                }
+            }
+        }
+
+        printf("physical memory regions:\n");
+        for(unsigned int n = 0; n < currentRegion; ++n) {
+            const auto& region = regions[n];
+            printf("  base %lx, %ld KB\n", region.base, region.length / 1024);
+        }
+
+        // Create mappings so that we can identity map all physical memory
+        auto next_page = kernel_phys_end;
+        uint64_t* pml4 = GetNextPage(next_page);
+
+        // Map all regions
+        for(unsigned int n = 0; n < currentRegion; ++n) {
+            const auto& region = regions[n];
+            MapMemoryArea(pml4, next_page, vm::PhysicalToVirtual(region.base), vm::PhysicalToVirtual(region.base) + region.length, region.base);
+        }
+
+        // Map the kernel itself
+        MapMemoryArea(pml4, next_page, kernel_phys_start | amd64::KernelBase, kernel_phys_end | amd64::KernelBase, kernel_phys_start);
+
+        foo();
+        __asm __volatile("movq %0, %%cr3\n" : : "r" (pml4));
+    }
+
 } // namespace
 
 extern "C" void exception(const struct amd64::TrapFrame* tf)
@@ -126,7 +260,7 @@ extern "C" void exception(const struct amd64::TrapFrame* tf)
         ;
 }
 
-extern "C" void startup(const struct MULTIBOOT* mb)
+extern "C" void startup(const MULTIBOOT* mb)
 {
     SetupDescriptors();
     console::initialize();
@@ -134,20 +268,8 @@ extern "C" void startup(const struct MULTIBOOT* mb)
     printf("hello world!\n");
     printf("mb flags %x\n", mb->mb_flags);
 
-    // Walk through the loader-provided memory map
-    {
-        const auto mm_end = reinterpret_cast<const char*>(mb->mb_mmap_addr + mb->mb_mmap_length);
-        for (auto mm_ptr = reinterpret_cast<const char*>(mb->mb_mmap_addr); mm_ptr < mm_end;
-             /* nothing */) {
-            const auto mm = reinterpret_cast<const MULTIBOOT_MMAP*>(mm_ptr);
-            const auto entry_len = mm->mm_entry_len + sizeof(uint32_t);
-            mm_ptr += entry_len;
-
-            printf(
-                "entry base %x:%x len %x:%x type %d\n", (int)mm->mm_base_hi, (int)mm->mm_base_lo,
-                (int)mm->mm_len_hi, (int)mm->mm_len_lo, (int)mm->mm_type);
-        }
-    }
+    // Process the loader-provided memory map
+    InitializeMemory(*mb);
 
     __asm __volatile("movq $0x12, %rax\n"
                      "movq $0x34, %rbx\n"
