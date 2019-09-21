@@ -14,8 +14,16 @@ namespace vm
      */
 
     /* Convert a physical to a kernel virtual address */
-    constexpr uint64_t PhysicalToVirtual(uint64_t addr) { return addr | 0xffff880000000000; }
+    template<typename Address>
+    constexpr uint64_t PhysicalToVirtual(Address addr)
+    {
+        return reinterpret_cast<uint64_t>(addr) | 0xffff880000000000;
+    }
 
-    constexpr uint64_t VirtualToPhysical(uint64_t addr) { return addr & ~0xffff880000000000; }
+    template<typename Address>
+    constexpr uint64_t VirtualToPhysical(Address addr)
+    {
+        return reinterpret_cast<uint64_t>(addr) & ~0xffff880000000000;
+    }
 
 } // namespace vm

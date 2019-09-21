@@ -3,8 +3,9 @@
 .globl exception6, exception7, exception8, exception9, exception10, exception11
 .globl exception12, exception13, exception14, exception16, exception17
 .globl exception18, exception19
-.global irq0, irq1, irq2, irq3, irq4, irq5, irq6, irq7
-.global irq8, irq9, irq10, irq11, irq12, irq13, irq14, irq15
+.globl irq0, irq1, irq2, irq3, irq4, irq5, irq6, irq7
+.globl irq8, irq9, irq10, irq11, irq12, irq13, irq14, irq15
+.globl switch_to, trap_return
 
 #define SAVE_REGISTERS \
     movq    %rax, 0x08(%rsp); \
@@ -60,6 +61,7 @@ do_exception:
     movq    %rsp, %rdi
     call    exception
 
+trap_return:
     RESTORE_REGISTERS
     addq    $0x88, %rsp
     iretq
@@ -78,10 +80,7 @@ do_irq:
 
     movq    %rsp, %rdi
     call    irq_handler
-
-    RESTORE_REGISTERS
-    addq    $0x88, %rsp
-    iretq
+    jmp     trap_return
 
 /* Now we just need to list the exception handlers */
 EXCEPTION_WITHOUT_ERRCODE(0)
@@ -121,3 +120,28 @@ IRQ_HANDLER(12)
 IRQ_HANDLER(13)
 IRQ_HANDLER(14)
 IRQ_HANDLER(15)
+
+switch_to:
+    pushq   %r15
+    pushq   %r14
+    pushq   %r13
+    pushq   %r12
+    pushq   %r11
+    pushq   %r10
+    pushq   %r9
+    pushq   %r8
+    pushq   %rdx
+
+    movq    %rsp, (%rdi)
+    movq    %rsi, %rsp
+
+    popq    %rdx
+    popq    %r8
+    popq    %r9
+    popq    %r10
+    popq    %r11
+    popq    %r12
+    popq    %r13
+    popq    %r14
+    popq    %r15
+    ret

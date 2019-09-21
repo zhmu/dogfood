@@ -3,12 +3,14 @@
 #include "multiboot.h"
 #include "page_allocator.h"
 #include "amd64.h"
+#include "process.h"
 #include "pic.h"
 #include "vm.h"
 
 using namespace amd64;
 
 TSS kernel_tss;
+uint64_t* kernel_pagedir = nullptr;
 
 inline constexpr int gdtSize = static_cast<int>(Selector::Task) + 16;
 uint8_t gdt[gdtSize];
@@ -292,7 +294,7 @@ namespace
 
         // Create mappings so that we can identity map all physical memory
         auto next_page = kernel_phys_end;
-        uint64_t* pml4 = GetNextPage(next_page);
+        auto pml4 = GetNextPage(next_page);
 
         // Map all memory regions; this is read/write
         for (unsigned int n = 0; n < currentRegion; ++n) {
@@ -318,6 +320,8 @@ namespace
         wrmsr(msr::EFER, rdmsr(msr::EFER) | msr::EFER_NXE); // No-Execute pages
         write_cr4(read_cr4() | cr4::PGE);                   // Global pages
         write_cr3(reinterpret_cast<uint64_t>(pml4));
+        kernel_pagedir =
+            reinterpret_cast<uint64_t*>(vm::PhysicalToVirtual(reinterpret_cast<uint64_t>(pml4)));
 
         // Register all available regions with our memory allocation now that
         // they are properly mapped.  Note that next_page is the kernel end +
@@ -362,34 +366,13 @@ extern "C" void startup(const MULTIBOOT* mb)
     SetupDescriptors();
     console::initialize();
     pic::Initialize();
-
-    printf("hello world!\n");
-
-    // Process the loader-provided memory map
     InitializeMemory(*mb);
+
     printf(
-        "%ld MB memory available\n",
+        "Dogfood/amd64 - %ld MB memory available\n",
         (page_allocator::GetNumberOfAvailablePages() * (PageSize / 1024UL)) / 1024UL);
 
-    __asm __volatile("sti");
+    process::Initialize();
     pic::Enable(pic::irq::Timer);
-
-    __asm __volatile("movq $0x12, %rax\n"
-                     "movq $0x34, %rbx\n"
-                     "movq $0x56, %rcx\n"
-                     "movq $0x78, %rdx\n"
-                     "movq $0x123, %rbp\n"
-                     "movq $0x234, %rsi\n"
-                     "movq $0x345, %rdi\n"
-                     "movq $0x800, %r8\n"
-                     "movq $0x900, %r9\n"
-                     "movq $0x1000, %r10\n"
-                     "movq $0x1100, %r11\n"
-                     "movq $0x1200, %r12\n"
-                     "movq $0x1300, %r13\n"
-                     "movq $0x1400, %r14\n"
-                     "movq $0x1500, %r15\n"
-                     "ud2\n");
-    for (;;)
-        ;
+    process::Scheduler();
 }

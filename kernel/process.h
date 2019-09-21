@@ -1,0 +1,30 @@
+#pragma once
+
+#include "types.h"
+
+namespace amd64
+{
+    struct Context;
+    struct TrapFrame;
+}
+
+namespace process
+{
+    enum class State { Unused, Construct, Runnable, Running, Zombie };
+
+    struct Process {
+        State state = State::Unused;
+        int pid = -1;
+        Process* parent = nullptr;
+        //
+        uint64_t pageDirectory = 0; // physical address
+        // Points to the *start* of the kernel stack
+        void* kernelStack = nullptr;
+        struct amd64::TrapFrame* trapFrame = nullptr;
+        struct amd64::Context* context = nullptr;
+    };
+
+    void Initialize();
+    void Scheduler();
+
+} // namespace process
