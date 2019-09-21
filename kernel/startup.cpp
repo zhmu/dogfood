@@ -4,13 +4,15 @@
 #include "amd64.h"
 #include "vm.h"
 
-amd64::TSS kernel_tss;
+using namespace amd64;
+
+TSS kernel_tss;
 
 inline constexpr int gdtSize = (4 * 8) + 16;
 uint8_t gdt[gdtSize];
 
 inline constexpr int numberOfIDTEntries = 256;
-amd64::IDTEntry idt[numberOfIDTEntries];
+IDTEntry idt[numberOfIDTEntries];
 
 extern "C" void exception0();
 extern "C" void exception1();
@@ -33,13 +35,12 @@ extern "C" void exception18();
 extern "C" void exception19();
 
 extern "C" void* __entry;
+extern "C" void* __rodata_end;
+extern "C" void* __rwdata_begin;
+extern "C" void* __rwdata_end;
+extern "C" void* __bss_begin;
+extern "C" void* __bss_end;
 extern "C" void* __end;
-
-int foo()
-{
-    volatile int x = 3;
-    return x++;
-}
 
 void memset(void* p, int c, uint64_t n)
 {
@@ -49,10 +50,11 @@ void memset(void* p, int c, uint64_t n)
 
 namespace
 {
-    inline constexpr uint64_t Page_P = (1 << 0);
-    inline constexpr uint64_t Page_RW = (1 << 1); // 1 = r/w, 0 = r/0
-    inline constexpr uint64_t Page_US = (1 << 2); // 1 = u/s, 0 = s
-    inline constexpr uint64_t Page_G = (1 << 8);
+    inline constexpr uint64_t Page_P = (1UL << 0);
+    inline constexpr uint64_t Page_RW = (1UL << 1); // 1 = r/w, 0 = r/0
+    inline constexpr uint64_t Page_US = (1UL << 2); // 1 = u/s, 0 = s
+    inline constexpr uint64_t Page_G = (1UL << 8);
+    inline constexpr uint64_t Page_NX = (1UL << 63);
 
     void SetupDescriptors()
     {
@@ -134,8 +136,8 @@ namespace
     uint64_t* GetNextPage(uint64_t& next_page)
     {
         auto ptr = reinterpret_cast<uint64_t*>(next_page);
-        memset(ptr, 0, sizeof(amd64::PageSize));
-        next_page += amd64::PageSize;
+        memset(ptr, 0, sizeof(PageSize));
+        next_page += PageSize;
         return ptr;
     }
 
@@ -147,11 +149,11 @@ namespace
         return reinterpret_cast<uint64_t*>(entry & 0xffffffffff000);
     };
 
-
-    void MapMemoryArea(uint64_t* pml4, uint64_t& next_page, uint64_t start, uint64_t end, uint64_t base)
+    void MapMemoryArea(
+        uint64_t* pml4, uint64_t& next_page, uint64_t phys_base, uint64_t va_start, uint64_t va_end,
+        uint64_t pteFlags)
     {
-        printf("MapMemoryArea: start %lx end %lx base %lx\n", start, end, base);
-        for(uint64_t addr = start; addr < end;  addr += amd64::PageSize) {
+        for (uint64_t addr = va_start; addr < va_end; addr += PageSize) {
             const auto pml4Offset = (addr >> 39) & 0x1ff;
             const auto pdpeOffset = (addr >> 30) & 0x1ff;
             const auto pdpOffset = (addr >> 21) & 0x1ff;
@@ -160,24 +162,32 @@ namespace
             auto pdpe = CreateOrGetPage(pml4[pml4Offset], next_page);
             auto pdp = CreateOrGetPage(pdpe[pdpeOffset], next_page);
             auto pte = CreateOrGetPage(pdp[pdpOffset], next_page);
-            pte[pteOffset] = (addr - start + base) | Page_G | Page_RW | Page_P;
+            pte[pteOffset] = (addr - va_start + phys_base) | pteFlags;
         }
+    }
+
+    template<typename T>
+    uint64_t RoundDownToPage(T v)
+    {
+        auto addr = reinterpret_cast<uint64_t>(v);
+        addr &= ~(static_cast<uint64_t>(PageSize) - 1);
+        return addr;
+    }
+
+    template<typename T>
+    uint64_t RoundUpToPage(T v)
+    {
+        auto addr = reinterpret_cast<uint64_t>(v);
+        addr = (addr | (PageSize - 1)) + 1;
+        return addr;
     }
 
     void InitializeMemory(const MULTIBOOT& mb)
     {
         // Determine where the kernel resides in memory - we need to
         // exclude this range from our memory map
-        const uint64_t kernel_phys_start = []() {
-            auto addr = reinterpret_cast<uint64_t>(&__entry) - amd64::KernelBase;
-            addr &= ~(amd64::PageSize - 1); // round down
-            return addr;
-        }();
-        const uint64_t kernel_phys_end = []() {
-            auto addr = reinterpret_cast<uint64_t>(&__end) - amd64::KernelBase;
-            addr = (addr | (amd64::PageSize - 1)) + 1; // round up
-            return addr;
-        }();
+        const uint64_t kernel_phys_start = RoundDownToPage(&__entry) - KernelBase;
+        const uint64_t kernel_phys_end = RoundUpToPage(&__end) - KernelBase;
         printf("kernel physical memory: %lx .. %lx\n", kernel_phys_start, kernel_phys_end);
 
         // Convert the memory into regions
@@ -190,7 +200,8 @@ namespace
         int currentRegion = 0;
         Region regions[maxRegions];
         auto addRegion = [&](const auto& region) {
-            if (currentRegion == maxRegions) return;
+            if (currentRegion == maxRegions)
+                return;
             regions[currentRegion] = region;
             ++currentRegion;
         };
@@ -202,7 +213,8 @@ namespace
                 const auto mm = reinterpret_cast<const MULTIBOOT_MMAP*>(mm_ptr);
                 const auto entry_len = mm->mm_entry_len + sizeof(uint32_t);
                 mm_ptr += entry_len;
-                if (mm->mm_type != MULTIBOOT_MMAP_AVAIL) continue;
+                if (mm->mm_type != MULTIBOOT_MMAP_AVAIL)
+                    continue;
 
                 // Combine the multiboot mmap to a base/length pair
                 const auto base = static_cast<uint64_t>(mm->mm_base_hi) << 32 | mm->mm_base_lo;
@@ -210,19 +222,21 @@ namespace
 
                 if (base >= kernel_phys_start && kernel_phys_end <= base + length) {
                     // Range overlaps with the kernel - split it
-                    const Region region1{ base, kernel_phys_start - base };
-                    const Region region2{ kernel_phys_end, (base + length) - kernel_phys_end };
-                    if (region1.length > 0) addRegion(region1);
-                    if (region2.length > 0) addRegion(region2);
+                    const Region region1{base, kernel_phys_start - base};
+                    const Region region2{kernel_phys_end, (base + length) - kernel_phys_end};
+                    if (region1.length > 0)
+                        addRegion(region1);
+                    if (region2.length > 0)
+                        addRegion(region2);
                 } else {
                     // No overlap; add as-is
-                    addRegion(Region{ base, length });
+                    addRegion(Region{base, length});
                 }
             }
         }
 
         printf("physical memory regions:\n");
-        for(unsigned int n = 0; n < currentRegion; ++n) {
+        for (unsigned int n = 0; n < currentRegion; ++n) {
             const auto& region = regions[n];
             printf("  base %lx, %ld KB\n", region.base, region.length / 1024);
         }
@@ -231,22 +245,35 @@ namespace
         auto next_page = kernel_phys_end;
         uint64_t* pml4 = GetNextPage(next_page);
 
-        // Map all regions
-        for(unsigned int n = 0; n < currentRegion; ++n) {
+        // Map all memory regions; this is read/write
+        for (unsigned int n = 0; n < currentRegion; ++n) {
             const auto& region = regions[n];
-            MapMemoryArea(pml4, next_page, vm::PhysicalToVirtual(region.base), vm::PhysicalToVirtual(region.base) + region.length, region.base);
+            MapMemoryArea(
+                pml4, next_page, region.base, vm::PhysicalToVirtual(region.base),
+                vm::PhysicalToVirtual(region.base) + region.length,
+                Page_NX | Page_G | Page_RW | Page_P);
         }
 
-        // Map the kernel itself
-        MapMemoryArea(pml4, next_page, kernel_phys_start | amd64::KernelBase, kernel_phys_end | amd64::KernelBase, kernel_phys_start);
+        // Map the kernel itself - we do this per section to honor read/only content
+        auto mapKernel = [&](void* from, void* to, uint64_t pteFlags) {
+            const auto start = reinterpret_cast<uint64_t>(from);
+            const auto end = reinterpret_cast<uint64_t>(to);
+            MapMemoryArea(
+                pml4, next_page, start - KernelBase, start, end, Page_G | Page_P | pteFlags);
+        };
+        mapKernel(&__entry, &__rodata_end, 0);                        // code + rodata
+        mapKernel(&__rwdata_begin, &__rwdata_end, Page_NX | Page_RW); // data
+        mapKernel(&__bss_begin, &__bss_end, Page_NX | Page_RW);       // bss
 
-        foo();
-        __asm __volatile("movq %0, %%cr3\n" : : "r" (pml4));
+        // Enable necessary features and use our new page tables
+        wrmsr(msr::EFER, rdmsr(msr::EFER) | msr::EFER_NXE); // No-Execute pages
+        write_cr4(read_cr4() | cr4::PGE);                   // Global pages
+        write_cr3(reinterpret_cast<uint64_t>(pml4));
     }
 
 } // namespace
 
-extern "C" void exception(const struct amd64::TrapFrame* tf)
+extern "C" void exception(const struct TrapFrame* tf)
 {
     printf("exception #%d @ cs:rip = %lx:%lx\n", tf->trapno, tf->cs, tf->rip);
     printf("rax %lx rbx %lx rcx %lx rdx %lx\n", tf->rax, tf->rbx, tf->rcx, tf->rdx);
@@ -262,6 +289,7 @@ extern "C" void exception(const struct amd64::TrapFrame* tf)
 
 extern "C" void startup(const MULTIBOOT* mb)
 {
+    memset(&__bss_begin, 0, (&__bss_end - &__bss_begin));
     SetupDescriptors();
     console::initialize();
 

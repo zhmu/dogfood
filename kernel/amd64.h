@@ -7,6 +7,19 @@ namespace amd64
     inline constexpr unsigned int PageSize = 4096;
     inline constexpr uint64_t KernelBase = 0xffffffff80000000;
 
+    namespace msr
+    {
+        inline constexpr uint64_t EFER = 0xc0000080;
+        inline constexpr uint64_t EFER_NXE = (1UL << 11); // No-Execute enable
+    }                                                     // namespace msr
+    namespace cr4
+    {
+        inline constexpr uint64_t PGE = (1UL << 7);         // Page-Global enable
+        inline constexpr uint64_t OSXMMEXCPT = (1UL << 10); // OS Unmasked Exception support
+        inline constexpr uint64_t OSFXSR = (1UL << 9);      // OS FXSAVE/FXRSTOR support
+
+    } // namespace cr4
+
     enum class Selector {
         KernelCode = 0x08,
         KernelData = 0x10,
@@ -163,4 +176,26 @@ namespace amd64
         /* a8 */ uint64_t ss;
     } __attribute__((packed));
 
+    inline uint64_t rdmsr(uint32_t msr)
+    {
+        uint32_t hi, lo;
+
+        __asm __volatile("rdmsr\n" : "=a"(lo), "=d"(hi) : "c"(msr));
+        return (static_cast<uint64_t>(hi) << 32) | static_cast<uint64_t>(lo);
+    }
+
+    inline void wrmsr(uint32_t msr, uint64_t val)
+    {
+        __asm __volatile("wrmsr\n" : : "a"(val & 0xffffffff), "d"(val >> 32), "c"(msr));
+    }
+
+    inline uint64_t read_cr4()
+    {
+        uint64_t r;
+        __asm __volatile("movq %%cr4, %0\n" : "=a"(r));
+        return r;
+    }
+
+    inline void write_cr3(uint64_t val) { __asm __volatile("movq %0, %%cr3\n" : : "a"(val)); }
+    inline void write_cr4(uint64_t val) { __asm __volatile("movq %0, %%cr4\n" : : "a"(val)); }
 } // namespace amd64

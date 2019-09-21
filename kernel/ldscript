@@ -10,15 +10,19 @@ SECTIONS {
         __rodata_end = ALIGN(4096);
     }
     .data : {
+        __rwdata_begin = ALIGN(4096);
         *(.data)
         *(.data*)
         . = ALIGN(4096);
+        __rwdata_end = ALIGN(4096);
     }
     .bss : {
+        __bss_begin = ALIGN(4096);
         *(.bss)
         *(.bss*)
         *(COMMON)
         . = ALIGN(4096);
+        __bss_end = ALIGN(4096);
     }
     __end = . ;
 
