@@ -30,7 +30,7 @@ namespace amd64
 
     enum class DescriptorPrivilege { Supervisor = 0, User = 3 };
 
-    enum class DescriptorContent { Code = (1 << 1) | (1 << 3), Data = (0 << 0) };
+    enum class DescriptorContent { Code = (1 << 3), Data = (1 << 1 /* writable */) };
 
     enum class IDTType {
         InterruptGate = 0xe, // disables interrupts
@@ -98,7 +98,7 @@ namespace amd64
             p[3] = 0;
             // Base Address 16:23 (ignored)
             p[4] = 0;
-            // Writable 9 [1], Conforming 10, Code 11, Must be set 12, DPL 13:14 (ignored), Present
+            // Writable 9, Conforming 10, Code 11, Must be set 12, DPL 13:14 (ignored), Present
             // 15
             p[5] = static_cast<int>(content) | (1 << 4) | (static_cast<int>(dpl) << 5) | (1 << 7);
             // Segment limit 16:19, AVL 20, Long 21, D/B 22, Granulatity 23 (all ignored)
