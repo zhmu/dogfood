@@ -85,7 +85,7 @@ namespace amd64
     namespace GDT
     {
         // Sets up a user/data entry in the GDT - these occupy 8 bytes
-        void SetEntry64(
+        inline void SetEntry64(
             uint8_t* gdt, const Selector sel, const DescriptorPrivilege dpl,
             const DescriptorContent content)
         {
@@ -108,7 +108,7 @@ namespace amd64
         }
 
         // Sets up a GDT entry for a TSS. Note that this entry takes up 16 bytes.
-        void SetTSS64(
+        inline void SetTSS64(
             uint8_t* gdt, const Selector sel, const DescriptorPrivilege dpl, uint64_t base,
             uint16_t size)
         {

@@ -1,6 +1,7 @@
 #include "console.h"
 #include "lib.h"
 #include "multiboot.h"
+#include "page_allocator.h"
 #include "amd64.h"
 #include "vm.h"
 
@@ -220,18 +221,14 @@ namespace
                 const auto base = static_cast<uint64_t>(mm->mm_base_hi) << 32 | mm->mm_base_lo;
                 const auto length = (static_cast<uint64_t>(mm->mm_len_hi) << 32 | mm->mm_len_lo);
 
-                if (base >= kernel_phys_start && kernel_phys_end <= base + length) {
-                    // Range overlaps with the kernel - split it
-                    const Region region1{base, kernel_phys_start - base};
-                    const Region region2{kernel_phys_end, (base + length) - kernel_phys_end};
-                    if (region1.length > 0)
-                        addRegion(region1);
-                    if (region2.length > 0)
-                        addRegion(region2);
-                } else {
-                    // No overlap; add as-is
-                    addRegion(Region{base, length});
-                }
+                // We'll assume the region starts where the kernel resides; we'll need to
+                // adjust the base if this happens
+                const auto region = [&]() {
+                    if (base == kernel_phys_start)
+                        return Region{kernel_phys_end, (base + length) - kernel_phys_end};
+                    return Region{base, length};
+                }();
+                addRegion(region);
             }
         }
 
@@ -269,6 +266,19 @@ namespace
         wrmsr(msr::EFER, rdmsr(msr::EFER) | msr::EFER_NXE); // No-Execute pages
         write_cr4(read_cr4() | cr4::PGE);                   // Global pages
         write_cr3(reinterpret_cast<uint64_t>(pml4));
+
+        // Register all available regions with our memory allocation now that
+        // they are properly mapped.  Note that next_page is the kernel end +
+        // the pages we used to store the memory mappings, so we'll need to
+        // adjust the region to avoid re-using that memory.
+        for (unsigned int n = 0; n < currentRegion; ++n) {
+            auto region = regions[n];
+            if (region.base == kernel_phys_end) {
+                region.length -= next_page - kernel_phys_end;
+                region.base = next_page;
+            }
+            page_allocator::RegisterMemory(vm::PhysicalToVirtual(region.base), region.length / PageSize);
+        }
     }
 
 } // namespace
@@ -294,10 +304,11 @@ extern "C" void startup(const MULTIBOOT* mb)
     console::initialize();
 
     printf("hello world!\n");
-    printf("mb flags %x\n", mb->mb_flags);
 
     // Process the loader-provided memory map
     InitializeMemory(*mb);
+    printf("%ld MB memory available\n",
+        (page_allocator::GetNumberOfAvailablePages() * (PageSize / 1024UL)) / 1024UL);
 
     __asm __volatile("movq $0x12, %rax\n"
                      "movq $0x34, %rbx\n"

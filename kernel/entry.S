@@ -8,7 +8,7 @@ __entry:
     call    startup
 
 .align        32
-.data
+.bss
     .space    4096
 bootstrap_stack:
 
