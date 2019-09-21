@@ -83,6 +83,29 @@ namespace
         return 0;
     }
 
+    // Helper for memset
+    template<typename T>
+    size_t Fill(void*& d, size_t sz, T v)
+    {
+        auto ptr = reinterpret_cast<T*>(d);
+        for (uint64_t n = 0; n < sz / sizeof(T); ++n, ++ptr)
+            *ptr = v;
+        d = reinterpret_cast<void*>(ptr);
+        return (sz / sizeof(T)) * sizeof(T);
+    }
+
+    template<typename T>
+    size_t Copy(void*& d, const void*& s, size_t sz)
+    {
+        auto dst = reinterpret_cast<T*>(d);
+        auto src = reinterpret_cast<const T*>(s);
+        for (uint64_t n = 0; n < sz / sizeof(T); ++n)
+            *dst++ = *src++;
+        d = reinterpret_cast<void*>(dst);
+        s = reinterpret_cast<const void*>(src);
+        return (sz / sizeof(T)) * sizeof(T);
+    }
+
 } // namespace
 
 int printf(const char* fmt, ...)
@@ -92,4 +115,33 @@ int printf(const char* fmt, ...)
     format(fmt, [](int ch) { console::put_char(ch); }, va);
     va_end(va);
     return 0;
+}
+
+void* memset(void* p, int c, size_t len)
+{
+    // Optimised by aligning to a 32-bit address and doing 32-bit operations
+    // while possible
+    auto dest = p;
+
+    if (len >= 4 && (reinterpret_cast<uint64_t>(dest) & 3))
+        len -= Fill(dest, len & 3, static_cast<uint8_t>(c));
+    const uint32_t c32 = static_cast<uint32_t>(c) << 24 | static_cast<uint32_t>(c) << 16 |
+                         static_cast<uint32_t>(c) << 8 | static_cast<uint32_t>(c);
+    len -= Fill(dest, len, c32);
+    Fill(dest, len, static_cast<uint8_t>(c));
+
+    return p;
+}
+
+void* memcpy(void* dst, const void* src, size_t len)
+{
+    auto ret = dst;
+
+    // Optimised by aligning to a 32-bit address and doing 32-bit operations
+    // while possible
+    if (len >= 4 && (reinterpret_cast<uint64_t>(dst) & 3))
+        len -= Copy<uint8_t>(dst, src, len & 3);
+    len -= Copy<uint32_t>(dst, src, len);
+    Copy<uint8_t>(dst, src, len);
+    return ret;
 }

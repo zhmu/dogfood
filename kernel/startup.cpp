@@ -43,12 +43,6 @@ extern "C" void* __bss_begin;
 extern "C" void* __bss_end;
 extern "C" void* __end;
 
-void memset(void* p, int c, uint64_t n)
-{
-    for (auto ptr = static_cast<char*>(p); n != 0; --n, ++ptr)
-        *ptr = c;
-}
-
 namespace
 {
     inline constexpr uint64_t Page_P = (1UL << 0);
