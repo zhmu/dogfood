@@ -3,13 +3,14 @@
 #include "multiboot.h"
 #include "page_allocator.h"
 #include "amd64.h"
+#include "pic.h"
 #include "vm.h"
 
 using namespace amd64;
 
 TSS kernel_tss;
 
-inline constexpr int gdtSize = (4 * 8) + 16;
+inline constexpr int gdtSize = static_cast<int>(Selector::Task) + 16;
 uint8_t gdt[gdtSize];
 
 inline constexpr int numberOfIDTEntries = 256;
@@ -34,6 +35,23 @@ extern "C" void exception16();
 extern "C" void exception17();
 extern "C" void exception18();
 extern "C" void exception19();
+
+extern "C" void irq0();
+extern "C" void irq1();
+extern "C" void irq2();
+extern "C" void irq3();
+extern "C" void irq4();
+extern "C" void irq5();
+extern "C" void irq6();
+extern "C" void irq7();
+extern "C" void irq8();
+extern "C" void irq9();
+extern "C" void irq10();
+extern "C" void irq11();
+extern "C" void irq12();
+extern "C" void irq13();
+extern "C" void irq14();
+extern "C" void irq15();
 
 extern "C" void* __entry;
 extern "C" void* __rodata_end;
@@ -68,12 +86,13 @@ namespace
 
         // Load new GDT and reload all descriptors
         {
-            volatile const RRegister gdtr{reinterpret_cast<uint64_t>(&gdt), gdtSize};
+            volatile const RRegister gdtr{reinterpret_cast<uint64_t>(&gdt), gdtSize - 1};
             __asm __volatile("lgdt (%%rax)\n"
                              "mov %%cx, %%ds\n"
                              "mov %%cx, %%es\n"
                              "mov %%cx, %%fs\n"
                              "mov %%cx, %%gs\n"
+                             "mov %%cx, %%ss\n"
                              "pushq %%rbx\n"
                              "pushq $1f\n"
                              "lretq\n"
@@ -122,6 +141,39 @@ namespace
                            reinterpret_cast<uint64_t>(&exception18)};
         idt[19] = IDTEntry{IDTType::InterruptGate, IST::IST_0, DescriptorPrivilege::Supervisor,
                            reinterpret_cast<uint64_t>(&exception19)};
+
+        idt[32] = IDTEntry{IDTType::InterruptGate, IST::IST_0, DescriptorPrivilege::Supervisor,
+                           reinterpret_cast<uint64_t>(&irq0)};
+        idt[33] = IDTEntry{IDTType::InterruptGate, IST::IST_0, DescriptorPrivilege::Supervisor,
+                           reinterpret_cast<uint64_t>(&irq1)};
+        idt[34] = IDTEntry{IDTType::InterruptGate, IST::IST_0, DescriptorPrivilege::Supervisor,
+                           reinterpret_cast<uint64_t>(&irq2)};
+        idt[35] = IDTEntry{IDTType::InterruptGate, IST::IST_0, DescriptorPrivilege::Supervisor,
+                           reinterpret_cast<uint64_t>(&irq3)};
+        idt[36] = IDTEntry{IDTType::InterruptGate, IST::IST_0, DescriptorPrivilege::Supervisor,
+                           reinterpret_cast<uint64_t>(&irq4)};
+        idt[37] = IDTEntry{IDTType::InterruptGate, IST::IST_0, DescriptorPrivilege::Supervisor,
+                           reinterpret_cast<uint64_t>(&irq5)};
+        idt[38] = IDTEntry{IDTType::InterruptGate, IST::IST_0, DescriptorPrivilege::Supervisor,
+                           reinterpret_cast<uint64_t>(&irq6)};
+        idt[39] = IDTEntry{IDTType::InterruptGate, IST::IST_0, DescriptorPrivilege::Supervisor,
+                           reinterpret_cast<uint64_t>(&irq7)};
+        idt[40] = IDTEntry{IDTType::InterruptGate, IST::IST_0, DescriptorPrivilege::Supervisor,
+                           reinterpret_cast<uint64_t>(&irq8)};
+        idt[41] = IDTEntry{IDTType::InterruptGate, IST::IST_0, DescriptorPrivilege::Supervisor,
+                           reinterpret_cast<uint64_t>(&irq9)};
+        idt[42] = IDTEntry{IDTType::InterruptGate, IST::IST_0, DescriptorPrivilege::Supervisor,
+                           reinterpret_cast<uint64_t>(&irq10)};
+        idt[43] = IDTEntry{IDTType::InterruptGate, IST::IST_0, DescriptorPrivilege::Supervisor,
+                           reinterpret_cast<uint64_t>(&irq11)};
+        idt[44] = IDTEntry{IDTType::InterruptGate, IST::IST_0, DescriptorPrivilege::Supervisor,
+                           reinterpret_cast<uint64_t>(&irq12)};
+        idt[45] = IDTEntry{IDTType::InterruptGate, IST::IST_0, DescriptorPrivilege::Supervisor,
+                           reinterpret_cast<uint64_t>(&irq13)};
+        idt[46] = IDTEntry{IDTType::InterruptGate, IST::IST_0, DescriptorPrivilege::Supervisor,
+                           reinterpret_cast<uint64_t>(&irq14)};
+        idt[47] = IDTEntry{IDTType::InterruptGate, IST::IST_0, DescriptorPrivilege::Supervisor,
+                           reinterpret_cast<uint64_t>(&irq15)};
 
         volatile const RRegister idtr{reinterpret_cast<uint64_t>(&idt),
                                       (numberOfIDTEntries * 16) - 1};
@@ -292,11 +344,18 @@ extern "C" void exception(const struct TrapFrame* tf)
         ;
 }
 
+extern "C" void irq_handler(const struct TrapFrame* tf)
+{
+    printf("[irq%d]", tf->trapno);
+    pic::Acknowledge();
+}
+
 extern "C" void startup(const MULTIBOOT* mb)
 {
     memset(&__bss_begin, 0, (&__bss_end - &__bss_begin));
     SetupDescriptors();
     console::initialize();
+    pic::Initialize();
 
     printf("hello world!\n");
 
@@ -305,6 +364,9 @@ extern "C" void startup(const MULTIBOOT* mb)
     printf(
         "%ld MB memory available\n",
         (page_allocator::GetNumberOfAvailablePages() * (PageSize / 1024UL)) / 1024UL);
+
+    __asm __volatile("sti");
+    pic::Enable(pic::irq::Timer);
 
     __asm __volatile("movq $0x12, %rax\n"
                      "movq $0x34, %rbx\n"

@@ -3,6 +3,8 @@
 .globl exception6, exception7, exception8, exception9, exception10, exception11
 .globl exception12, exception13, exception14, exception16, exception17
 .globl exception18, exception19
+.global irq0, irq1, irq2, irq3, irq4, irq5, irq6, irq7
+.global irq8, irq9, irq10, irq11, irq12, irq13, irq14, irq15
 
 #define SAVE_REGISTERS \
     movq    %rax, 0x08(%rsp); \
@@ -62,6 +64,25 @@ do_exception:
     addq    $0x88, %rsp
     iretq
 
+#define IRQ_HANDLER(n) \
+irq ## n: \
+    subq    $0x88, %rsp; \
+    movq    $n, 0x00(%rsp); \
+    jmp do_irq
+
+do_irq:
+    movw    $0x10, %ax
+    movw    %ax, %ss
+
+    SAVE_REGISTERS
+
+    movq    %rsp, %rdi
+    call    irq_handler
+
+    RESTORE_REGISTERS
+    addq    $0x88, %rsp
+    iretq
+
 /* Now we just need to list the exception handlers */
 EXCEPTION_WITHOUT_ERRCODE(0)
 EXCEPTION_WITHOUT_ERRCODE(1)
@@ -82,3 +103,21 @@ EXCEPTION_WITHOUT_ERRCODE(16)
 EXCEPTION_WITH_ERRCODE(17)
 EXCEPTION_WITHOUT_ERRCODE(18)
 EXCEPTION_WITHOUT_ERRCODE(19)
+
+/* And the IRQ's */
+IRQ_HANDLER(0)
+IRQ_HANDLER(1)
+IRQ_HANDLER(2)
+IRQ_HANDLER(3)
+IRQ_HANDLER(4)
+IRQ_HANDLER(5)
+IRQ_HANDLER(6)
+IRQ_HANDLER(7)
+IRQ_HANDLER(8)
+IRQ_HANDLER(9)
+IRQ_HANDLER(10)
+IRQ_HANDLER(11)
+IRQ_HANDLER(12)
+IRQ_HANDLER(13)
+IRQ_HANDLER(14)
+IRQ_HANDLER(15)
