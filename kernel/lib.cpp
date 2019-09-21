@@ -145,3 +145,11 @@ void* memcpy(void* dst, const void* src, size_t len)
     Copy<uint8_t>(dst, src, len);
     return ret;
 }
+
+void panic(const char* s)
+{
+    __asm __volatile("cli");
+    printf("panic: %s\n", s);
+    while (1)
+        ;
+}
