@@ -198,4 +198,37 @@ namespace amd64
 
     inline void write_cr3(uint64_t val) { __asm __volatile("movq %0, %%cr3\n" : : "a"(val)); }
     inline void write_cr4(uint64_t val) { __asm __volatile("movq %0, %%cr4\n" : : "a"(val)); }
+
+    namespace io
+    {
+        inline void outb(uint16_t port, uint8_t data)
+        {
+            __asm __volatile("outb %0, %w1" : : "a"(data), "d"(port));
+        }
+
+        inline void outw(uint16_t port, uint16_t data)
+        {
+            __asm __volatile("outw %0, %w1" : : "a"(data), "d"(port));
+        }
+
+        inline void outl(uint16_t port, uint32_t data)
+        {
+            __asm __volatile("outl %0, %w1" : : "a"(data), "d"(port));
+        }
+
+        inline uint8_t inb(uint16_t port)
+        {
+            uint8_t a;
+            __asm __volatile("inb %w1, %0" : "=a"(a) : "d"(port));
+            return a;
+        }
+
+        inline uint16_t inw(uint16_t port)
+        {
+            uint16_t a;
+            __asm __volatile("inw %w1, %0" : "=a"(a) : "d"(port));
+            return a;
+        }
+
+    } // namespace io
 } // namespace amd64

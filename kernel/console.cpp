@@ -1,5 +1,7 @@
 #include "console.h"
-#include "io.h"
+#include "amd64.h"
+
+using namespace amd64::io;
 
 namespace console
 {
@@ -19,7 +21,6 @@ namespace console
 
     void initialize()
     {
-        using namespace io;
         outb(port + registers::IER, 0);     /* Disables interrupts */
         outb(port + registers::LCR, 0x80);  /* Enable DLAB */
         outb(port + registers::DATA, 1);    /* Divisor low byte (115200 baud) */
@@ -30,7 +31,6 @@ namespace console
 
     void put_char(int ch)
     {
-        using namespace io;
         while ((inb(port + registers::LSR) & 0x20) == 0)
             /* wait for the transfer buffer to become empty */;
         outb(port + registers::DATA, ch);
@@ -38,7 +38,6 @@ namespace console
 
     int get_char()
     {
-        using namespace io;
         if ((inb(port + registers::LSR) & 1) == 0)
             return 0;
         return inb(port + registers::DATA);
