@@ -7,4 +7,4 @@ namespace page_allocator
     void* Allocate();
     void Free(void*);
     uint64_t GetNumberOfAvailablePages();
-} // namespace page
+} // namespace page_allocator

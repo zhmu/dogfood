@@ -277,7 +277,8 @@ namespace
                 region.length -= next_page - kernel_phys_end;
                 region.base = next_page;
             }
-            page_allocator::RegisterMemory(vm::PhysicalToVirtual(region.base), region.length / PageSize);
+            page_allocator::RegisterMemory(
+                vm::PhysicalToVirtual(region.base), region.length / PageSize);
         }
     }
 
@@ -307,7 +308,8 @@ extern "C" void startup(const MULTIBOOT* mb)
 
     // Process the loader-provided memory map
     InitializeMemory(*mb);
-    printf("%ld MB memory available\n",
+    printf(
+        "%ld MB memory available\n",
         (page_allocator::GetNumberOfAvailablePages() * (PageSize / 1024UL)) / 1024UL);
 
     __asm __volatile("movq $0x12, %rax\n"

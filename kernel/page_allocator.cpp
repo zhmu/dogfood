@@ -5,18 +5,19 @@
 
 namespace page_allocator
 {
-    namespace {
+    namespace
+    {
         struct FreeList {
             FreeList* next;
         };
 
         FreeList* freelist = nullptr;
-    }
+    } // namespace
 
     void RegisterMemory(const uint64_t base, const unsigned int length_in_pages)
     {
         uint64_t p = base;
-        for(unsigned int n = 0; n < length_in_pages; ++n) {
+        for (unsigned int n = 0; n < length_in_pages; ++n) {
             Free(reinterpret_cast<void*>(p));
             p += amd64::PageSize;
         }
@@ -40,9 +41,9 @@ namespace page_allocator
     uint64_t GetNumberOfAvailablePages()
     {
         uint64_t count = 0;
-        for(auto ptr = freelist; ptr != nullptr; ptr = ptr->next)
+        for (auto ptr = freelist; ptr != nullptr; ptr = ptr->next)
             ++count;
         return count;
     }
 
-} // namespace page
+} // namespace page_allocator
