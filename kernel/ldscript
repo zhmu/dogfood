@@ -13,8 +13,9 @@ SECTIONS {
         __rwdata_begin = ALIGN(4096);
         *(.data)
         *(.data*)
+        *(.init_array)
         . = ALIGN(4096);
-        __rwdata_end = ALIGN(4096);
+        __rwdata_end = .;
     }
     .bss : {
         __bss_begin = ALIGN(4096);
@@ -22,7 +23,7 @@ SECTIONS {
         *(.bss*)
         *(COMMON)
         . = ALIGN(4096);
-        __bss_end = ALIGN(4096);
+        __bss_end = .;
     }
     __end = . ;
 
