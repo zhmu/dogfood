@@ -53,6 +53,7 @@ extern "C" void irq13();
 extern "C" void irq14();
 extern "C" void irq15();
 
+extern "C" void* bootstrap_stack;
 extern "C" void* __entry;
 extern "C" void* __rodata_end;
 extern "C" void* __rwdata_begin;
@@ -84,6 +85,9 @@ namespace
             gdt, Selector::Task, DescriptorPrivilege::Supervisor,
             reinterpret_cast<uint64_t>(&kernel_tss), sizeof(kernel_tss));
 
+        memset(&kernel_tss, 0, sizeof(kernel_tss));
+        kernel_tss.ist1 = reinterpret_cast<uint64_t>(&bootstrap_stack);
+
         // Load new GDT and reload all descriptors
         {
             volatile const RRegister gdtr{reinterpret_cast<uint64_t>(&gdt), gdtSize - 1};
@@ -93,13 +97,14 @@ namespace
                              "mov %%cx, %%fs\n"
                              "mov %%cx, %%gs\n"
                              "mov %%cx, %%ss\n"
+                             "ltr %%dx\n"
                              "pushq %%rbx\n"
                              "pushq $1f\n"
                              "lretq\n"
                              "1:\n"
                              :
                              : "a"(&gdtr), "b"(static_cast<int>(Selector::KernelCode)),
-                               "c"(static_cast<int>(Selector::KernelData)));
+                               "c"(static_cast<int>(Selector::KernelData)), "d"(static_cast<int>(Selector::Task)));
         }
 
         idt[0] = IDTEntry{IDTType::InterruptGate, IST::IST_0, DescriptorPrivilege::Supervisor,
@@ -118,7 +123,8 @@ namespace
                           reinterpret_cast<uint64_t>(&exception6)};
         idt[7] = IDTEntry{IDTType::InterruptGate, IST::IST_0, DescriptorPrivilege::Supervisor,
                           reinterpret_cast<uint64_t>(&exception7)};
-        idt[8] = IDTEntry{IDTType::InterruptGate, IST::IST_0, DescriptorPrivilege::Supervisor,
+        // Use interrupt stack 1 for double fault
+        idt[8] = IDTEntry{IDTType::InterruptGate, IST::IST_1, DescriptorPrivilege::Supervisor,
                           reinterpret_cast<uint64_t>(&exception8)};
         idt[9] = IDTEntry{IDTType::InterruptGate, IST::IST_0, DescriptorPrivilege::Supervisor,
                           reinterpret_cast<uint64_t>(&exception9)};
