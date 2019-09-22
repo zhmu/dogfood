@@ -8,6 +8,9 @@ extern amd64::TSS kernel_tss;
 
 extern "C" void switch_to(amd64::Context** prevContext, amd64::Context* newContext);
 extern "C" void* trap_return;
+extern "C" void* initcode;
+extern "C" void* initcode_end;
+extern "C" uint64_t syscall_kernel_rsp;
 
 namespace process
 {
@@ -63,7 +66,9 @@ namespace process
                 // Allocate user stack
                 {
                     auto ustack = CreateUserStack(proc);
-                    vm::Map(pd, userStackBase, vm::PageSize, vm::VirtualToPhysical(proc.userStack), vm::Page_P | vm::Page_RW | vm::Page_US);
+                    vm::Map(
+                        pd, userStackBase, vm::PageSize, vm::VirtualToPhysical(proc.userStack),
+                        vm::Page_P | vm::Page_RW | vm::Page_US);
                     proc.trapFrame->rsp = userStackBase + vm::PageSize;
                 }
                 // Allocate context for switch_to()
@@ -93,10 +98,10 @@ namespace process
             // XXX build some CODE
             auto pd = reinterpret_cast<uint64_t*>(vm::PhysicalToVirtual(proc->pageDirectory));
             auto code = reinterpret_cast<uint8_t*>(page_allocator::Allocate());
-            memset(code, 0x90, vm::PageSize); // nop
-            code[0] = 0x53; // push rbx
-            code[vm::PageSize - 1] = 0xf4;// hlt
-            vm::Map(pd, initCodeBase, vm::PageSize, vm::VirtualToPhysical(code), vm::Page_P | vm::Page_RW | vm::Page_US);
+            memcpy(code, &initcode, (uint64_t)&initcode_end - (uint64_t)&initcode);
+            vm::Map(
+                pd, initCodeBase, vm::PageSize, vm::VirtualToPhysical(code),
+                vm::Page_P | vm::Page_RW | vm::Page_US);
 
             proc->state = State::Runnable;
         }
@@ -114,7 +119,11 @@ namespace process
                 proc.state = State::Running;
 
                 amd64::write_cr3(proc.pageDirectory);
-                kernel_tss.rsp0 = reinterpret_cast<uint64_t>(reinterpret_cast<char*>(proc.kernelStack) + vm::PageSize);
+                kernel_tss.rsp0 = reinterpret_cast<uint64_t>(
+                    reinterpret_cast<char*>(proc.kernelStack) + vm::PageSize);
+                syscall_kernel_rsp = reinterpret_cast<uint64_t>(
+                    reinterpret_cast<char*>(proc.kernelStack) + vm::PageSize);
+                printf("syscall_kernel_rsp = %lx\n", syscall_kernel_rsp);
                 switch_to(&cpu_context, proc.context);
             }
         }

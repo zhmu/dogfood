@@ -54,6 +54,7 @@ extern "C" void irq12();
 extern "C" void irq13();
 extern "C" void irq14();
 extern "C" void irq15();
+extern "C" void syscall_handler();
 
 extern "C" void* bootstrap_stack;
 extern "C" void* __entry;
@@ -100,7 +101,8 @@ namespace
                              "1:\n"
                              :
                              : "a"(&gdtr), "b"(static_cast<int>(Selector::KernelCode)),
-                               "c"(static_cast<int>(Selector::KernelData)), "d"(static_cast<int>(Selector::Task)));
+                               "c"(static_cast<int>(Selector::KernelData)),
+                               "d"(static_cast<int>(Selector::Task)));
         }
 
         idt[0] = IDTEntry{IDTType::InterruptGate, IST::IST_0, DescriptorPrivilege::Supervisor,
@@ -288,9 +290,10 @@ namespace
             const auto start = reinterpret_cast<uint64_t>(from);
             const auto end = reinterpret_cast<uint64_t>(to);
             MapMemoryArea(
-                pml4, next_page, start - KernelBase, start, end, vm::Page_G | vm::Page_P | pteFlags);
+                pml4, next_page, start - KernelBase, start, end,
+                vm::Page_G | vm::Page_P | pteFlags);
         };
-        mapKernel(&__entry, &__rodata_end, 0);                        // code + rodata
+        mapKernel(&__entry, &__rodata_end, 0);                                // code + rodata
         mapKernel(&__rwdata_begin, &__rwdata_end, vm::Page_NX | vm::Page_RW); // data
         mapKernel(&__bss_begin, &__bss_end, vm::Page_NX | vm::Page_RW);       // bss
 
@@ -316,6 +319,16 @@ namespace
         }
     }
 
+    void InitializeSyscall()
+    {
+        wrmsr(
+            msr::STAR, ((static_cast<uint64_t>(Selector::UserCode) - 0x10) |
+                        (static_cast<uint64_t>(DescriptorPrivilege::User)) << 48L) |
+                           (static_cast<uint64_t>(Selector::KernelCode) << 32L));
+        wrmsr(msr::LSTAR, reinterpret_cast<uint64_t>(&syscall_handler));
+        wrmsr(msr::SFMASK, 0x200); // IF
+        wrmsr(msr::EFER, rdmsr(msr::EFER) | msr::EFER_SCE);
+    }
 } // namespace
 
 extern "C" void exception(const struct TrapFrame* tf)
@@ -338,6 +351,14 @@ extern "C" void irq_handler(const struct TrapFrame* tf)
     pic::Acknowledge();
 }
 
+extern "C" uint64_t syscall(const Syscall* sc)
+{
+    printf(
+        "syscall rax %lx rdi %lx rsi %lx rdx %lx r10 %lx r9 %lx r8 %lx\n", sc->rax, sc->rdi,
+        sc->rsi, sc->rdx, sc->r10, sc->r9, sc->r8);
+    return 123;
+}
+
 extern "C" void startup(const MULTIBOOT* mb)
 {
     memset(&__bss_begin, 0, (&__bss_end - &__bss_begin));
@@ -345,6 +366,7 @@ extern "C" void startup(const MULTIBOOT* mb)
     console::initialize();
     pic::Initialize();
     InitializeMemory(*mb);
+    InitializeSyscall();
 
     printf(
         "Dogfood/amd64 - %ld MB memory available\n",

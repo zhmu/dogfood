@@ -1,0 +1,19 @@
+.data
+
+.global initcode, initcode_end
+
+initcode:
+
+1:
+        movq $1, %rax
+        movq $2, %rdi
+        movq $3, %rsi
+        movq $4, %rdx
+        movq $5, %r10
+        movq $6, %r9
+        movq $7, %r8
+        syscall
+
+        jmp     1b
+
+initcode_end:

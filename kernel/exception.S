@@ -5,7 +5,7 @@
 .globl exception18, exception19
 .globl irq0, irq1, irq2, irq3, irq4, irq5, irq6, irq7
 .globl irq8, irq9, irq10, irq11, irq12, irq13, irq14, irq15
-.globl switch_to, trap_return
+.globl switch_to, trap_return, syscall_handler, syscall_kernel_rsp
 
 #define SAVE_REGISTERS \
     movq    %rax, 0x08(%rsp); \
@@ -145,3 +145,50 @@ switch_to:
     popq    %r14
     popq    %r15
     ret
+
+syscall_handler:
+    // Switch to kernel stack
+    movq    %rsp, syscall_userland_rsp
+    movq    syscall_kernel_rsp, %rsp
+
+    pushq   %rbx
+    pushq   %rcx
+    pushq   %rbp
+    pushq   %r11
+    pushq   %r12
+    pushq   %r13
+    pushq   %r14
+    pushq   %r15
+
+    subq    $56, %rsp
+    movq    %rax, 0(%rsp)
+    movq    %rdi, 8(%rsp)
+    movq    %rsi, 16(%rsp)
+    movq    %rdx, 24(%rsp)
+    movq    %r10, 32(%rsp)
+    movq    %r9, 40(%rsp)
+    movq    %r8, 48(%rsp)
+
+    movq    %rsp, %rdi
+    call    syscall
+    addq    $56, %rsp
+
+    popq    %r15
+    popq    %r14
+    popq    %r13
+    popq    %r12
+    popq    %r11
+    popq    %rbp
+    popq    %rcx
+    popq    %rbx
+
+    movq    syscall_userland_rsp, %rsp
+    sysretq
+
+.data
+
+syscall_userland_rsp:
+    .long   0, 0
+
+syscall_kernel_rsp:
+    .long   0, 0

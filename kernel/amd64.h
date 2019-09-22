@@ -10,7 +10,12 @@ namespace amd64
     {
         inline constexpr uint64_t EFER = 0xc0000080;
         inline constexpr uint64_t EFER_NXE = (1UL << 11); // No-Execute enable
-    }                                                     // namespace msr
+        inline constexpr uint64_t EFER_SCE = (1UL << 0);  // Syscall extensions
+        inline constexpr uint64_t STAR = 0xc0000081;
+        inline constexpr uint64_t LSTAR = 0xc0000082;
+        inline constexpr uint64_t CSTAR = 0xc0000083;
+        inline constexpr uint64_t SFMASK = 0xc0000084;
+    } // namespace msr
     namespace cr4
     {
         inline constexpr uint64_t PGE = (1UL << 7);         // Page-Global enable
@@ -187,6 +192,17 @@ namespace amd64
         uint64_t r14;
         uint64_t r15;
         uint64_t rip;
+    } __attribute__((packed));
+
+    // Note: must match syscall_handler in exception.S
+    struct Syscall {
+        uint64_t rax;
+        uint64_t rdi;
+        uint64_t rsi;
+        uint64_t rdx;
+        uint64_t r10;
+        uint64_t r9;
+        uint64_t r8;
     } __attribute__((packed));
 
     inline uint64_t rdmsr(uint32_t msr)
