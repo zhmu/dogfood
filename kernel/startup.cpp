@@ -66,12 +66,6 @@ extern "C" void* __end;
 
 namespace
 {
-    inline constexpr uint64_t Page_P = (1UL << 0);
-    inline constexpr uint64_t Page_RW = (1UL << 1); // 1 = r/w, 0 = r/0
-    inline constexpr uint64_t Page_US = (1UL << 2); // 1 = u/s, 0 = s
-    inline constexpr uint64_t Page_G = (1UL << 8);
-    inline constexpr uint64_t Page_NX = (1UL << 63);
-
     void SetupDescriptors()
     {
         using namespace amd64;
@@ -191,15 +185,15 @@ namespace
     uint64_t* GetNextPage(uint64_t& next_page)
     {
         auto ptr = reinterpret_cast<uint64_t*>(next_page);
-        memset(ptr, 0, sizeof(PageSize));
-        next_page += PageSize;
+        memset(ptr, 0, sizeof(vm::PageSize));
+        next_page += vm::PageSize;
         return ptr;
     }
 
     uint64_t* CreateOrGetPage(uint64_t& entry, uint64_t& next_page)
     {
-        if ((entry & Page_P) == 0) {
-            entry = reinterpret_cast<uint64_t>(GetNextPage(next_page)) | Page_P | Page_RW;
+        if ((entry & vm::Page_P) == 0) {
+            entry = reinterpret_cast<uint64_t>(GetNextPage(next_page)) | vm::Page_P | vm::Page_RW;
         }
         return reinterpret_cast<uint64_t*>(entry & 0xffffffffff000);
     };
@@ -208,7 +202,7 @@ namespace
         uint64_t* pml4, uint64_t& next_page, uint64_t phys_base, uint64_t va_start, uint64_t va_end,
         uint64_t pteFlags)
     {
-        for (uint64_t addr = va_start; addr < va_end; addr += PageSize) {
+        for (uint64_t addr = va_start; addr < va_end; addr += vm::PageSize) {
             const auto pml4Offset = (addr >> 39) & 0x1ff;
             const auto pdpeOffset = (addr >> 30) & 0x1ff;
             const auto pdpOffset = (addr >> 21) & 0x1ff;
@@ -221,28 +215,12 @@ namespace
         }
     }
 
-    template<typename T>
-    uint64_t RoundDownToPage(T v)
-    {
-        auto addr = reinterpret_cast<uint64_t>(v);
-        addr &= ~(static_cast<uint64_t>(PageSize) - 1);
-        return addr;
-    }
-
-    template<typename T>
-    uint64_t RoundUpToPage(T v)
-    {
-        auto addr = reinterpret_cast<uint64_t>(v);
-        addr = (addr | (PageSize - 1)) + 1;
-        return addr;
-    }
-
     void InitializeMemory(const MULTIBOOT& mb)
     {
         // Determine where the kernel resides in memory - we need to
         // exclude this range from our memory map
-        const uint64_t kernel_phys_start = RoundDownToPage(&__entry) - KernelBase;
-        const uint64_t kernel_phys_end = RoundUpToPage(&__end) - KernelBase;
+        const uint64_t kernel_phys_start = vm::RoundDownToPage(&__entry) - KernelBase;
+        const uint64_t kernel_phys_end = vm::RoundUpToPage(&__end) - KernelBase;
         printf("kernel physical memory: %lx .. %lx\n", kernel_phys_start, kernel_phys_end);
 
         // Convert the memory into regions
@@ -302,7 +280,7 @@ namespace
             MapMemoryArea(
                 pml4, next_page, region.base, vm::PhysicalToVirtual(region.base),
                 vm::PhysicalToVirtual(region.base) + region.length,
-                Page_NX | Page_G | Page_RW | Page_P);
+                vm::Page_NX | vm::Page_G | vm::Page_RW | vm::Page_P);
         }
 
         // Map the kernel itself - we do this per section to honor read/only content
@@ -310,11 +288,11 @@ namespace
             const auto start = reinterpret_cast<uint64_t>(from);
             const auto end = reinterpret_cast<uint64_t>(to);
             MapMemoryArea(
-                pml4, next_page, start - KernelBase, start, end, Page_G | Page_P | pteFlags);
+                pml4, next_page, start - KernelBase, start, end, vm::Page_G | vm::Page_P | pteFlags);
         };
         mapKernel(&__entry, &__rodata_end, 0);                        // code + rodata
-        mapKernel(&__rwdata_begin, &__rwdata_end, Page_NX | Page_RW); // data
-        mapKernel(&__bss_begin, &__bss_end, Page_NX | Page_RW);       // bss
+        mapKernel(&__rwdata_begin, &__rwdata_end, vm::Page_NX | vm::Page_RW); // data
+        mapKernel(&__bss_begin, &__bss_end, vm::Page_NX | vm::Page_RW);       // bss
 
         // Enable necessary features and use our new page tables
         wrmsr(msr::EFER, rdmsr(msr::EFER) | msr::EFER_NXE); // No-Execute pages
@@ -334,7 +312,7 @@ namespace
                 region.base = next_page;
             }
             page_allocator::RegisterMemory(
-                vm::PhysicalToVirtual(region.base), region.length / PageSize);
+                vm::PhysicalToVirtual(region.base), region.length / vm::PageSize);
         }
     }
 
@@ -370,7 +348,7 @@ extern "C" void startup(const MULTIBOOT* mb)
 
     printf(
         "Dogfood/amd64 - %ld MB memory available\n",
-        (page_allocator::GetNumberOfAvailablePages() * (PageSize / 1024UL)) / 1024UL);
+        (page_allocator::GetNumberOfAvailablePages() * (vm::PageSize / 1024UL)) / 1024UL);
 
     process::Initialize();
     pic::Enable(pic::irq::Timer);

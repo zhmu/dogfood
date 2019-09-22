@@ -5,7 +5,6 @@
 #include "vm.h"
 
 extern amd64::TSS kernel_tss;
-extern uint64_t* kernel_pagedir;
 
 extern "C" void switch_to(amd64::Context** prevContext, amd64::Context* newContext);
 extern "C" void* trap_return;
@@ -14,6 +13,8 @@ namespace process
 {
     namespace
     {
+        inline constexpr uint64_t initCodeBase = 0x8000000;
+        inline constexpr uint64_t userStackBase = 0x10000;
         inline constexpr size_t maxProcesses = 32;
         Process process[maxProcesses];
         Process* current = nullptr;
@@ -25,15 +26,15 @@ namespace process
             auto kstack = reinterpret_cast<char*>(page_allocator::Allocate());
             assert(kstack != nullptr);
             proc.kernelStack = kstack;
-            return kstack + amd64::PageSize;
+            return kstack + vm::PageSize;
         }
 
-        void CreateUserPagedir(Process& proc)
+        char* CreateUserStack(Process& proc)
         {
-            auto pml4 = reinterpret_cast<uint64_t*>(page_allocator::Allocate());
-            assert(pml4 != nullptr);
-            memcpy(pml4, kernel_pagedir, amd64::PageSize);
-            proc.pageDirectory = vm::VirtualToPhysical(pml4);
+            auto ustack = reinterpret_cast<char*>(page_allocator::Allocate());
+            assert(ustack != nullptr);
+            proc.userStack = ustack;
+            return ustack + vm::PageSize;
         }
 
         Process* AllocateProcess()
@@ -44,48 +45,32 @@ namespace process
 
                 proc.state = State::Construct;
                 proc.pid = next_pid++;
+
+                auto pd = vm::CreateUserlandPageDirectory();
+                proc.pageDirectory = vm::VirtualToPhysical(pd);
+
                 auto sp = CreateUserKernelStack(proc);
-                // Allocate trap frame
+                // Allocate trap frame for trap_return()
                 {
                     sp -= sizeof(amd64::TrapFrame);
                     auto tf = reinterpret_cast<amd64::TrapFrame*>(sp);
                     memset(tf, 0, sizeof(amd64::TrapFrame));
-                    tf->rax = 0xab0001;
-                    tf->rbx = 0xab0002;
-                    tf->rcx = 0xab0003;
-                    tf->rdx = 0xab0004;
-                    tf->rbp = 0xab0010;
-                    tf->rsi = 0xab0005;
-                    tf->rdi = 0xab0006;
-                    tf->r8 = 0xab0007;
-                    tf->r9 = 0xab0008;
-                    tf->r10 = 0xab0009;
-                    tf->r11 = 0xab000a;
-                    tf->r12 = 0xab000b;
-                    tf->r13 = 0xab000c;
-                    tf->r14 = 0xab000d;
-                    tf->r15 = 0xab000e;
-                    tf->rip = 0x5555aaaa;
                     tf->cs = static_cast<uint64_t>(amd64::Selector::UserCode) + 3;
                     tf->rflags = 0; // TODO IF
-                    tf->rsp = 0xaaaa5555;
                     tf->ss = static_cast<uint64_t>(amd64::Selector::UserData) + 3;
                     proc.trapFrame = tf;
                 }
-                // Allocate context
+                // Allocate user stack
+                {
+                    auto ustack = CreateUserStack(proc);
+                    vm::Map(pd, userStackBase, vm::PageSize, vm::VirtualToPhysical(proc.userStack), vm::Page_P | vm::Page_RW | vm::Page_US);
+                    proc.trapFrame->rsp = userStackBase + vm::PageSize;
+                }
+                // Allocate context for switch_to()
                 {
                     sp -= sizeof(amd64::Context);
                     auto context = reinterpret_cast<amd64::Context*>(sp);
                     memset(context, 0, sizeof(amd64::Context));
-                    context->rdx = 0x19830100;
-                    context->r8 = 0x19830111;
-                    context->r9 = 0x19830222;
-                    context->r10 = 0x19830333;
-                    context->r11 = 0x19830444;
-                    context->r12 = 0x19830555;
-                    context->r13 = 0x19830666;
-                    context->r14 = 0x19830777;
-                    context->r15 = 0x19830888;
                     context->rip = reinterpret_cast<uint64_t>(&trap_return);
                     proc.context = context;
                 }
@@ -103,6 +88,16 @@ namespace process
             assert(proc != nullptr);
             assert(proc->pid == 1);
 
+            proc->trapFrame->rip = initCodeBase;
+
+            // XXX build some CODE
+            auto pd = reinterpret_cast<uint64_t*>(vm::PhysicalToVirtual(proc->pageDirectory));
+            auto code = reinterpret_cast<uint8_t*>(page_allocator::Allocate());
+            memset(code, 0x90, vm::PageSize); // nop
+            code[0] = 0x53; // push rbx
+            code[vm::PageSize - 1] = 0xf4;// hlt
+            vm::Map(pd, initCodeBase, vm::PageSize, vm::VirtualToPhysical(code), vm::Page_P | vm::Page_RW | vm::Page_US);
+
             proc->state = State::Runnable;
         }
     }
@@ -118,6 +113,8 @@ namespace process
                 current = &proc;
                 proc.state = State::Running;
 
+                amd64::write_cr3(proc.pageDirectory);
+                kernel_tss.rsp0 = reinterpret_cast<uint64_t>(reinterpret_cast<char*>(proc.kernelStack) + vm::PageSize);
                 switch_to(&cpu_context, proc.context);
             }
         }

@@ -1,5 +1,5 @@
 #include "page_allocator.h"
-#include "amd64.h"
+#include "vm.h"
 
 #include "lib.h"
 
@@ -19,7 +19,7 @@ namespace page_allocator
         uint64_t p = base;
         for (unsigned int n = 0; n < length_in_pages; ++n) {
             Free(reinterpret_cast<void*>(p));
-            p += amd64::PageSize;
+            p += vm::PageSize;
         }
     }
 

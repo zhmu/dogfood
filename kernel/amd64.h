@@ -4,7 +4,6 @@
 
 namespace amd64
 {
-    inline constexpr unsigned int PageSize = 4096;
     inline constexpr uint64_t KernelBase = 0xffffffff80000000;
 
     namespace msr
