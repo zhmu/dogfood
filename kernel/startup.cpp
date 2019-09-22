@@ -361,7 +361,6 @@ extern "C" uint64_t syscall(const Syscall* sc)
 
 extern "C" void startup(const MULTIBOOT* mb)
 {
-    memset(&__bss_begin, 0, (&__bss_end - &__bss_begin));
     SetupDescriptors();
     console::initialize();
     pic::Initialize();
