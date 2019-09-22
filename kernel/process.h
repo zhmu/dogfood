@@ -6,7 +6,7 @@ namespace amd64
 {
     struct Context;
     struct TrapFrame;
-}
+} // namespace amd64
 
 namespace process
 {
@@ -17,8 +17,8 @@ namespace process
         int pid = -1;
         Process* parent = nullptr;
         //
-        uint64_t pageDirectory = 0; // physical address
-        void* userStack = nullptr; // start of user stack
+        uint64_t pageDirectory = 0;  // physical address
+        void* userStack = nullptr;   // start of user stack
         void* kernelStack = nullptr; // start of kernel stack
         struct amd64::TrapFrame* trapFrame = nullptr;
         struct amd64::Context* context = nullptr;

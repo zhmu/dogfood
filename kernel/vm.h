@@ -15,7 +15,9 @@ namespace vm
     inline constexpr uint64_t Page_NX = (1UL << 63);
 
     uint64_t* FindPTE(uint64_t* pml4, uint64_t addr, bool create);
-    void Map(uint64_t* pml4, const uint64_t va_start, const size_t length, const uint64_t phys, const uint64_t pteFlags);
+    void
+    Map(uint64_t* pml4, const uint64_t va_start, const size_t length, const uint64_t phys,
+        const uint64_t pteFlags);
 
     uint64_t* CreateUserlandPageDirectory();
 
@@ -56,6 +58,5 @@ namespace vm
         addr = (addr | (PageSize - 1)) + 1;
         return addr;
     }
-
 
 } // namespace vm

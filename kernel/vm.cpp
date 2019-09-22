@@ -5,18 +5,20 @@
 
 namespace vm
 {
-    namespace {
+    namespace
+    {
         uint64_t* CreateOrGetPage(uint64_t& entry, bool create)
         {
             if ((entry & Page_P) == 0) {
-                if (!create) return nullptr;
+                if (!create)
+                    return nullptr;
                 auto new_page = page_allocator::Allocate();
                 memset(new_page, 0, vm::PageSize);
                 entry = vm::VirtualToPhysical(new_page) | Page_P | Page_US | Page_RW;
             }
             return reinterpret_cast<uint64_t*>(vm::PhysicalToVirtual(entry & 0xffffffffff000));
         }
-    }
+    } // namespace
 
     uint64_t* FindPTE(uint64_t* pml4, uint64_t addr, bool create)
     {
@@ -26,16 +28,20 @@ namespace vm
         const auto pteOffset = (addr >> 12) & 0x1ff;
 
         auto pdpe = CreateOrGetPage(pml4[pml4Offset], create);
-        if (pdpe == nullptr) return nullptr;
+        if (pdpe == nullptr)
+            return nullptr;
         auto pdp = CreateOrGetPage(pdpe[pdpeOffset], create);
-        if (pdp == nullptr) return nullptr;
+        if (pdp == nullptr)
+            return nullptr;
         auto pte = CreateOrGetPage(pdp[pdpOffset], create);
-        if (pte == nullptr) return nullptr;
+        if (pte == nullptr)
+            return nullptr;
         return &pte[pteOffset];
     }
 
-    void Map(
-        uint64_t* pml4, const uint64_t va_start, const size_t length, const uint64_t phys, const uint64_t pteFlags)
+    void
+    Map(uint64_t* pml4, const uint64_t va_start, const size_t length, const uint64_t phys,
+        const uint64_t pteFlags)
     {
         auto va = RoundDownToPage(va_start);
         auto pa = phys;
@@ -56,4 +62,4 @@ namespace vm
         memcpy(pml4, kernel_pagedir, vm::PageSize);
         return pml4;
     }
-}
+} // namespace vm
