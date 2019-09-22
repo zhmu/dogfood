@@ -4,7 +4,6 @@
 
 initcode:
 
-1:
         movq $1, %rax
         movq $2, %rdi
         movq $3, %rsi
@@ -13,7 +12,7 @@ initcode:
         movq $6, %r9
         movq $7, %r8
         syscall
-
+1:
         jmp     1b
 
 initcode_end:
