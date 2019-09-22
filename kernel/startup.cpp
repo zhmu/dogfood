@@ -3,8 +3,10 @@
 #include "multiboot.h"
 #include "page_allocator.h"
 #include "amd64.h"
-#include "process.h"
+#include "bio.h"
+#include "ide.h"
 #include "pic.h"
+#include "process.h"
 #include "vm.h"
 
 using namespace amd64;
@@ -347,7 +349,15 @@ extern "C" void exception(const struct TrapFrame* tf)
 
 extern "C" void irq_handler(const struct TrapFrame* tf)
 {
-    printf("[irq%d]", tf->trapno);
+    switch (tf->trapno) {
+        case pic::irq::Timer:
+            break;
+        case pic::irq::IDE:
+            ide::OnIRQ();
+            break;
+        default:
+            printf("stray irq %d\n", tf->trapno);
+    }
     pic::Acknowledge();
 }
 
@@ -366,12 +376,25 @@ extern "C" void startup(const MULTIBOOT* mb)
     pic::Initialize();
     InitializeMemory(*mb);
     InitializeSyscall();
+    bio::Initialize();
 
     printf(
         "Dogfood/amd64 - %ld MB memory available\n",
         (page_allocator::GetNumberOfAvailablePages() * (vm::PageSize / 1024UL)) / 1024UL);
 
     process::Initialize();
+    ide::Initialize();
     pic::Enable(pic::irq::Timer);
+    __asm __volatile("sti");
+
+    for (int n = 1; n < 5; n++) {
+        printf("%d ==> ", n);
+        auto& buf = bio::bread(0, n);
+        for (int n = 0; n < 512; n++)
+            printf("%x ", buf.data[n]);
+        printf("\n");
+        bio::brelse(buf);
+    }
+
     process::Scheduler();
 }

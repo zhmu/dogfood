@@ -258,6 +258,7 @@ namespace amd64
             __asm __volatile("inw %w1, %0" : "=a"(a) : "d"(port));
             return a;
         }
-
     } // namespace io
+
+    inline void MemoryBarrier() { __asm __volatile("" : : : "memory"); }
 } // namespace amd64
