@@ -73,9 +73,6 @@ irq ## n: \
     jmp do_irq
 
 do_irq:
-    movw    $0x10, %ax
-    movw    %ax, %ss
-
     SAVE_REGISTERS
 
     movq    %rsp, %rdi
