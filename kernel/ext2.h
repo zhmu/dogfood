@@ -7,6 +7,7 @@
 #pragma once
 
 #include "types.h"
+#include "fs.h"
 
 namespace ext2
 {
@@ -192,5 +193,7 @@ namespace ext2
 #define EXT2_GOOD_OLD_INODE_SIZE 128
 
     void Mount();
+    void iread(fs::ino_t inum, Inode& inode);
+    uint32_t bmap(Inode& inode, unsigned int inodeBlockNr);
 
 } // namespace ext2

@@ -5,6 +5,7 @@
 #include "amd64.h"
 #include "bio.h"
 #include "ext2.h"
+#include "fs.h"
 #include "ide.h"
 #include "pic.h"
 #include "process.h"
@@ -388,6 +389,18 @@ extern "C" void startup(const MULTIBOOT* mb)
     pic::Enable(pic::irq::Timer);
     __asm __volatile("sti");
     ext2::Mount();
+
+    ext2::Inode inode;
+    ext2::iread(28, inode);
+    char buf[513];
+    off_t offset = 0;
+   while(1){
+        int r = fs::Read(inode, buf, offset, sizeof(buf));
+        if (r <= 0) { printf("!! r %d\n", r); break; }
+        //printf("[%d]", r);
+        for(int n = 0; n < r; n++) printf("%c", buf[n]);
+        offset += r;
+    }
 
 #if 0
     for (int n = 1; n < 5; n++) {
