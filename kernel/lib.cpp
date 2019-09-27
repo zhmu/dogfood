@@ -57,6 +57,17 @@ namespace
             }
 
             switch (*fmt) {
+                case 'c': {
+                    char ch = va_arg(va, int);
+                    emit(ch);
+                    break;
+                }
+                case 'p': {
+                    const uint64_t v = va_arg(va, unsigned long);
+                    putint(16, v, emit);
+                    isLong = 0;
+                    break;
+                }
                 case 'x': {
                     const uintmax_t v = fetchValue();
                     putint(16, v, emit);
