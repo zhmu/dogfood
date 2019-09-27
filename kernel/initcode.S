@@ -2,17 +2,31 @@
 
 .global initcode, initcode_end
 
-initcode:
+#include "syscall.h"
 
-        movq $1, %rax
-        movq $2, %rdi
-        movq $3, %rsi
-        movq $4, %rdx
-        movq $5, %r10
-        movq $6, %r9
-        movq $7, %r8
+initcode:
+        movq $SYS_write, %rax
+        movq $1, %rdi   // stdout
+        leaq msg(%rip), %rsi // ptr
+        movq $12, %rdx  // len
         syscall
-1:
-        jmp     1b
+
+        movq $SYS_execve, %rax
+        leaq init(%rip), %rdi
+        leaq argv(%rip), %rsi
+        leaq envp(%rip), %rdx
+        movq %rdi, (%rsi)
+        syscall
+
+        movq $SYS_exit, %rax
+        movq $-1, %rdi
+        syscall
+
+1:      jmp     1b
+
+msg:    .ascii  "Hello world!\0"
+init:   .ascii  "/init\0"
+argv:   .long   0
+envp:   .long   0
 
 initcode_end:

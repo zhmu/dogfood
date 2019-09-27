@@ -196,13 +196,13 @@ namespace amd64
 
     // Note: must match syscall_handler in exception.S
     struct Syscall {
-        uint64_t rax;
-        uint64_t rdi;
-        uint64_t rsi;
-        uint64_t rdx;
-        uint64_t r10;
-        uint64_t r9;
-        uint64_t r8;
+        uint64_t no;   // rax
+        uint64_t arg1; // rdi
+        uint64_t arg2; // rsi
+        uint64_t arg3; // rdx
+        uint64_t arg4; // r10
+        uint64_t arg5; // r9
+        uint64_t arg6; // r8
     } __attribute__((packed));
 
     inline uint64_t rdmsr(uint32_t msr)

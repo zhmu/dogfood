@@ -363,14 +363,6 @@ extern "C" void irq_handler(const struct TrapFrame* tf)
     pic::Acknowledge();
 }
 
-extern "C" uint64_t syscall(const Syscall* sc)
-{
-    printf(
-        "syscall rax %lx rdi %lx rsi %lx rdx %lx r10 %lx r9 %lx r8 %lx\n", sc->rax, sc->rdi,
-        sc->rsi, sc->rdx, sc->r10, sc->r9, sc->r8);
-    return 123;
-}
-
 extern "C" void startup(const MULTIBOOT* mb)
 {
     SetupDescriptors();
