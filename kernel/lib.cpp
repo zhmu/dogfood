@@ -164,3 +164,36 @@ void panic(const char* s)
     while (1)
         ;
 }
+
+size_t strlen(const char* src) { return strchr(src, '\0') - src; }
+
+size_t strlcpy(char* dst, const char* src, size_t len)
+{
+    assert(len > 0);
+
+    auto src_len = strlen(src);
+    if (src_len > len)
+        src_len = len;
+    memcpy(dst, src, len);
+    dst[len - 1] = '\0';
+    return src_len;
+}
+
+char* strchr(const char* s, int ch)
+{
+    while (true) {
+        if (*s == ch)
+            return const_cast<char*>(s);
+        if (*s == '\0')
+            return nullptr;
+        ++s;
+    }
+    // NOTREACHED
+}
+
+int strcmp(const char* a, const char* b)
+{
+    while (*a != '\0' && *a == *b)
+        ++a, ++b;
+    return *a - *b;
+}

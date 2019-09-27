@@ -2,7 +2,8 @@
 
 #include "types.h"
 
-namespace ext2 {
+namespace ext2
+{
     struct Inode;
 }
 
@@ -30,4 +31,4 @@ namespace fs
 
     Inode* iget(Device dev, InodeNumber inum);
     Inode* namei(const char* path);
-}
+} // namespace fs

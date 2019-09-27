@@ -86,6 +86,8 @@ namespace process
 
     } // namespace
 
+    Process& GetCurrent() { return *current; }
+
     void Initialize()
     {
         {

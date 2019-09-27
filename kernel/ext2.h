@@ -9,7 +9,8 @@
 #include "types.h"
 #include "fs.h"
 
-namespace fs {
+namespace fs
+{
     struct Inode;
 }
 

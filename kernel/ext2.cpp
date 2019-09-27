@@ -50,14 +50,15 @@ namespace ext2
 
         BlockGroup blockGroup;
         ReadBlockGroup(dev, bgroup, blockGroup);
-/*
-        printf(
-            "blockgroup %d => bitmap %d inode %d table %d free blocks %d free inodes %d used dirs "
-            "%d\n",
-            bgroup, blockGroup.bg_block_bitmap, blockGroup.bg_inode_bitmap,
-            blockGroup.bg_inode_table, blockGroup.bg_free_blocks_count,
-            blockGroup.bg_free_inodes_count, blockGroup.bg_used_dirs_count);
-*/
+        /*
+                printf(
+                    "blockgroup %d => bitmap %d inode %d table %d free blocks %d free inodes %d used
+           dirs "
+                    "%d\n",
+                    bgroup, blockGroup.bg_block_bitmap, blockGroup.bg_inode_bitmap,
+                    blockGroup.bg_inode_table, blockGroup.bg_free_blocks_count,
+                    blockGroup.bg_free_inodes_count, blockGroup.bg_used_dirs_count);
+        */
 
         const auto inodeBlockNr = [&]() {
             bio::BlockNumber blockNr = blockGroup.bg_inode_table;
@@ -134,19 +135,23 @@ namespace ext2
             char block[bio::BlockSize];
         } u;
 
-        while(offset < dirInode.ext2inode->i_size) {
-            int n = fs::Read(dirInode, reinterpret_cast<void*>(&u.block), offset, sizeof(DirectoryEntry) + fs::MaxDirectoryEntryNameLength);
-            if (n <= 0) return false;
+        while (offset < dirInode.ext2inode->i_size) {
+            int n = fs::Read(
+                dirInode, reinterpret_cast<void*>(&u.block), offset,
+                sizeof(DirectoryEntry) + fs::MaxDirectoryEntryNameLength);
+            if (n <= 0)
+                return false;
 
             const auto& de = u.de;
-            if (de.name_len >= fs::MaxDirectoryEntryNameLength) continue;
+            if (de.name_len >= fs::MaxDirectoryEntryNameLength)
+                continue;
 
             dentry.d_ino = de.inode;
             memcpy(dentry.d_name, reinterpret_cast<const char*>(de.name), de.name_len);
             dentry.d_name[de.name_len] = '\0';
             offset += de.rec_len;
             return true;
-       }
+        }
 
         return false;
     }

@@ -12,4 +12,7 @@
 int printf(const char* fmt, ...);
 void* memset(void* p, int c, size_t n);
 void* memcpy(void* dst, const void* src, size_t len);
+size_t strlcpy(char* dst, const char* src, size_t len);
+char* strchr(const char* s, int ch);
+int strcmp(const char* a, const char* b);
 [[noreturn]] void panic(const char* s);
