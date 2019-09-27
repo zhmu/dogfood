@@ -4,6 +4,7 @@
 #include "page_allocator.h"
 #include "amd64.h"
 #include "bio.h"
+#include "ext2.h"
 #include "ide.h"
 #include "pic.h"
 #include "process.h"
@@ -386,7 +387,9 @@ extern "C" void startup(const MULTIBOOT* mb)
     ide::Initialize();
     pic::Enable(pic::irq::Timer);
     __asm __volatile("sti");
+    ext2::Mount();
 
+#if 0
     for (int n = 1; n < 5; n++) {
         printf("%d ==> ", n);
         auto& buf = bio::bread(0, n);
@@ -395,6 +398,7 @@ extern "C" void startup(const MULTIBOOT* mb)
         printf("\n");
         bio::brelse(buf);
     }
+#endif
 
     process::Scheduler();
 }
