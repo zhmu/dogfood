@@ -11,32 +11,29 @@ namespace ext2
         unsigned int blockSize;
         unsigned int biosPerBlock;
 
-        constexpr inline int RootDevice = 0;
-        constexpr inline fs::ino_t RootInode = 2;
+        constexpr inline fs::InodeNumber rootInodeNumber = 2;
 
         template<typename Buffer>
-        void ReadBlocks(bio::BlockNumber blockNr, unsigned int count, Buffer* dest)
+        void ReadBlocks(fs::Device dev, bio::BlockNumber blockNr, unsigned int count, Buffer* dest)
         {
             for (unsigned int n = 0; n < count; ++n) {
-                auto& buf = bio::bread(RootDevice, blockNr + n);
+                auto& buf = bio::bread(dev, blockNr + n);
                 memcpy(
                     reinterpret_cast<char*>(dest) + n * bio::BlockSize, buf.data, bio::BlockSize);
                 bio::brelse(buf);
             }
         }
 
-        void ReadBlockGroup(const int bgNumber, BlockGroup& blockGroup)
+        void ReadBlockGroup(fs::Device dev, const int bgNumber, BlockGroup& blockGroup)
         {
             const auto blockNr = [&]() {
                 bio::BlockNumber blockNr = 1 + (bgNumber * sizeof(BlockGroup)) / blockSize;
                 blockNr += superblock.s_first_data_block;
-                printf("bgNumber %d => ext2 block %d\n", bgNumber, blockNr);
                 blockNr *= biosPerBlock;
                 blockNr += ((bgNumber * sizeof(BlockGroup)) % blockSize) / bio::BlockSize;
                 return blockNr;
             }();
-            printf("bgNumber %d => block %d\n", bgNumber, blockNr);
-            auto& buf = bio::bread(RootDevice, blockNr);
+            auto& buf = bio::bread(dev, blockNr);
             memcpy(
                 reinterpret_cast<void*>(&blockGroup),
                 buf.data + (bgNumber * sizeof(BlockGroup) % bio::BlockSize), sizeof(BlockGroup));
@@ -44,7 +41,7 @@ namespace ext2
 
     } // namespace
 
-    void iread(fs::ino_t inum, Inode& inode)
+    void ReadInode(fs::Device dev, fs::InodeNumber inum, Inode& inode)
     {
         inum--; // inode 0 does not exist and is not stored
 
@@ -52,13 +49,15 @@ namespace ext2
         const uint32_t iindex = inum % superblock.s_inodes_per_group;
 
         BlockGroup blockGroup;
-        ReadBlockGroup(bgroup, blockGroup);
+        ReadBlockGroup(dev, bgroup, blockGroup);
+/*
         printf(
             "blockgroup %d => bitmap %d inode %d table %d free blocks %d free inodes %d used dirs "
             "%d\n",
             bgroup, blockGroup.bg_block_bitmap, blockGroup.bg_inode_bitmap,
             blockGroup.bg_inode_table, blockGroup.bg_free_blocks_count,
             blockGroup.bg_free_inodes_count, blockGroup.bg_used_dirs_count);
+*/
 
         const auto inodeBlockNr = [&]() {
             bio::BlockNumber blockNr = blockGroup.bg_inode_table;
@@ -68,7 +67,7 @@ namespace ext2
             return blockNr;
         }();
 
-        auto& buf = bio::bread(RootDevice, inodeBlockNr);
+        auto& buf = bio::bread(dev, inodeBlockNr);
         unsigned int idx = (iindex * superblock.s_inode_size) % bio::BlockSize;
         const Inode& in = *reinterpret_cast<Inode*>(&buf.data[idx]);
         inode = in;
@@ -98,16 +97,16 @@ namespace ext2
         panic("fourth indirect");
     }
 
-    uint32_t bmap(Inode& inode, unsigned int inodeBlockNr)
+    uint32_t bmap(fs::Inode& inode, unsigned int inodeBlockNr)
     {
         uint32_t ext2BlockNr = inodeBlockNr / biosPerBlock;
         uint32_t bioBlockOffset = inodeBlockNr % biosPerBlock;
         if (ext2BlockNr < 12) {
-            return (inode.i_block[ext2BlockNr] * biosPerBlock) + bioBlockOffset;
+            return (inode.ext2inode->i_block[ext2BlockNr] * biosPerBlock) + bioBlockOffset;
         }
 
         int level;
-        auto indirect = DetermineIndirect(inode, ext2BlockNr, level);
+        auto indirect = DetermineIndirect(*inode.ext2inode, ext2BlockNr, level);
         int block_shift = superblock.s_log_block_size + 8;
         do {
             auto blockIndex =
@@ -117,7 +116,7 @@ namespace ext2
                 blockIndex -= bio::BlockSize / sizeof(uint32_t);
                 indirect++;
             }
-            auto& buf = bio::bread(RootDevice, indirect);
+            auto& buf = bio::bread(inode.dev, indirect);
             indirect = [&]() {
                 const auto blocks = reinterpret_cast<uint32_t*>(buf.data);
                 return blocks[blockIndex];
@@ -128,34 +127,39 @@ namespace ext2
         return indirect * biosPerBlock + bioBlockOffset;
     }
 
-    void Mount()
+    bool ReadDirectory(fs::Inode& dirInode, off_t& offset, fs::DEntry& dentry)
+    {
+        union {
+            DirectoryEntry de;
+            char block[bio::BlockSize];
+        } u;
+
+        while(offset < dirInode.ext2inode->i_size) {
+            int n = fs::Read(dirInode, reinterpret_cast<void*>(&u.block), offset, sizeof(DirectoryEntry) + fs::MaxDirectoryEntryNameLength);
+            if (n <= 0) return false;
+
+            const auto& de = u.de;
+            if (de.name_len >= fs::MaxDirectoryEntryNameLength) continue;
+
+            dentry.d_ino = de.inode;
+            memcpy(dentry.d_name, reinterpret_cast<const char*>(de.name), de.name_len);
+            dentry.d_name[de.name_len] = '\0';
+            offset += de.rec_len;
+            return true;
+       }
+
+        return false;
+    }
+
+    fs::Inode* Mount(fs::Device dev)
     {
         // Piece the superblock together
-        ReadBlocks(2, sizeof(Superblock) / bio::BlockSize, &superblock);
+        ReadBlocks(dev, 2, sizeof(Superblock) / bio::BlockSize, &superblock);
         if (superblock.s_magic != constants::magic::Magic)
-            panic("bad ext2 magic");
+            return nullptr;
         blockSize = 1024L << superblock.s_log_block_size;
         biosPerBlock = blockSize / bio::BlockSize;
-        printf("%d\n", biosPerBlock);
-
-        // iread(RootInode, rootInode);
-
-        for (int n = 13; n < 14; n++) {
-            Inode inode;
-
-            iread(n, inode);
-            printf(
-                "inode %d: mode %d uid %d size %d gid %d #links %d blocks %d flags %x\n", n,
-                inode.i_mode, inode.i_uid, inode.i_size, inode.i_gid, inode.i_links_count,
-                inode.i_blocks, inode.i_flags);
-
-#if 1
-            for (int ibl = 0; ibl < inode.i_blocks; ibl++) {
-                auto bl = bmap(inode, ibl);
-                printf("%d ==> %d\n", ibl, bl);
-            }
-#endif
-        }
+        return fs::iget(dev, rootInodeNumber);
     }
 
 } // namespace ext2

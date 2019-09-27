@@ -9,6 +9,10 @@
 #include "types.h"
 #include "fs.h"
 
+namespace fs {
+    struct Inode;
+}
+
 namespace ext2
 {
     namespace constants
@@ -192,8 +196,9 @@ namespace ext2
 /* Values for old filesystems (that have the good old revision) */
 #define EXT2_GOOD_OLD_INODE_SIZE 128
 
-    void Mount();
-    void iread(fs::ino_t inum, Inode& inode);
-    uint32_t bmap(Inode& inode, unsigned int inodeBlockNr);
+    fs::Inode* Mount(fs::Device dev);
+    void ReadInode(fs::Device dev, fs::InodeNumber inum, Inode& inode);
+    uint32_t bmap(fs::Inode& inode, unsigned int inodeBlockNr);
+    bool ReadDirectory(fs::Inode& dirInode, off_t& offset, fs::DEntry& dentry);
 
 } // namespace ext2

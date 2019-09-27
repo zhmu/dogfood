@@ -384,34 +384,11 @@ extern "C" void startup(const MULTIBOOT* mb)
         "Dogfood/amd64 - %ld MB memory available\n",
         (page_allocator::GetNumberOfAvailablePages() * (vm::PageSize / 1024UL)) / 1024UL);
 
-    process::Initialize();
     ide::Initialize();
     pic::Enable(pic::irq::Timer);
     __asm __volatile("sti");
-    ext2::Mount();
-
-    ext2::Inode inode;
-    ext2::iread(28, inode);
-    char buf[513];
-    off_t offset = 0;
-   while(1){
-        int r = fs::Read(inode, buf, offset, sizeof(buf));
-        if (r <= 0) { printf("!! r %d\n", r); break; }
-        //printf("[%d]", r);
-        for(int n = 0; n < r; n++) printf("%c", buf[n]);
-        offset += r;
-    }
-
-#if 0
-    for (int n = 1; n < 5; n++) {
-        printf("%d ==> ", n);
-        auto& buf = bio::bread(0, n);
-        for (int n = 0; n < 512; n++)
-            printf("%x ", buf.data[n]);
-        printf("\n");
-        bio::brelse(buf);
-    }
-#endif
+    fs::Initialize();
+    process::Initialize();
 
     process::Scheduler();
 }
