@@ -229,6 +229,8 @@ namespace amd64
     inline void write_cr3(uint64_t val) { __asm __volatile("movq %0, %%cr3\n" : : "a"(val)); }
     inline void write_cr4(uint64_t val) { __asm __volatile("movq %0, %%cr4\n" : : "a"(val)); }
 
+    inline void FlushTLB() { __asm __volatile("movq %cr3, %rax; movq %rax, %cr3"); }
+
     namespace io
     {
         inline void outb(uint16_t port, uint8_t data)

@@ -14,12 +14,17 @@ namespace vm
     inline constexpr uint64_t Page_G = (1UL << 8);
     inline constexpr uint64_t Page_NX = (1UL << 63);
 
-    uint64_t* FindPTE(uint64_t* pml4, uint64_t addr, bool create);
+    namespace userland
+    {
+        inline constexpr uint64_t stackBase = 0x10000;
+    }
+
     void
     Map(uint64_t* pml4, const uint64_t va_start, const size_t length, const uint64_t phys,
         const uint64_t pteFlags);
 
     uint64_t* CreateUserlandPageDirectory();
+    void FreeUserlandPageDirectory(uint64_t* pml);
 
     /*
      * We use the following memory map, [G] means global mapped:

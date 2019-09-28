@@ -28,6 +28,7 @@ namespace process
 
     Process& GetCurrent();
 
+    char* CreateAndMapUserStack(Process& proc);
     void Initialize();
     void Scheduler();
 

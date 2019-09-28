@@ -17,7 +17,6 @@ namespace process
     namespace
     {
         inline constexpr uint64_t initCodeBase = 0x8000000;
-        inline constexpr uint64_t userStackBase = 0x10000;
         inline constexpr size_t maxProcesses = 32;
         Process process[maxProcesses];
         Process* current = nullptr;
@@ -30,14 +29,6 @@ namespace process
             assert(kstack != nullptr);
             proc.kernelStack = kstack;
             return kstack + vm::PageSize;
-        }
-
-        char* CreateUserStack(Process& proc)
-        {
-            auto ustack = reinterpret_cast<char*>(page_allocator::Allocate());
-            assert(ustack != nullptr);
-            proc.userStack = ustack;
-            return ustack + vm::PageSize;
         }
 
         Process* AllocateProcess()
@@ -65,11 +56,8 @@ namespace process
                 }
                 // Allocate user stack
                 {
-                    auto ustack = CreateUserStack(proc);
-                    vm::Map(
-                        pd, userStackBase, vm::PageSize, vm::VirtualToPhysical(proc.userStack),
-                        vm::Page_P | vm::Page_RW | vm::Page_US);
-                    proc.trapFrame->rsp = userStackBase + vm::PageSize;
+                    CreateAndMapUserStack(proc);
+                    proc.trapFrame->rsp = vm::userland::stackBase + vm::PageSize;
                 }
                 // Allocate context for switch_to()
                 {
@@ -87,6 +75,19 @@ namespace process
     } // namespace
 
     Process& GetCurrent() { return *current; }
+
+    char* CreateAndMapUserStack(Process& proc)
+    {
+        auto ustack = reinterpret_cast<char*>(page_allocator::Allocate());
+        assert(ustack != nullptr);
+        proc.userStack = ustack;
+
+        auto pd = reinterpret_cast<uint64_t*>(vm::PhysicalToVirtual(proc.pageDirectory));
+        vm::Map(
+            pd, vm::userland::stackBase, vm::PageSize, vm::VirtualToPhysical(proc.userStack),
+            vm::Page_P | vm::Page_RW | vm::Page_US);
+        return ustack;
+    }
 
     void Initialize()
     {
