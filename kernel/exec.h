@@ -1,6 +1,7 @@
 #pragma once
 
-namespace amd64 {
+namespace amd64
+{
     struct Syscall;
 }
 

@@ -339,12 +339,14 @@ typedef struct {
 #define DT_FINI_ARRAY 26   /* Pointer to an array of pointers of termination functions */
 #define DT_INIT_ARRAYSZ 27 /* Size, in bytes, of the array of initialization functions */
 #define DT_FINI_ARRAYSZ 28 /* Size, in bytes, of the array of termination functions */
-#define DT_LOOS 0x60000000 /* Defines a range of dynamic table tags for environment-specific use \
-                            */
+#define DT_LOOS                                                                      \
+    0x60000000 /* Defines a range of dynamic table tags for environment-specific use \
+                */
 #define DT_GNU_HASH 0x6ffffef5
 #define DT_HIOS 0x6fffffff
-#define DT_LOPROC 0x70000000 /* Defines a range of dynamic table tags for processor-specific use \
-                              */
+#define DT_LOPROC                                                                  \
+    0x70000000 /* Defines a range of dynamic table tags for processor-specific use \
+                */
 #define DT_HIPROC 0x7fffffff
     union {
         Elf64_Xword d_val;

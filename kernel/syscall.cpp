@@ -30,7 +30,7 @@ extern "C" uint64_t syscall(amd64::Syscall* sc)
             return process::GetCurrent().pid;
     }
     printf(
-        "unsupported syscall %d %lx [%x %x %x %x %x %x]\n", sc->no, sc->rip, sc->arg1, sc->arg2, sc->arg3,
-        sc->arg4, sc->arg5, sc->arg6);
+        "unsupported syscall %d %lx [%x %x %x %x %x %x]\n", sc->no, sc->rip, sc->arg1, sc->arg2,
+        sc->arg3, sc->arg4, sc->arg5, sc->arg6);
     return -1;
 }

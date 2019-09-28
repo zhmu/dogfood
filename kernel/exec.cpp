@@ -18,12 +18,9 @@ namespace
 {
     bool VerifyHeader(const Elf64_Ehdr& ehdr)
     {
-        if (ehdr.e_ident[EI_MAG0] != ELFMAG0 ||
-            ehdr.e_ident[EI_MAG1] != ELFMAG1 ||
-            ehdr.e_ident[EI_MAG2] != ELFMAG2 ||
-            ehdr.e_ident[EI_MAG3] != ELFMAG3 ||
-            ehdr.e_ident[EI_CLASS] != ELFCLASS64 ||
-            ehdr.e_ident[EI_DATA] != ELFDATA2LSB)
+        if (ehdr.e_ident[EI_MAG0] != ELFMAG0 || ehdr.e_ident[EI_MAG1] != ELFMAG1 ||
+            ehdr.e_ident[EI_MAG2] != ELFMAG2 || ehdr.e_ident[EI_MAG3] != ELFMAG3 ||
+            ehdr.e_ident[EI_CLASS] != ELFCLASS64 || ehdr.e_ident[EI_DATA] != ELFDATA2LSB)
             return false;
         if (ehdr.e_type != ET_EXEC)
             return false;
@@ -33,7 +30,7 @@ namespace
             return false;
         return true;
     }
-}
+} // namespace
 
 int exec(amd64::Syscall& sc)
 {
@@ -41,7 +38,8 @@ int exec(amd64::Syscall& sc)
     const auto argv = reinterpret_cast<const char**>(sc.arg2);
     const auto envp = reinterpret_cast<const char**>(sc.arg3);
     auto inode = fs::namei(path);
-    if (inode == nullptr) return -ENOENT;
+    if (inode == nullptr)
+        return -ENOENT;
 
     Elf64_Ehdr ehdr;
     if (fs::Read(*inode, reinterpret_cast<void*>(&ehdr), 0, sizeof(ehdr)) != sizeof(ehdr)) {
@@ -57,16 +55,20 @@ int exec(amd64::Syscall& sc)
 
     auto& current = process::GetCurrent();
     auto pml4 = reinterpret_cast<uint64_t*>(vm::PhysicalToVirtual(current.pageDirectory));
-    for(int ph = 0; ph < ehdr.e_phnum; ++ph) {
+    for (int ph = 0; ph < ehdr.e_phnum; ++ph) {
         Elf64_Phdr phdr;
-        if (fs::Read(*inode, reinterpret_cast<void*>(&phdr), ehdr.e_phoff + ph * sizeof(phdr), sizeof(phdr)) != sizeof(phdr)) {
+        if (fs::Read(
+                *inode, reinterpret_cast<void*>(&phdr), ehdr.e_phoff + ph * sizeof(phdr),
+                sizeof(phdr)) != sizeof(phdr)) {
             fs::iput(*inode);
             return -EIO;
         }
-        if (phdr.p_type != PT_LOAD) continue;
+        if (phdr.p_type != PT_LOAD)
+            continue;
 
-        printf("phdr %d: type %d offset %lx vaddr %p memsz %d filesz %d flags %x\n",
-            ph, phdr.p_type, phdr.p_offset, phdr.p_vaddr, phdr.p_memsz, phdr.p_filesz, phdr.p_flags);
+        printf(
+            "phdr %d: type %d offset %lx vaddr %p memsz %d filesz %d flags %x\n", ph, phdr.p_type,
+            phdr.p_offset, phdr.p_vaddr, phdr.p_memsz, phdr.p_filesz, phdr.p_flags);
 
         auto pteFlags = vm::Page_P | vm::Page_US;
         if ((phdr.p_flags & PF_X) == 0)
@@ -75,12 +77,16 @@ int exec(amd64::Syscall& sc)
             pteFlags |= vm::Page_RW;
 
         auto totalPages = vm::RoundUpToPage(phdr.p_memsz) / vm::PageSize;
-        for(int n = 0; n < totalPages; ++n) {
+        for (int n = 0; n < totalPages; ++n) {
             void* page = page_allocator::Allocate();
             assert(page != nullptr);
             memset(page, 0, vm::PageSize);
-            printf("map: va %p pa %p flags %lx\n", phdr.p_vaddr + n * vm::PageSize, vm::VirtualToPhysical(page), pteFlags);
-            vm::Map(pml4, phdr.p_vaddr + n * vm::PageSize, vm::PageSize, vm::VirtualToPhysical(page), pteFlags);
+            printf(
+                "map: va %p pa %p flags %lx\n", phdr.p_vaddr + n * vm::PageSize,
+                vm::VirtualToPhysical(page), pteFlags);
+            vm::Map(
+                pml4, phdr.p_vaddr + n * vm::PageSize, vm::PageSize, vm::VirtualToPhysical(page),
+                pteFlags);
 
             auto r = fs::Read(*inode, page, phdr.p_offset, vm::PageSize);
             printf("r %lx\n", r);
@@ -99,4 +105,3 @@ int exec(amd64::Syscall& sc)
     fs::iput(*inode);
     return -1;
 }
-
