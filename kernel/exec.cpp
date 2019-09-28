@@ -115,8 +115,12 @@ int exec(amd64::Syscall& sc)
         return -EIO;
     }
 
+    auto& current = process::GetCurrent();
+    auto ustack = CreateAndMapUserStack(current) + vm::PageSize;
+
     amd64::FlushTLB();
     sc.rip = ehdr.e_entry;
+    sc.rsp = vm::userland::stackBase + vm::PageSize;
 
     fs::iput(*inode);
     return 0;

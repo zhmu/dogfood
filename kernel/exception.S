@@ -156,7 +156,7 @@ syscall_handler:
     pushq   %r14
     pushq   %r15
 
-    subq    $64, %rsp
+    subq    $72, %rsp
     movq    %rax, 0(%rsp)
     movq    %rdi, 8(%rsp)
     movq    %rsi, 16(%rsp)
@@ -165,6 +165,8 @@ syscall_handler:
     movq    %r9, 40(%rsp)
     movq    %r8, 48(%rsp)
     movq    %rcx, 56(%rsp)
+    movq    syscall_userland_rsp, %rax
+    movq    %rax, 64(%rsp)
 
     sti
 
@@ -172,7 +174,9 @@ syscall_handler:
     call    syscall
 
     movq    56(%rsp), %rcx
-    addq    $64, %rsp
+    movq    64(%rsp), %rbx
+    movq    %rbx, syscall_userland_rsp
+    addq    $72, %rsp
 
     cli
 
