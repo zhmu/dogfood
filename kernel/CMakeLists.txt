@@ -11,7 +11,7 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++17 ${COMMON_FLAGS}")
 set(CMAKE_CXX_LINK_EXECUTABLE "ld <CMAKE_CXX_LINK_FLAGS> <LINK_FLAGS> <OBJECTS>  -o <TARGET> <LINK_LIBRARIES>")
 set(CMAKE_CXX_LINK_FLAGS "-b elf64-x86-64 -T ${CMAKE_CURRENT_SOURCE_DIR}/ldscript -nostdlib -nodefaultlibs")
 
-set(SOURCES entry.S startup.cpp exception.S console.cpp lib.cpp page_allocator.cpp pic.cpp process.cpp vm.cpp initcode.S bio.cpp ide.cpp ext2.cpp fs.cpp syscall.cpp)
+set(SOURCES entry.S startup.cpp exception.S console.cpp lib.cpp page_allocator.cpp pic.cpp process.cpp vm.cpp initcode.S bio.cpp ide.cpp ext2.cpp fs.cpp syscall.cpp exec.cpp)
 add_executable(kernel_elf ${SOURCES})
 set_target_properties(kernel_elf PROPERTIES OUTPUT_NAME "kernel.elf")
 

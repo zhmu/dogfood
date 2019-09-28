@@ -2,10 +2,11 @@
 #include "syscall.h"
 #include "amd64.h"
 #include "console.h"
+#include "exec.h"
 #include "process.h"
 #include "lib.h"
 
-extern "C" uint64_t syscall(const amd64::Syscall* sc)
+extern "C" uint64_t syscall(amd64::Syscall* sc)
 {
     switch (sc->no) {
         case SYS_write: {
@@ -16,10 +17,8 @@ extern "C" uint64_t syscall(const amd64::Syscall* sc)
                 console::put_char(*s++);
             return -1;
         }
-        case SYS_execve: {
-            printf("execve: %p %p %p\n", sc->arg1, sc->arg2, sc->arg3);
-            return -1;
-        }
+        case SYS_execve:
+            return exec(*sc);
         case SYS_getsid:
         case SYS_getuid:
         case SYS_geteuid:
@@ -31,7 +30,7 @@ extern "C" uint64_t syscall(const amd64::Syscall* sc)
             return process::GetCurrent().pid;
     }
     printf(
-        "unsupported syscall %d [%x %x %x %x %x %x]\n", sc->no, sc->arg1, sc->arg2, sc->arg3,
+        "unsupported syscall %d %lx [%x %x %x %x %x %x]\n", sc->no, sc->rip, sc->arg1, sc->arg2, sc->arg3,
         sc->arg4, sc->arg5, sc->arg6);
     return -1;
 }

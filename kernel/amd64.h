@@ -203,6 +203,7 @@ namespace amd64
         uint64_t arg4; // r10
         uint64_t arg5; // r9
         uint64_t arg6; // r8
+        uint64_t rip;  // rip
     } __attribute__((packed));
 
     inline uint64_t rdmsr(uint32_t msr)

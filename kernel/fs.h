@@ -30,5 +30,6 @@ namespace fs
     int Read(Inode& inode, void* dst, off_t offset, unsigned int count);
 
     Inode* iget(Device dev, InodeNumber inum);
+    void iput(Inode& inode);
     Inode* namei(const char* path);
 } // namespace fs
