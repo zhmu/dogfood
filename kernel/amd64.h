@@ -182,15 +182,12 @@ namespace amd64
 
     // Note: must match switch_to() in exception.S
     struct Context {
-        uint64_t rdx;
-        uint64_t r8;
-        uint64_t r9;
-        uint64_t r10;
-        uint64_t r11;
+        uint64_t rbx;
         uint64_t r12;
         uint64_t r13;
         uint64_t r14;
         uint64_t r15;
+        uint64_t rbp;
         uint64_t rip;
     } __attribute__((packed));
 
