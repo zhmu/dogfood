@@ -9,6 +9,8 @@
 extern "C" uint64_t syscall(amd64::Syscall* sc)
 {
     switch (sc->no) {
+        case SYS_exit:
+            return process::Exit(*sc);
         case SYS_write: {
             printf("write: %d %p %x\n", sc->arg1, sc->arg2, sc->arg3);
             auto s = reinterpret_cast<const char*>(sc->arg2);
@@ -17,6 +19,10 @@ extern "C" uint64_t syscall(amd64::Syscall* sc)
                 console::put_char(*s++);
             return -1;
         }
+        case SYS_clone:
+            return process::Fork(*sc);
+        case SYS_waitpid:
+            return process::WaitPID(*sc);
         case SYS_execve:
             return exec(*sc);
         case SYS_getsid:

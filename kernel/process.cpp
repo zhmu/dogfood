@@ -1,5 +1,6 @@
 #include "process.h"
 #include "amd64.h"
+#include "errno.h"
 #include "lib.h"
 #include "page_allocator.h"
 #include "vm.h"
@@ -40,9 +41,6 @@ namespace process
                 proc.state = State::Construct;
                 proc.pid = next_pid++;
 
-                auto pd = vm::CreateUserlandPageDirectory();
-                proc.pageDirectory = vm::VirtualToPhysical(pd);
-
                 auto sp = CreateUserKernelStack(proc);
                 // Allocate trap frame for trap_return()
                 {
@@ -53,11 +51,6 @@ namespace process
                     tf->rflags = 0; // TODO IF
                     tf->ss = static_cast<uint64_t>(amd64::Selector::UserData) + 3;
                     proc.trapFrame = tf;
-                }
-                // Allocate user stack
-                {
-                    CreateAndMapUserStack(proc);
-                    proc.trapFrame->rsp = vm::userland::stackBase + vm::PageSize;
                 }
                 // Allocate context for switch_to()
                 {
@@ -70,6 +63,34 @@ namespace process
                 return &proc;
             }
             return nullptr;
+        }
+
+        Process* CreateProcess()
+        {
+            auto p = AllocateProcess();
+            if (p == nullptr)
+                return nullptr;
+            auto& proc = *p;
+
+            auto pd = vm::CreateUserlandPageDirectory();
+            proc.pageDirectory = vm::VirtualToPhysical(pd);
+            // Allocate user stack
+            {
+                CreateAndMapUserStack(proc);
+                proc.trapFrame->rsp = vm::userland::stackBase + vm::PageSize;
+            }
+
+            return &proc;
+        }
+
+        void DestroyZombieProcess(Process& proc)
+        {
+            auto pml4 = reinterpret_cast<uint64_t*>(vm::PhysicalToVirtual(proc.pageDirectory));
+            vm::FreeUserlandPageDirectory(pml4);
+            if (proc.userStack != nullptr)
+                page_allocator::Free(proc.userStack);
+            page_allocator::Free(proc.kernelStack);
+            proc.state = State::Unused;
         }
 
     } // namespace
@@ -89,10 +110,82 @@ namespace process
         return ustack;
     }
 
+    int Fork(amd64::Syscall& sc)
+    {
+        auto new_process = AllocateProcess();
+        if (new_process == nullptr)
+            return -ENOMEM;
+        new_process->ppid = current->pid;
+
+        auto current_pd =
+            reinterpret_cast<uint64_t*>(vm::PhysicalToVirtual(current->pageDirectory));
+        auto new_pd = vm::CloneMappings(current_pd);
+        new_process->pageDirectory = vm::VirtualToPhysical(new_pd);
+        new_process->state = State::Runnable;
+
+        // We're using trap_return() to yield control back to userland; copy values from syscall
+        // frame
+        new_process->trapFrame->cs = static_cast<uint64_t>(amd64::Selector::UserCode) + 3;
+        new_process->trapFrame->ss = static_cast<uint64_t>(amd64::Selector::UserData) + 3;
+        new_process->trapFrame->rflags = 0x202; // XXX
+        new_process->trapFrame->rip = sc.rip;
+        new_process->trapFrame->rsp = sc.rsp;
+
+        // TODO restore these registers from the syscall frame too
+        new_process->trapFrame->rbx = 0;
+        new_process->trapFrame->r12 = 0;
+        new_process->trapFrame->r13 = 0;
+        new_process->trapFrame->r14 = 0;
+        new_process->trapFrame->r15 = 0;
+        new_process->trapFrame->rbp = 0;
+        return new_process->pid;
+    }
+
+    int WaitPID(amd64::Syscall& sc)
+    {
+        auto pid = static_cast<int>(sc.arg1);
+        auto stat_loc = reinterpret_cast<int*>(sc.arg2);
+        auto options = static_cast<int>(sc.arg3);
+
+        while (true) {
+            bool have_children = false;
+            for (auto& proc : process) {
+                if (proc.state == State::Unused || proc.ppid != current->pid)
+                    continue;
+
+                have_children = true;
+                if (proc.state == State::Zombie) {
+                    int pid = proc.pid;
+                    DestroyZombieProcess(proc);
+                    return pid;
+                }
+            }
+            if (!have_children)
+                return -ECHILD;
+
+            // TODO implement proper sleep/wakeup mechanism
+            current->state = State::Runnable; // XXX
+            switch_to(&current->context, cpu_context);
+        }
+        // NOTREACHED
+    }
+
+    int Exit(amd64::Syscall& sc)
+    {
+        if (current->pid == 1)
+            panic("init exiting?");
+
+        current->state = State::Zombie;
+        switch_to(&current->context, cpu_context);
+        for (;;)
+            ;
+        // NOTREACHED
+    }
+
     void Initialize()
     {
         {
-            auto proc = AllocateProcess();
+            auto proc = CreateProcess();
             assert(proc != nullptr);
             assert(proc->pid == 1);
 
@@ -126,7 +219,6 @@ namespace process
                     reinterpret_cast<char*>(proc.kernelStack) + vm::PageSize);
                 syscall_kernel_rsp = reinterpret_cast<uint64_t>(
                     reinterpret_cast<char*>(proc.kernelStack) + vm::PageSize);
-                printf("syscall_kernel_rsp = %lx\n", syscall_kernel_rsp);
                 switch_to(&cpu_context, proc.context);
             }
         }

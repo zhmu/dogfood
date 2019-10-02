@@ -106,4 +106,24 @@ namespace vm
         });
         page_allocator::Free(pml4);
     }
+
+    uint64_t* CloneMappings(uint64_t* src_pml4)
+    {
+        uint64_t* dst_pml4 = CreateUserlandPageDirectory();
+        assert(dst_pml4 != nullptr);
+
+        WalkPTE(src_pml4, [&](const uint64_t va, const uint64_t entry) {
+            if (va >= vm::PhysicalToVirtual(static_cast<uint64_t>(0)))
+                return;
+
+            auto page = page_allocator::Allocate();
+            assert(page != nullptr);
+            memcpy(page, reinterpret_cast<const void*>(vm::VirtualToPhysical(va)), vm::PageSize);
+            auto pteFlags = entry & 0xfff;
+            if (entry & Page_NX)
+                pteFlags |= Page_NX;
+            Map(dst_pml4, va, vm::PageSize, vm::VirtualToPhysical(page), pteFlags);
+        });
+        return dst_pml4;
+    }
 } // namespace vm

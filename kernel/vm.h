@@ -25,6 +25,7 @@ namespace vm
 
     uint64_t* CreateUserlandPageDirectory();
     void FreeUserlandPageDirectory(uint64_t* pml);
+    uint64_t* CloneMappings(uint64_t* src_pml4);
 
     /*
      * We use the following memory map, [G] means global mapped:

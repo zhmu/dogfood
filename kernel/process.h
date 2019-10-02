@@ -6,16 +6,18 @@
 namespace amd64
 {
     struct Context;
+    struct Syscall;
     struct TrapFrame;
 } // namespace amd64
 
 namespace process
 {
-    enum class State { Unused, Construct, Runnable, Running, Zombie };
+    enum class State { Unused, Construct, Runnable, Running, Zombie, Sleeping };
 
     struct Process {
         State state = State::Unused;
         int pid = -1;
+        int ppid = -1;
         Process* parent = nullptr;
         //
         uint64_t pageDirectory = 0;  // physical address
@@ -31,5 +33,8 @@ namespace process
     char* CreateAndMapUserStack(Process& proc);
     void Initialize();
     void Scheduler();
+    int Exit(amd64::Syscall& context);
+    int Fork(amd64::Syscall& context);
+    int WaitPID(amd64::Syscall& context);
 
 } // namespace process
