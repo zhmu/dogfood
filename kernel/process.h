@@ -6,7 +6,6 @@
 namespace amd64
 {
     struct Context;
-    struct Syscall;
     struct TrapFrame;
 } // namespace amd64
 
@@ -33,8 +32,8 @@ namespace process
     char* CreateAndMapUserStack(Process& proc);
     void Initialize();
     void Scheduler();
-    int Exit(amd64::Syscall& context);
-    int Fork(amd64::Syscall& context);
-    int WaitPID(amd64::Syscall& context);
+    int Exit(amd64::TrapFrame& context);
+    int Fork(amd64::TrapFrame& context);
+    int WaitPID(amd64::TrapFrame& context);
 
 } // namespace process

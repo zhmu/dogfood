@@ -3,6 +3,7 @@
 #include "errno.h"
 #include "lib.h"
 #include "page_allocator.h"
+#include "syscall.h"
 #include "vm.h"
 
 extern amd64::TSS kernel_tss;
@@ -110,7 +111,7 @@ namespace process
         return ustack;
     }
 
-    int Fork(amd64::Syscall& sc)
+    int Fork(amd64::TrapFrame& tf)
     {
         auto new_process = AllocateProcess();
         if (new_process == nullptr)
@@ -128,24 +129,24 @@ namespace process
         new_process->trapFrame->cs = static_cast<uint64_t>(amd64::Selector::UserCode) + 3;
         new_process->trapFrame->ss = static_cast<uint64_t>(amd64::Selector::UserData) + 3;
         new_process->trapFrame->rflags = 0x202; // XXX
-        new_process->trapFrame->rip = sc.rip;
-        new_process->trapFrame->rsp = sc.rsp;
+        new_process->trapFrame->rip = tf.rip;
+        new_process->trapFrame->rsp = tf.rsp;
 
-        // TODO restore these registers from the syscall frame too
-        new_process->trapFrame->rbx = 0;
-        new_process->trapFrame->r12 = 0;
-        new_process->trapFrame->r13 = 0;
-        new_process->trapFrame->r14 = 0;
-        new_process->trapFrame->r15 = 0;
-        new_process->trapFrame->rbp = 0;
+        // Restore these registers from the trapframe; the is needed by the ABI
+        new_process->trapFrame->rbx = tf.rbx;
+        new_process->trapFrame->r12 = tf.r12;
+        new_process->trapFrame->r13 = tf.r12;
+        new_process->trapFrame->r14 = tf.r14;
+        new_process->trapFrame->r15 = tf.r15;
+        new_process->trapFrame->rbp = tf.rbp;
         return new_process->pid;
     }
 
-    int WaitPID(amd64::Syscall& sc)
+    int WaitPID(amd64::TrapFrame& tf)
     {
-        auto pid = static_cast<int>(sc.arg1);
-        auto stat_loc = reinterpret_cast<int*>(sc.arg2);
-        auto options = static_cast<int>(sc.arg3);
+        auto pid = static_cast<int>(syscall::GetArgument<1>(tf));
+        auto stat_loc = reinterpret_cast<int*>(syscall::GetArgument<2>(tf));
+        auto options = static_cast<int>(syscall::GetArgument<3>(tf));
 
         while (true) {
             bool have_children = false;
@@ -170,7 +171,7 @@ namespace process
         // NOTREACHED
     }
 
-    int Exit(amd64::Syscall& sc)
+    int Exit(amd64::TrapFrame& tf)
     {
         if (current->pid == 1)
             panic("init exiting?");

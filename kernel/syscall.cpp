@@ -6,25 +6,27 @@
 #include "process.h"
 #include "lib.h"
 
-extern "C" uint64_t syscall(amd64::Syscall* sc)
+extern "C" uint64_t perform_syscall(amd64::TrapFrame* tf)
 {
-    switch (sc->no) {
+    switch (syscall::GetNumber(*tf)) {
         case SYS_exit:
-            return process::Exit(*sc);
+            return process::Exit(*tf);
         case SYS_write: {
-            printf("write: %d %p %x\n", sc->arg1, sc->arg2, sc->arg3);
-            auto s = reinterpret_cast<const char*>(sc->arg2);
-            auto len = sc->arg3;
-            while (len--)
+            printf(
+                "write: %d %p %x\n", syscall::GetArgument<1>(*tf), syscall::GetArgument<2>(*tf),
+                syscall::GetArgument<3>(*tf));
+            auto s = reinterpret_cast<const char*>(syscall::GetArgument<2>(*tf));
+            auto len = syscall::GetArgument<3>(*tf);
+            for (auto n = len; n > 0; n--)
                 console::put_char(*s++);
-            return -1;
+            return len;
         }
         case SYS_clone:
-            return process::Fork(*sc);
+            return process::Fork(*tf);
         case SYS_waitpid:
-            return process::WaitPID(*sc);
+            return process::WaitPID(*tf);
         case SYS_execve:
-            return exec(*sc);
+            return exec(*tf);
         case SYS_getsid:
         case SYS_getuid:
         case SYS_geteuid:
@@ -36,7 +38,8 @@ extern "C" uint64_t syscall(amd64::Syscall* sc)
             return process::GetCurrent().pid;
     }
     printf(
-        "unsupported syscall %d %lx [%x %x %x %x %x %x]\n", sc->no, sc->rip, sc->arg1, sc->arg2,
-        sc->arg3, sc->arg4, sc->arg5, sc->arg6);
+        "unsupported syscall %d %lx [%x %x %x %x %x %x]\n", syscall::GetNumber(*tf),
+        syscall::GetArgument<1>(*tf), syscall::GetArgument<2>(*tf), syscall::GetArgument<3>(*tf),
+        syscall::GetArgument<4>(*tf), syscall::GetArgument<5>(*tf), syscall::GetArgument<6>(*tf));
     return -1;
 }

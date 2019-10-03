@@ -6,6 +6,7 @@
 #include "lib.h"
 #include "page_allocator.h"
 #include "process.h"
+#include "syscall.h"
 #include "vm.h"
 
 namespace
@@ -92,11 +93,11 @@ namespace
     }
 } // namespace
 
-int exec(amd64::Syscall& sc)
+int exec(amd64::TrapFrame& tf)
 {
-    const auto path = reinterpret_cast<const char*>(sc.arg1);
-    const auto argv = reinterpret_cast<const char**>(sc.arg2);
-    const auto envp = reinterpret_cast<const char**>(sc.arg3);
+    const auto path = reinterpret_cast<const char*>(syscall::GetArgument<1>(tf));
+    const auto argv = reinterpret_cast<const char**>(syscall::GetArgument<2>(tf));
+    const auto envp = reinterpret_cast<const char**>(syscall::GetArgument<3>(tf));
     auto inode = fs::namei(path);
     if (inode == nullptr)
         return -ENOENT;
@@ -119,8 +120,8 @@ int exec(amd64::Syscall& sc)
     auto ustack = CreateAndMapUserStack(current) + vm::PageSize;
 
     amd64::FlushTLB();
-    sc.rip = ehdr.e_entry;
-    sc.rsp = vm::userland::stackBase + vm::PageSize;
+    tf.rip = ehdr.e_entry;
+    tf.rsp = vm::userland::stackBase + vm::PageSize;
 
     fs::iput(*inode);
     return 0;

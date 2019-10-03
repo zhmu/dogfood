@@ -142,45 +142,34 @@ syscall_handler:
     movq    %rsp, syscall_userland_rsp
     movq    syscall_kernel_rsp, %rsp
 
-    pushq   %rbx
-    pushq   %rbp
-    pushq   %r11
-    pushq   %r12
-    pushq   %r13
-    pushq   %r14
-    pushq   %r15
+    // Create a trap frame; we don't need to store all registers here,
+    // but as we want most of them anyway...
+    subq    $0xb0, %rsp
+    SAVE_REGISTERS
+    movq    %rcx, 0x88(%rsp)
 
-    subq    $72, %rsp
-    movq    %rax, 0(%rsp)
-    movq    %rdi, 8(%rsp)
-    movq    %rsi, 16(%rsp)
-    movq    %rdx, 24(%rsp)
-    movq    %r10, 32(%rsp)
-    movq    %r9, 40(%rsp)
-    movq    %r8, 48(%rsp)
-    movq    %rcx, 56(%rsp)
     movq    syscall_userland_rsp, %rax
-    movq    %rax, 64(%rsp)
+    movq    %rax, 0xa0(%rsp)
 
     sti
 
     movq    %rsp, %rdi
-    call    syscall
+    call    perform_syscall
 
-    movq    56(%rsp), %rcx
-    movq    64(%rsp), %rbx
+    movq    0xa0(%rsp), %rbx
     movq    %rbx, syscall_userland_rsp
-    addq    $72, %rsp
 
     cli
 
-    popq    %r15
-    popq    %r14
-    popq    %r13
-    popq    %r12
-    popq    %r11
-    popq    %rbp
-    popq    %rbx
+    // Restore just what the ABI needs
+    movq    0x10(%rsp), %rbx
+    movq    0x28(%rsp), %rbp
+    movq    0x58(%rsp), %r11
+    movq    0x60(%rsp), %r12
+    movq    0x68(%rsp), %r13
+    movq    0x70(%rsp), %r14
+    movq    0x78(%rsp), %r15
+    movq    0x88(%rsp), %rcx
 
     movq    syscall_userland_rsp, %rsp
     sysretq

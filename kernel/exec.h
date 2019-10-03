@@ -2,7 +2,7 @@
 
 namespace amd64
 {
-    struct Syscall;
+    struct TrapFrame;
 }
 
-int exec(amd64::Syscall&);
+int exec(amd64::TrapFrame&);
