@@ -9,6 +9,8 @@
 #include "syscall.h"
 #include "vm.h"
 
+#define EXEC_DEBUG 0
+
 namespace
 {
     bool VerifyHeader(const Elf64_Ehdr& ehdr)
@@ -63,28 +65,28 @@ namespace
                 phdr.p_flags);
 #endif
             const auto pteFlags = MapElfFlagsToVM(phdr.p_flags);
-            const auto totalPages = vm::RoundUpToPage(phdr.p_memsz) / vm::PageSize;
-            for (int n = 0; n < totalPages; ++n) {
+
+            const auto va = vm::RoundDownToPage(phdr.p_vaddr);
+            const auto fileOffset = vm::RoundDownToPage(phdr.p_offset);
+            auto fileSz = phdr.p_filesz + (phdr.p_offset - fileOffset);
+            for (uint64_t offset = 0; offset < phdr.p_memsz; offset += vm::PageSize) {
                 void* page = page_allocator::Allocate();
                 if (page == nullptr)
                     return false;
                 memset(page, 0, vm::PageSize);
-#if EXEC_DEBUG
-                printf(
-                    "map: va %p pa %p flags %lx\n", phdr.p_vaddr + n * vm::PageSize,
-                    vm::VirtualToPhysical(page), pteFlags);
-#endif
-
                 vm::Map(
-                    pml4, phdr.p_vaddr + n * vm::PageSize, vm::PageSize,
+                    pml4, va + offset, vm::PageSize,
                     vm::VirtualToPhysical(page), pteFlags);
 
-                const auto readOffset = n * vm::PageSize;
+                const auto readOffset = offset;
                 int bytesToRead = vm::PageSize;
-                if (readOffset + bytesToRead > phdr.p_filesz)
-                    bytesToRead = phdr.p_filesz - readOffset;
+                if (readOffset + bytesToRead > fileSz)
+                    bytesToRead = fileSz - readOffset;
+#if EXEC_DEBUG
+                printf("reading: offset %x, %d bytes -> %p\n", fileOffset + readOffset, bytesToRead, va + offset);
+#endif
                 if (bytesToRead > 0 &&
-                    fs::Read(inode, page, phdr.p_offset + readOffset, bytesToRead) != bytesToRead)
+                    fs::Read(inode, page, fileOffset + readOffset, bytesToRead) != bytesToRead)
                     return false;
             }
         }
@@ -118,10 +120,11 @@ int exec(amd64::TrapFrame& tf)
 
     auto& current = process::GetCurrent();
     auto ustack = CreateAndMapUserStack(current) + vm::PageSize;
+    amd64::write_cr3(current.pageDirectory);
 
-    amd64::FlushTLB();
     tf.rip = ehdr.e_entry;
     tf.rsp = vm::userland::stackBase + vm::PageSize;
+    tf.rdi = vm::userland::stackBase;
 
     fs::iput(*inode);
     return 0;

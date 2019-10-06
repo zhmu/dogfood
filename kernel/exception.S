@@ -170,6 +170,8 @@ syscall_handler:
     movq    0x70(%rsp), %r14
     movq    0x78(%rsp), %r15
     movq    0x88(%rsp), %rcx
+    // ... plus %rdi, as exec() uses this (first argument)
+    movq    0x38(%rsp), %rdi
 
     movq    syscall_userland_rsp, %rsp
     sysretq
