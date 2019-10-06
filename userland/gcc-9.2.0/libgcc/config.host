@@ -643,6 +643,10 @@ x86_64-*-elf* | x86_64-*-rtems*)
 x86_64-*-fuchsia*)
 	tmake_file="$tmake_file t-libgcc-pic"
 	;;
+*-*-dogfood*)
+    extra_parts="$extra_parts crti.o crtbegin.o crtend.o crtn.o"
+    tmake_file="$tmake_file i386/t-crtstuff t-crtstuff-pic t-libgcc-pic"
+    ;;
 i[34567]86-*-dragonfly*)
 	tmake_file="${tmake_file} i386/t-dragonfly i386/t-crtstuff"
 	md_unwind_header=i386/dragonfly-unwind.h

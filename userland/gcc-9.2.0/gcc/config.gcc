@@ -705,6 +705,12 @@ case ${target} in
     "" | yes | posix) thread_file='posix' ;;
   esac
   ;;
+*-*-dogfood*)
+  gas=yes
+  gnu_ld=yes
+  default_use_cxa_atexit=yes
+  use_gcc_stdint=wrap
+  ;;
 *-*-dragonfly*)
   gas=yes
   gnu_ld=yes
@@ -1629,6 +1635,9 @@ x86_64-*-darwin*)
 	tmake_file="${tmake_file} ${cpu_type}/t-darwin64-biarch t-slibgcc"
 	tm_file="${tm_file} ${cpu_type}/darwin64-biarch.h"
 	;;
+x86_64-*-dogfood*)
+    tm_file="${tm_file} i386/unix.h i386/att.h dbxelf.h elfos.h newlib-stdint.h i386/i386elf.h i386/x86-64.h dogfood.h"
+    ;;
 i[34567]86-*-elfiamcu)
 	tm_file="${tm_file} i386/unix.h i386/att.h dbxelf.h elfos.h newlib-stdint.h i386/iamcu.h"
 	;;
