@@ -21,6 +21,8 @@ extern "C" uint64_t perform_syscall(amd64::TrapFrame* tf)
                 console::put_char(*s++);
             return len;
         }
+        case SYS_kill:
+            return process::Kill(*tf);
         case SYS_clone:
             return process::Fork(*tf);
         case SYS_waitpid:
@@ -38,7 +40,7 @@ extern "C" uint64_t perform_syscall(amd64::TrapFrame* tf)
             return process::GetCurrent().pid;
     }
     printf(
-        "unsupported syscall %d %lx [%x %x %x %x %x %x]\n", syscall::GetNumber(*tf),
+        "[%d] unsupported syscall %d %lx [%x %x %x %x %x %x]\n", process::GetCurrent().pid, syscall::GetNumber(*tf),
         syscall::GetArgument<1>(*tf), syscall::GetArgument<2>(*tf), syscall::GetArgument<3>(*tf),
         syscall::GetArgument<4>(*tf), syscall::GetArgument<5>(*tf), syscall::GetArgument<6>(*tf));
     return -1;

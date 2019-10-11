@@ -17,6 +17,7 @@ namespace process
         State state = State::Unused;
         int pid = -1;
         int ppid = -1;
+        int signal = 0;
         Process* parent = nullptr;
         //
         uint64_t pageDirectory = 0;  // physical address
@@ -35,5 +36,6 @@ namespace process
     int Exit(amd64::TrapFrame& context);
     int Fork(amd64::TrapFrame& context);
     int WaitPID(amd64::TrapFrame& context);
+    int Kill(amd64::TrapFrame& context);
 
 } // namespace process
