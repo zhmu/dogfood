@@ -43,8 +43,16 @@ namespace vm
             return &pte[pteOffset];
         }
 
-        template<typename Func>
-        void WalkPTE(uint64_t* pml4, Func func)
+        constexpr uint64_t CombineAddressPieces(uint64_t pteOffset, uint64_t pdpOffset, uint64_t pdpeOffset, uint64_t pml4eOffset)
+        {
+            auto addr = (pteOffset << 12) | (pdpOffset << 21) | (pdpeOffset << 30) | (pml4eOffset << 39);
+            if (addr & (1UL << 47))
+                addr |= 0xffff000000000000; // sign-extend to canonical-address form
+            return addr;
+        }
+
+        template<typename OnIndirectionPage, typename OnMapping>
+        void WalkPTE(uint64_t* pml4, OnIndirectionPage onIndirectionPage, OnMapping onMapping)
         {
             for (uint64_t pml4eOffset = 0; pml4eOffset < 512; ++pml4eOffset) {
                 if ((pml4[pml4eOffset] & Page_P) == 0)
@@ -61,14 +69,17 @@ namespace vm
                         for (uint64_t pteOffset = 0; pteOffset < 512; ++pteOffset) {
                             if ((pte[pteOffset] & Page_P) == 0)
                                 continue;
-                            auto va = (pteOffset << 12) | (pdpOffset << 21) | (pdpeOffset << 30) |
-                                      (pml4eOffset << 39);
-                            if (va & (1UL << 47))
-                                va |= 0xffff000000000000; // sign-extend to canonical-address form
-                            func(va, pte[pteOffset]);
+                            const auto va = CombineAddressPieces(pteOffset, pdpOffset, pdpeOffset, pml4eOffset);
+                            onMapping(va, pte[pteOffset]);
                         }
+                        const auto va = CombineAddressPieces(0, pdpOffset, pdpeOffset, pml4eOffset);
+                        onIndirectionPage(va, pdp[pdpOffset]);
                     }
+                    const auto va = CombineAddressPieces(0, 0, pdpeOffset, pml4eOffset);
+                    onIndirectionPage(va, pdpe[pdpeOffset]);
                 }
+                const auto va = CombineAddressPieces(0, 0, 0, pml4eOffset);
+                onIndirectionPage(va, pml4[pml4eOffset]);
             }
         }
     } // namespace
@@ -99,11 +110,13 @@ namespace vm
 
     void FreeUserlandPageDirectory(uint64_t* pml4)
     {
-        WalkPTE(pml4, [](const uint64_t va, const uint64_t entry) {
+        auto freePageIfInUserLand = [](const uint64_t va, const uint64_t entry) {
             if (va >= vm::PhysicalToVirtual(static_cast<uint64_t>(0)))
                 return;
             page_allocator::Free(MakePointerToEntry(entry));
-        });
+        };
+
+        WalkPTE(pml4, freePageIfInUserLand, freePageIfInUserLand);
         page_allocator::Free(pml4);
     }
 
@@ -112,7 +125,7 @@ namespace vm
         uint64_t* dst_pml4 = CreateUserlandPageDirectory();
         assert(dst_pml4 != nullptr);
 
-        WalkPTE(src_pml4, [&](const uint64_t va, const uint64_t entry) {
+        WalkPTE(src_pml4, [](const auto, const auto) {}, [&](const uint64_t va, const uint64_t entry) {
             if (va >= vm::PhysicalToVirtual(static_cast<uint64_t>(0)))
                 return;
 
