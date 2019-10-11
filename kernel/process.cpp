@@ -184,11 +184,14 @@ namespace process
     {
         auto pid = static_cast<int>(syscall::GetArgument<1>(tf));
         auto signal = static_cast<int>(syscall::GetArgument<2>(tf));
-        if (pid < 0) return -EPERM;
-        if (signal < 1 || signal > 15) return -EINVAL;
+        if (pid < 0)
+            return -EPERM;
+        if (signal < 1 || signal > 15)
+            return -EINVAL;
 
         auto proc = FindProcessByPID(pid);
-        if (proc == nullptr) return -ESRCH;
+        if (proc == nullptr)
+            return -ESRCH;
 
         printf("kill: pid %d sig %d (own %d)\n", pid, signal, current->pid);
         proc->signal = signal;

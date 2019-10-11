@@ -43,9 +43,11 @@ namespace vm
             return &pte[pteOffset];
         }
 
-        constexpr uint64_t CombineAddressPieces(uint64_t pteOffset, uint64_t pdpOffset, uint64_t pdpeOffset, uint64_t pml4eOffset)
+        constexpr uint64_t CombineAddressPieces(
+            uint64_t pteOffset, uint64_t pdpOffset, uint64_t pdpeOffset, uint64_t pml4eOffset)
         {
-            auto addr = (pteOffset << 12) | (pdpOffset << 21) | (pdpeOffset << 30) | (pml4eOffset << 39);
+            auto addr =
+                (pteOffset << 12) | (pdpOffset << 21) | (pdpeOffset << 30) | (pml4eOffset << 39);
             if (addr & (1UL << 47))
                 addr |= 0xffff000000000000; // sign-extend to canonical-address form
             return addr;
@@ -69,7 +71,8 @@ namespace vm
                         for (uint64_t pteOffset = 0; pteOffset < 512; ++pteOffset) {
                             if ((pte[pteOffset] & Page_P) == 0)
                                 continue;
-                            const auto va = CombineAddressPieces(pteOffset, pdpOffset, pdpeOffset, pml4eOffset);
+                            const auto va =
+                                CombineAddressPieces(pteOffset, pdpOffset, pdpeOffset, pml4eOffset);
                             onMapping(va, pte[pteOffset]);
                         }
                         const auto va = CombineAddressPieces(0, pdpOffset, pdpeOffset, pml4eOffset);
@@ -125,18 +128,21 @@ namespace vm
         uint64_t* dst_pml4 = CreateUserlandPageDirectory();
         assert(dst_pml4 != nullptr);
 
-        WalkPTE(src_pml4, [](const auto, const auto) {}, [&](const uint64_t va, const uint64_t entry) {
-            if (va >= vm::PhysicalToVirtual(static_cast<uint64_t>(0)))
-                return;
+        WalkPTE(
+            src_pml4, [](const auto, const auto) {},
+            [&](const uint64_t va, const uint64_t entry) {
+                if (va >= vm::PhysicalToVirtual(static_cast<uint64_t>(0)))
+                    return;
 
-            auto page = page_allocator::Allocate();
-            assert(page != nullptr);
-            memcpy(page, reinterpret_cast<const void*>(vm::VirtualToPhysical(va)), vm::PageSize);
-            auto pteFlags = entry & 0xfff;
-            if (entry & Page_NX)
-                pteFlags |= Page_NX;
-            Map(dst_pml4, va, vm::PageSize, vm::VirtualToPhysical(page), pteFlags);
-        });
+                auto page = page_allocator::Allocate();
+                assert(page != nullptr);
+                memcpy(
+                    page, reinterpret_cast<const void*>(vm::VirtualToPhysical(va)), vm::PageSize);
+                auto pteFlags = entry & 0xfff;
+                if (entry & Page_NX)
+                    pteFlags |= Page_NX;
+                Map(dst_pml4, va, vm::PageSize, vm::VirtualToPhysical(page), pteFlags);
+            });
         return dst_pml4;
     }
 } // namespace vm

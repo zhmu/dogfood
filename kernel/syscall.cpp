@@ -40,8 +40,9 @@ extern "C" uint64_t perform_syscall(amd64::TrapFrame* tf)
             return process::GetCurrent().pid;
     }
     printf(
-        "[%d] unsupported syscall %d %lx [%x %x %x %x %x %x]\n", process::GetCurrent().pid, syscall::GetNumber(*tf),
-        syscall::GetArgument<1>(*tf), syscall::GetArgument<2>(*tf), syscall::GetArgument<3>(*tf),
-        syscall::GetArgument<4>(*tf), syscall::GetArgument<5>(*tf), syscall::GetArgument<6>(*tf));
+        "[%d] unsupported syscall %d %lx [%x %x %x %x %x %x]\n", process::GetCurrent().pid,
+        syscall::GetNumber(*tf), syscall::GetArgument<1>(*tf), syscall::GetArgument<2>(*tf),
+        syscall::GetArgument<3>(*tf), syscall::GetArgument<4>(*tf), syscall::GetArgument<5>(*tf),
+        syscall::GetArgument<6>(*tf));
     return -1;
 }

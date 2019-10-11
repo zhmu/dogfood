@@ -74,16 +74,16 @@ namespace
                 if (page == nullptr)
                     return false;
                 memset(page, 0, vm::PageSize);
-                vm::Map(
-                    pml4, va + offset, vm::PageSize,
-                    vm::VirtualToPhysical(page), pteFlags);
+                vm::Map(pml4, va + offset, vm::PageSize, vm::VirtualToPhysical(page), pteFlags);
 
                 const auto readOffset = offset;
                 int bytesToRead = vm::PageSize;
                 if (readOffset + bytesToRead > fileSz)
                     bytesToRead = fileSz - readOffset;
 #if EXEC_DEBUG
-                printf("reading: offset %x, %d bytes -> %p\n", fileOffset + readOffset, bytesToRead, va + offset);
+                printf(
+                    "reading: offset %x, %d bytes -> %p\n", fileOffset + readOffset, bytesToRead,
+                    va + offset);
 #endif
                 if (bytesToRead > 0 &&
                     fs::Read(inode, page, fileOffset + readOffset, bytesToRead) != bytesToRead)
