@@ -325,10 +325,10 @@ namespace
 
     void InitializeSyscall()
     {
-        wrmsr(
-            msr::STAR, ((static_cast<uint64_t>(Selector::UserCode) - 0x10) |
-                        (static_cast<uint64_t>(DescriptorPrivilege::User)) << 48L) |
-                           (static_cast<uint64_t>(Selector::KernelCode) << 32L));
+        constexpr auto star =
+            (static_cast<uint64_t>((static_cast<int>(Selector::UserCode) - 0x10) | static_cast<int>(DescriptorPrivilege::User)) << 48L) |
+                           (static_cast<uint64_t>(Selector::KernelCode) << 32L);
+        wrmsr(msr::STAR, star);
         wrmsr(msr::LSTAR, reinterpret_cast<uint64_t>(&syscall_handler));
         wrmsr(msr::SFMASK, 0x200); // IF
         wrmsr(msr::EFER, rdmsr(msr::EFER) | msr::EFER_SCE);
