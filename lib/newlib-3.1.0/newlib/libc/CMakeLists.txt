@@ -509,6 +509,7 @@ set(SOURCES
     string/strncpy.c
     string/strndup.c
     string/strndup_r.c
+    string/strnlen.c
     string/strnstr.c
     string/strpbrk.c
     string/strrchr.c
@@ -597,8 +598,13 @@ set(SOURCES
 set(SOURCES
     ${SOURCES}
     sys/dogfood/syscall.S
+    sys/dogfood/syscall_wrappers.c
     sys/dogfood/isatty.c
     sys/dogfood/lseek.c
+    sys/dogfood/opendir.c
+    sys/dogfood/readdir.c
+    sys/dogfood/closedir.c
+    sys/dogfood/rewinddir.c
 )
 
 set(SOURCES_notyet
@@ -716,7 +722,6 @@ set(SOURCES_notyet
     stdio64/stdio64.c
     stdio64/tmpfile64.c
     stdlib/nano-mallocr.c
-    string/strnlen.c
     sys/a29khif/getpid.c
     sys/a29khif/kill.c
     sys/arm/access.c
@@ -1574,7 +1579,6 @@ set(HEADERS_SYS
     include/sys/config.h
     include/sys/custom_file.h
     include/sys/dir.h
-    include/sys/dirent.h
     include/sys/errno.h
     include/sys/fcntl.h
     include/sys/features.h
@@ -1601,6 +1605,7 @@ set(HEADERS_SYS
     include/sys/unistd.h
     include/sys/utime.h
     include/sys/wait.h
+    sys/dogfood/sys/dirent.h
 )
 set(HEADERS_RPC
     ${HEADERS_RPC}
@@ -1973,6 +1978,7 @@ set(SOURCES
     ../libm/complex/catanl.c
 )
 
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -isystem ${CMAKE_CURRENT_SOURCE_DIR}/sys/dogfood")
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -isystem ${CMAKE_CURRENT_SOURCE_DIR}/include")
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -isystem ${CMAKE_SOURCE_DIR}/include")
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -I. -I${CMAKE_CURRENT_SOURCE_DIR}/../libm/common")
