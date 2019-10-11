@@ -252,6 +252,12 @@ int umask(int mask)
     return -1;
 }
 
+int killpg (pid_t, int)
+{
+    errno = ENOSYS;
+    return -1;
+}
+
 int getgroups(int gidsetsize, gid_t *grouplist)
 {
     if (gidsetsize > 0)
