@@ -10,7 +10,7 @@ off_t lseek(int fd, off_t offset, int whence)
     long status = sys_seek(fd, &new_offset, whence);
     if (status >= 0)
         return new_offset;
-  
+
     errno = EIO;
     return -1;
 }

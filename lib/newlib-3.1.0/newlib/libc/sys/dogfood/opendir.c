@@ -7,7 +7,8 @@
 DIR* opendir(const char* name)
 {
     int fd = open(name, O_RDONLY | O_DIRECTORY);
-    if (fd < 0) return NULL;
+    if (fd < 0)
+        return NULL;
 
     DIR* dir = malloc(sizeof(dir));
     if (dir == NULL) {

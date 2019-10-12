@@ -94,16 +94,19 @@ namespace
         return true;
     }
 
-    template<typename Func> void ApplyToArgumentArray(const char** p, Func apply)
+    template<typename Func>
+    void ApplyToArgumentArray(const char** p, Func apply)
     {
-        while(true) {
+        while (true) {
             apply(*p);
-            if (*p == nullptr) break;
+            if (*p == nullptr)
+                break;
             ++p;
         }
     }
 
-    void CopyArgumentContentsToStack(const char** args, const char* ustack, uint64_t*& sp, char*& data_sp)
+    void CopyArgumentContentsToStack(
+        const char** args, const char* ustack, uint64_t*& sp, char*& data_sp)
     {
         ApplyToArgumentArray(args, [&](auto p) {
             size_t len;

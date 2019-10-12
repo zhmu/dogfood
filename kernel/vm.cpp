@@ -156,20 +156,26 @@ namespace vm
         printf("vmop: op %d addr %p len %p\n", vmop->vo_op, vmop->vo_addr, vmop->vo_len);
 
         auto& current = process::GetCurrent();
-        switch(vmop->vo_op) {
+        switch (vmop->vo_op) {
             case OP_SBRK: {
-                if (vmop->vo_len < 0) return -EINVAL;
+                if (vmop->vo_len < 0)
+                    return -EINVAL;
                 const auto previousHeapSize = current.heapSize;
                 current.heapSize += vmop->vo_len;
 
-                auto pml4 = reinterpret_cast<uint64_t*>(vm::PhysicalToVirtual(current.pageDirectory));
+                auto pml4 =
+                    reinterpret_cast<uint64_t*>(vm::PhysicalToVirtual(current.pageDirectory));
                 while (current.heapSizeAllocated < vm::RoundUpToPage(current.heapSize)) {
                     auto page = page_allocator::Allocate();
-                    if (page == nullptr) return -ENOMEM;
+                    if (page == nullptr)
+                        return -ENOMEM;
                     memset(page, 0, vm::PageSize);
 
-                    printf("allocating heap => %p\n", vm::userland::heapBase + current.heapSizeAllocated);
-                    Map(pml4, vm::userland::heapBase + current.heapSizeAllocated, vm::PageSize, vm::VirtualToPhysical(page), vm::Page_P | vm::Page_RW | vm::Page_US);
+                    printf(
+                        "allocating heap => %p\n",
+                        vm::userland::heapBase + current.heapSizeAllocated);
+                    Map(pml4, vm::userland::heapBase + current.heapSizeAllocated, vm::PageSize,
+                        vm::VirtualToPhysical(page), vm::Page_P | vm::Page_RW | vm::Page_US);
                     current.heapSizeAllocated += vm::PageSize;
                 }
                 printf("retval %p\n", vm::userland::heapBase + previousHeapSize);

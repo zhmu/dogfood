@@ -2,7 +2,10 @@
 
 #include "types.h"
 
-namespace amd64 { struct TrapFrame; }
+namespace amd64
+{
+    struct TrapFrame;
+}
 
 extern uint64_t* kernel_pagedir;
 
@@ -20,7 +23,7 @@ namespace vm
     {
         inline constexpr uint64_t stackBase = 0x10000;
         inline constexpr uint64_t heapBase = 0x0000002000000000;
-    }
+    } // namespace userland
 
     void
     Map(uint64_t* pml4, const uint64_t va_start, const size_t length, const uint64_t phys,
