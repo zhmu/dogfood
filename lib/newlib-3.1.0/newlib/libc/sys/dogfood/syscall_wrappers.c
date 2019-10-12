@@ -255,7 +255,7 @@ int umask(int mask)
     return -1;
 }
 
-int killpg(pid_t, int)
+int killpg(pid_t pgrp, int sig)
 {
     errno = ENOSYS;
     return -1;

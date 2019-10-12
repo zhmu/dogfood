@@ -1606,6 +1606,7 @@ set(HEADERS_SYS
     include/sys/utime.h
     include/sys/wait.h
     sys/dogfood/sys/dirent.h
+    sys/dogfood/sys/ioctl.h
 )
 set(HEADERS_RPC
     ${HEADERS_RPC}
