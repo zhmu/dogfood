@@ -39,6 +39,7 @@ namespace process
                 if (proc.state != State::Unused)
                     continue;
 
+                proc = Process{};
                 proc.state = State::Construct;
                 proc.pid = next_pid++;
 
