@@ -5,6 +5,7 @@
 #include "exec.h"
 #include "process.h"
 #include "lib.h"
+#include "vm.h"
 
 extern "C" uint64_t perform_syscall(amd64::TrapFrame* tf)
 {
@@ -21,6 +22,8 @@ extern "C" uint64_t perform_syscall(amd64::TrapFrame* tf)
                 console::put_char(*s++);
             return len;
         }
+        case SYS_vmop:
+            return vm::VmOp(*tf);
         case SYS_kill:
             return process::Kill(*tf);
         case SYS_clone:

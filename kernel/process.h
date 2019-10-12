@@ -19,6 +19,8 @@ namespace process
         int ppid = -1;
         int signal = 0;
         Process* parent = nullptr;
+        uint64_t heapSize = 0;
+        uint64_t heapSizeAllocated = 0;
         //
         uint64_t pageDirectory = 0;  // physical address
         void* kernelStack = nullptr; // start of kernel stack

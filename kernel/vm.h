@@ -2,6 +2,8 @@
 
 #include "types.h"
 
+namespace amd64 { struct TrapFrame; }
+
 extern uint64_t* kernel_pagedir;
 
 namespace vm
@@ -17,6 +19,7 @@ namespace vm
     namespace userland
     {
         inline constexpr uint64_t stackBase = 0x10000;
+        inline constexpr uint64_t heapBase = 0x0000002000000000;
     }
 
     void
@@ -26,6 +29,7 @@ namespace vm
     uint64_t* CreateUserlandPageDirectory();
     void FreeUserlandPageDirectory(uint64_t* pml);
     uint64_t* CloneMappings(uint64_t* src_pml4);
+    long VmOp(amd64::TrapFrame& tf);
 
     /*
      * We use the following memory map, [G] means global mapped:

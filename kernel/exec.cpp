@@ -125,7 +125,6 @@ namespace
     {
         auto ustack = reinterpret_cast<char*>(page_allocator::Allocate());
         assert(ustack != nullptr);
-        proc.userStack = ustack;
         memset(ustack, 0, vm::PageSize);
 
         int argc = 0, envc = 0;
