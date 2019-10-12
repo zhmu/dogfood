@@ -93,6 +93,52 @@ namespace
 
         return true;
     }
+
+    template<typename Func> void ApplyToArgumentArray(const char** p, Func apply)
+    {
+        while(true) {
+            apply(*p);
+            if (*p == nullptr) break;
+            ++p;
+        }
+    }
+
+    void CopyArgumentContentsToStack(const char** args, const char* ustack, uint64_t*& sp, char*& data_sp)
+    {
+        ApplyToArgumentArray(args, [&](auto p) {
+            size_t len;
+            uint64_t ptr;
+            if (p != nullptr) {
+                len = strlen(p) + 1;
+                ptr = vm::userland::stackBase + (data_sp - ustack);
+            } else {
+                len = 0;
+                ptr = 0;
+            }
+            *sp++ = ptr;
+            memcpy(data_sp, p, len);
+            data_sp += len;
+        });
+    }
+
+    void* PrepareNewUserlandStack(process::Process& proc, const char** argv, const char** envp)
+    {
+        auto ustack = reinterpret_cast<char*>(page_allocator::Allocate());
+        assert(ustack != nullptr);
+        proc.userStack = ustack;
+        memset(ustack, 0, vm::PageSize);
+
+        int argc = 0, envc = 0;
+        ApplyToArgumentArray(argv, [&](auto p) { ++argc; });
+        ApplyToArgumentArray(envp, [&](auto p) { ++envc; });
+
+        auto sp = reinterpret_cast<uint64_t*>(ustack);
+        *sp++ = argc - 1; /* do not count nullptr */
+        auto data_sp = reinterpret_cast<char*>(sp + argc + envc);
+        CopyArgumentContentsToStack(argv, ustack, sp, data_sp);
+        CopyArgumentContentsToStack(envp, ustack, sp, data_sp);
+        return ustack;
+    }
 } // namespace
 
 int exec(amd64::TrapFrame& tf)
@@ -113,13 +159,28 @@ int exec(amd64::TrapFrame& tf)
         fs::iput(*inode);
         return -ENOEXEC;
     }
+
+    // We prepare the new userland stack before loading the ELF as that will
+    // free out mappings
+    auto ustack = PrepareNewUserlandStack(process::GetCurrent(), argv, envp);
+    if (ustack == nullptr) {
+        fs::iput(*inode);
+        return -EFAULT; // XXX
+    }
+
     if (!LoadProgramHeaders(*inode, ehdr)) {
+        page_allocator::Free(ustack);
         fs::iput(*inode);
         return -EIO;
     }
 
     auto& current = process::GetCurrent();
-    auto ustack = CreateAndMapUserStack(current) + vm::PageSize;
+    {
+        auto pd = reinterpret_cast<uint64_t*>(vm::PhysicalToVirtual(current.pageDirectory));
+        vm::Map(
+            pd, vm::userland::stackBase, vm::PageSize, vm::VirtualToPhysical(ustack),
+            vm::Page_P | vm::Page_RW | vm::Page_US);
+    }
     amd64::write_cr3(current.pageDirectory);
 
     tf.rip = ehdr.e_entry;

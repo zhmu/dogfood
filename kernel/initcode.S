@@ -26,7 +26,7 @@ initcode:
 
 msg:    .ascii  "Hello world!\0"
 init:   .ascii  "/init\0"
-argv:   .long   0
-envp:   .long   0
+argv:   .quad   0
+envp:   .quad   0
 
 initcode_end:

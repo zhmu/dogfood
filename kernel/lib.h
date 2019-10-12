@@ -16,3 +16,4 @@ size_t strlcpy(char* dst, const char* src, size_t len);
 char* strchr(const char* s, int ch);
 int strcmp(const char* a, const char* b);
 [[noreturn]] void panic(const char* s);
+size_t strlen(const char* src);
