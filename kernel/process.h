@@ -21,7 +21,6 @@ namespace process
         Process* parent = nullptr;
         //
         uint64_t pageDirectory = 0;  // physical address
-        void* userStack = nullptr;   // start of user stack
         void* kernelStack = nullptr; // start of kernel stack
         struct amd64::TrapFrame* trapFrame = nullptr;
         struct amd64::Context* context = nullptr;

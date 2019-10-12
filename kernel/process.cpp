@@ -97,8 +97,6 @@ namespace process
         {
             auto pml4 = reinterpret_cast<uint64_t*>(vm::PhysicalToVirtual(proc.pageDirectory));
             vm::FreeUserlandPageDirectory(pml4);
-            if (proc.userStack != nullptr)
-                page_allocator::Free(proc.userStack);
             page_allocator::Free(proc.kernelStack);
             proc.state = State::Unused;
         }
@@ -111,11 +109,11 @@ namespace process
     {
         auto ustack = reinterpret_cast<char*>(page_allocator::Allocate());
         assert(ustack != nullptr);
-        proc.userStack = ustack;
+        memset(ustack, 0, vm::PageSize);
 
         auto pd = reinterpret_cast<uint64_t*>(vm::PhysicalToVirtual(proc.pageDirectory));
         vm::Map(
-            pd, vm::userland::stackBase, vm::PageSize, vm::VirtualToPhysical(proc.userStack),
+            pd, vm::userland::stackBase, vm::PageSize, vm::VirtualToPhysical(ustack),
             vm::Page_P | vm::Page_RW | vm::Page_US);
         return ustack;
     }
