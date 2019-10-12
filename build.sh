@@ -113,6 +113,6 @@ if [ "$NEWLIB" -ne 0 ]; then
     cd build/newlib
     cmake -GNinja -DCMAKE_TOOLCHAIN_FILE=${TOOLCHAIN_FILE} -DCMAKE_INSTALL_PREFIX=${OUTDIR} ../../lib/newlib-3.1.0
     ninja install
-    ln -sf ${OUTDIR}/include ${OUTDIR}/${TARGET}/include
+    ln -sf ${OUTDIR}/usr/include ${OUTDIR}/${TARGET}/include
     cd ../..
 fi
