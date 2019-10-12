@@ -42,6 +42,7 @@
  * Usage:  mkinit sourcefile...
  */
 
+#undef stat64
 
 #include <sys/types.h>
 #include <stdio.h>
