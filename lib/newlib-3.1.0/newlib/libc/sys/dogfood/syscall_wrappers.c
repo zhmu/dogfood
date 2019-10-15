@@ -274,3 +274,10 @@ int wait3(int* status, int options, struct rusage* rusage)
         memset(rusage, 0, sizeof(*rusage));
     return waitpid(0, (long*)&status, options);
 }
+
+int getmntinfo(struct statfs** mntbufp, int mode)
+{
+    errno = ENOSYS;
+    return -1;
+}
+
