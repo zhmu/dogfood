@@ -63,23 +63,6 @@ typedef	quad_t *	qaddr_t;
 #include <sys/_types.h>
 #include <sys/_stdint.h>
 
-#if __BSD_VISIBLE
-#include <machine/endian.h>
-#include <sys/select.h>
-#  define	physadr		physadr_t
-#  define	quad		quad_t
-
-#ifndef _IN_ADDR_T_DECLARED
-typedef	__uint32_t	in_addr_t;	/* base type for internet address */
-#define	_IN_ADDR_T_DECLARED
-#endif
-
-#ifndef _IN_PORT_T_DECLARED
-typedef	__uint16_t	in_port_t;
-#define	_IN_PORT_T_DECLARED
-#endif
-#endif /* __BSD_VISIBLE */
-
 #if __MISC_VISIBLE
 #ifndef _BSDTYPES_DEFINED
 /* also defined in mingw/gmon.h and in w32api/winsock[2].h */
@@ -109,16 +92,6 @@ typedef	unsigned int	uint;		/* System V compatibility */
 typedef	unsigned long	ulong;		/* System V compatibility */
 #endif
 
-#ifndef _BLKCNT_T_DECLARED
-typedef	__blkcnt_t	blkcnt_t;
-#define	_BLKCNT_T_DECLARED
-#endif
-
-#ifndef _BLKSIZE_T_DECLARED
-typedef	__blksize_t	blksize_t;
-#define	_BLKSIZE_T_DECLARED
-#endif
-
 #if !defined(__clock_t_defined) && !defined(_CLOCK_T_DECLARED)
 typedef	_CLOCK_T_	clock_t;
 #define	__clock_t_defined
@@ -129,6 +102,17 @@ typedef	_CLOCK_T_	clock_t;
 typedef	_TIME_T_	time_t;
 #define	__time_t_defined
 #define	_TIME_T_DECLARED
+#endif
+
+
+#ifndef _BLKCNT_T_DECLARED
+typedef	__blkcnt_t	blkcnt_t;
+#define	_BLKCNT_T_DECLARED
+#endif
+
+#ifndef _BLKSIZE_T_DECLARED
+typedef	__blksize_t	blksize_t;
+#define	_BLKSIZE_T_DECLARED
 #endif
 
 #ifndef __daddr_t_defined
@@ -235,8 +219,28 @@ typedef	__suseconds_t	suseconds_t;
 
 typedef	__int64_t	sbintime_t;
 
-#include <sys/features.h>
 #include <sys/_pthreadtypes.h>
+
+#if __BSD_VISIBLE
+#include <machine/endian.h>
+#include <sys/time.h>
+#include <sys/select.h>
+#  define	physadr		physadr_t
+#  define	quad		quad_t
+
+#ifndef _IN_ADDR_T_DECLARED
+typedef	__uint32_t	in_addr_t;	/* base type for internet address */
+#define	_IN_ADDR_T_DECLARED
+#endif
+
+#ifndef _IN_PORT_T_DECLARED
+typedef	__uint16_t	in_port_t;
+#define	_IN_PORT_T_DECLARED
+#endif
+#endif /* __BSD_VISIBLE */
+
+
+#include <sys/features.h>
 #include <machine/types.h>
 
 #endif  /* !__need_inttypes */

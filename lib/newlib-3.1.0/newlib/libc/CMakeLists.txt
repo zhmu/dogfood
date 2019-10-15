@@ -366,6 +366,7 @@ set(SOURCES
     stdlib/getenv.c
     stdlib/getenv_r.c
     stdlib/getopt.c
+    stdlib/getprogname.c
     stdlib/getsubopt.c
     stdlib/imaxabs.c
     stdlib/imaxdiv.c
@@ -1607,6 +1608,9 @@ set(HEADERS_SYS
     include/sys/wait.h
     sys/dogfood/sys/dirent.h
     sys/dogfood/sys/ioctl.h
+    sys/dogfood/sys/mman.h
+    sys/dogfood/sys/mount.h
+    sys/dogfood/sys/socket.h
 )
 set(HEADERS_RPC
     ${HEADERS_RPC}
