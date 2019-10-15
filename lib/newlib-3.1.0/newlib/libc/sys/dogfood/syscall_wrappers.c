@@ -281,3 +281,8 @@ int getmntinfo(struct statfs** mntbufp, int mode)
     return -1;
 }
 
+int fsync(int fd)
+{
+    return 0;
+}
+
