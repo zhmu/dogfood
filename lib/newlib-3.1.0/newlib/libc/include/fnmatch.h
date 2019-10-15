@@ -46,6 +46,7 @@
 #define	FNM_CASEFOLD	0x10	/* Case insensitive search. */
 #define	FNM_IGNORECASE	FNM_CASEFOLD
 #define	FNM_FILE_NAME	FNM_PATHNAME
+#define	FNM_EXTMATCH	0
 #endif
 
 __BEGIN_DECLS

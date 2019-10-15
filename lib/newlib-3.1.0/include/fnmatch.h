@@ -53,6 +53,7 @@ extern "C" {
 #define	FNM_FILE_NAME	FNM_PATHNAME /* Preferred GNU name.  */
 #define	FNM_LEADING_DIR	(1 << 3) /* Ignore `/...' after a match.  */
 #define	FNM_CASEFOLD	(1 << 4) /* Compare without regard to case.  */
+#define	FNM_EXTMATCH	0        /* GNU extension (unsupported) */
 #endif
 
 /* Value returned by `fnmatch' if STRING does not match PATTERN.  */
