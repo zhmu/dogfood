@@ -333,6 +333,10 @@ _Noreturn void
 	quick_exit(int);
 #endif /* __ISO_C_VISIBLE >= 2011 */
 
+#if __BSD_VISIBLE
+const char* getprogname(void);
+#endif
+
 _END_STD_C
 
 #if __SSP_FORTIFY_LEVEL > 0

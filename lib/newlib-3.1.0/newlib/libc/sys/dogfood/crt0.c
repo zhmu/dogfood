@@ -7,6 +7,8 @@ extern char** environ;
 extern void _fini(void);
 extern void _init(void);
 
+char* __progname;
+
 void _start(unsigned long* sp)
 {
     int argc = *sp++;
@@ -14,6 +16,7 @@ void _start(unsigned long* sp)
     sp += argc + 1 /* null */;
     environ = (char**)sp;
     atexit(_fini);
+    __progname = argv[0];
     _init();
 
     exit(main(argc, argv, environ));
