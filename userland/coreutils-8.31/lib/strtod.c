@@ -302,7 +302,7 @@ compute_minus_zero (void)
 }
 # define minus_zero compute_minus_zero ()
 #else
-DOUBLE minus_zero = -0.0;
+static DOUBLE minus_zero = -0.0;
 #endif
 
 /* Convert NPTR to a DOUBLE.  If ENDPTR is not NULL, a pointer to the
