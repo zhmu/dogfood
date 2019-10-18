@@ -6,6 +6,12 @@ using namespace amd64::io;
 namespace console
 {
     inline constexpr int port = 0x3f8; // COM1
+    namespace input_buffer {
+        inline constexpr size_t size = 16;
+        char data[size];
+        size_t read_offset = 0;
+        size_t write_offset = 0;
+    }
 
     namespace registers
     {
@@ -21,7 +27,7 @@ namespace console
 
     void initialize()
     {
-        outb(port + registers::IER, 0);     /* Disables interrupts */
+        outb(port + registers::IER, 1);     /* Interrupt on data available */
         outb(port + registers::LCR, 0x80);  /* Enable DLAB */
         outb(port + registers::DATA, 1);    /* Divisor low byte (115200 baud) */
         outb(port + registers::IER, 0);     /* Divisor hi byte */
@@ -43,4 +49,39 @@ namespace console
         return inb(port + registers::DATA);
     }
 
+    int Read(void* buf, int len)
+    {
+        auto ptr = reinterpret_cast<char*>(buf);
+        while(len > 0) {
+            using namespace input_buffer;
+            while (read_offset == write_offset) {
+                // Not enough data; wait for more TODO mechanism
+                __asm __volatile("pause");
+            }
+
+            auto ch = data[read_offset];
+            read_offset = (read_offset + 1) % size;
+            if (ch == '\r') ch = '\n';
+
+            *ptr++ = ch;
+            --len;
+            if (ch == '\n') break;
+        }
+        return ptr - reinterpret_cast<char*>(buf);
+    }
+
+    void OnIRQ()
+    {
+        while(true) {
+            auto ch = get_char();
+            if (ch == 0) break;
+            {
+                using namespace input_buffer;
+                data[write_offset] = ch;
+                write_offset = (write_offset + 1) % size;
+
+                put_char(ch);
+            }
+        }
+    }
 } // namespace console

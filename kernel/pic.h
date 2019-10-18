@@ -7,6 +7,7 @@ namespace pic
         inline constexpr int Timer = 0;
         inline constexpr int Keyboard = 1;
         inline constexpr int Slave = 2;
+        inline constexpr int COM1 = 4;
         inline constexpr int IDE = 14;
     } // namespace irq
 

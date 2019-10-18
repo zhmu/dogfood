@@ -13,14 +13,19 @@ extern "C" uint64_t perform_syscall(amd64::TrapFrame* tf)
         case SYS_exit:
             return process::Exit(*tf);
         case SYS_write: {
-            printf(
-                "write: %d %p %x\n", syscall::GetArgument<1>(*tf), syscall::GetArgument<2>(*tf),
-                syscall::GetArgument<3>(*tf));
             auto s = reinterpret_cast<const char*>(syscall::GetArgument<2>(*tf));
             auto len = syscall::GetArgument<3>(*tf);
             for (auto n = len; n > 0; n--)
                 console::put_char(*s++);
             return len;
+        }
+        case SYS_read: {
+            printf(
+                "read: %d %p %x\n", syscall::GetArgument<1>(*tf), syscall::GetArgument<2>(*tf),
+                syscall::GetArgument<3>(*tf));
+            auto buf = reinterpret_cast<void*>(syscall::GetArgument<2>(*tf));
+            auto len = syscall::GetArgument<3>(*tf);
+            return console::Read(buf, len);
         }
         case SYS_vmop:
             return vm::VmOp(*tf);

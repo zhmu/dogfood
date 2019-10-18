@@ -356,6 +356,9 @@ extern "C" void irq_handler(const struct TrapFrame* tf)
     switch (tf->trapno) {
         case pic::irq::Timer:
             break;
+        case pic::irq::COM1:
+            console::OnIRQ();
+            break;
         case pic::irq::IDE:
             ide::OnIRQ();
             break;
@@ -380,6 +383,7 @@ extern "C" void startup(const MULTIBOOT* mb)
 
     ide::Initialize();
     pic::Enable(pic::irq::Timer);
+    pic::Enable(pic::irq::COM1);
     __asm __volatile("sti");
     fs::Initialize();
     process::Initialize();
