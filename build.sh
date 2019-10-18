@@ -12,22 +12,32 @@ BINUTILS=0
 GCC=0
 NEWLIB=0
 DASH=0
+COREUTILS=0
 while [ "$1" != "" ]; do
 	P="$1"
 	case "$P" in
 		-h)
-			echo "usage: build.sh [-hc] [-bg] [-n]"
+			echo "usage: build.sh [-hc] [-bg] [-ndu]"
             echo ""
             echo " -h    this help"
-            echo " -c    clean (forces a rebuild)"
+            echo " -c    clean (forces a rebuild of toolchain)"
+            echo " -a    build everything"
             echo ""
             echo " -b    build: binutils"
             echo " -g    build: gcc"
             echo ""
             echo " -n    build: newlib"
             echo " -d    build: dash"
+            echo " -u    build: coreutils"
 			exit 1
 			;;
+        -a)
+            BINUTILS=1
+            GCC=1
+            NEWLIB=1
+            DASH=1
+            COREUTILS=1
+            ;;
         -c)
             CLEAN=1
 			;;
@@ -42,6 +52,9 @@ while [ "$1" != "" ]; do
             ;;
         -d)
             DASH=1
+            ;;
+        -u)
+            COREUTILS=1
             ;;
         *)
             echo "unexpected parameter '$P'; use '-h' for help"
@@ -131,8 +144,20 @@ if [ "$DASH" -ne 0 ]; then
     echo "*** Bulding dash"
     cd userland/dash-0.5.10.2
     make clean || true
-    CFLAGS="--sysroot ${TOOLCHAIN} -DJOBS=0" ./configure --host=x86_64-elf-dogfood --prefix=${OUTDIR}
+    CFLAGS="--sysroot ${TOOLCHAIN} -DJOBS=0" ./configure --host=${TARGET} --prefix=${OUTDIR}
     make ${MAKE_ARGS}
     make install
     cd ../..
 fi
+
+# coreutils
+if [ "$COREUTILS" -ne 0 ]; then
+    echo "*** Building coreutils"
+    cd userland/coreutils-8.31
+    make clean || true
+    CFLAGS="--sysroot ${TOOLCHAIN} -DOK_TO_USE_1S_CLOCK" ./configure --host=${TARGET} --prefix=${OUTDIR}
+    make ${MAKE_ARGS}
+    make install
+    cd ../..
+fi
+
