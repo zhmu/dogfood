@@ -528,3 +528,15 @@ int uname(struct utsname* u)
     errno = ENOSYS;
     return -1;
 }
+
+clock_t times(struct tms *buf)
+{
+    errno = ENOSYS;
+    return (clock_t)-1;
+}
+
+int setrlimit(int resource, const struct rlimit *rlim)
+{
+    errno = ENOSYS;
+    return -1;
+}
