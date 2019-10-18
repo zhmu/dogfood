@@ -1,9 +1,15 @@
 #include <sys/types.h>
 #include <sys/resource.h>
 #include <sys/mman.h>
+#include <sys/select.h>
 #include <errno.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdarg.h>
+#include <grp.h>
+#include <pwd.h>
+
+extern char** environ;
 
 typedef enum {
     /* Creates a new mapping */
@@ -212,7 +218,7 @@ SYSCALL3(write)
 SYSCALL1(unlink)
 SYSCALL3(execve)
 SYSCALL1(dup)
-SYSCALL2(rename)
+//SYSCALL2(rename)
 SYSCALL2(stat)
 SYSCALL1(chdir)
 SYSCALL2(fstat)
@@ -286,3 +292,239 @@ int fsync(int fd)
     return 0;
 }
 
+struct servent* getservbyname(const char *name, const char *proto)
+{
+    return NULL;
+}
+
+int execvp(const char* path, char* const argv[])
+{
+    return execve(path, argv, environ);
+}
+
+int setpgid(pid_t pid, pid_t pgid)
+{
+    errno = -ENOSYS;
+    return -1;
+}
+
+unsigned int alarm(unsigned int seconds)
+{
+    return 0;
+}
+
+int access(const char* filename, int mode)
+{
+    errno = -ENOSYS;
+    return -1;
+}
+
+int setreuid(uid_t ruid, uid_t euid)
+{
+    errno = -ENOSYS;
+    return -1;
+}
+
+int setregid(gid_t rgid, gid_t egid)
+{
+    errno = -ENOSYS;
+    return -1;
+}
+
+long sysconf(int name)
+{
+    return 0;
+}
+
+struct group *getgrnam(const char *name)
+{
+    return NULL;
+}
+
+struct group *getgrgid(gid_t gid)
+{
+    return NULL;
+}
+
+
+struct passwd *getpwnam(const char *name)
+{
+    return NULL;
+}
+
+struct passwd *getpwuid(uid_t uid)
+{
+    return NULL;
+}
+
+
+int fchown(int fd, uid_t owner, gid_t group)
+{
+    errno = ENOSYS;
+    return -1;
+}
+
+int chmod(const char *pathname, mode_t mode)
+{
+    errno = ENOSYS;
+    return -1;
+}
+
+int mkdir(const char *pathname, mode_t mode)
+{
+    errno = ENOSYS;
+    return -1;
+}
+
+int rmdir(const char *pathname)
+{
+    errno = ENOSYS;
+    return -1;
+}
+
+
+int ftruncate(int fd, off_t length)
+{
+    errno = ENOSYS;
+    return -1;
+}
+
+int gettimeofday(struct timeval * tv, void* __tz)
+{
+    errno = ENOSYS;
+    return -1;
+}
+
+
+int settimeofday(const struct timeval *tv, const struct timezone *tz)
+{
+    errno = ENOSYS;
+    return -1;
+}
+
+long fpathconf(int fd, int name)
+{
+    errno = ENOSYS;
+    return -1;
+}
+
+long pathconf(const char *path, int name)
+{
+    errno = ENOSYS;
+    return -1;
+}
+
+struct group *getgrent(void)
+{
+    return NULL;
+}
+
+void setgrent(void)
+{
+}
+
+void endgrent(void)
+{
+}
+
+
+int execlp(const char* path, const char* arg0, ...)
+{
+    va_list va;
+
+    /* Count the number of arguments */
+    int num_args = 1 /* terminating \0 */;
+    va_start(va, arg0);
+    while (1) {
+        const char* arg = va_arg(va, const char*);
+        if (arg == NULL)
+            break;
+        num_args++;
+    }
+    va_end(va);
+
+    /* Construct the argument list */
+    const char** args = malloc(num_args * sizeof(char*));
+    if (args == NULL) {
+        errno = ENOMEM;
+        return -1;
+    }
+    int pos = 0;
+    va_start(va, arg0);
+    while (1) {
+        const char* arg = va_arg(va, const char*);
+        if (arg == NULL)
+            break;
+        args[pos++] = arg;
+    }
+    args[pos] = NULL;
+    va_end(va);
+
+    execve(path, (char* const*)args, environ);
+
+    /* If we got here, execve() failed (and set errno) and we must clean up after ourselves */
+    free(args);
+    return -1;
+}
+
+int select(int nfds, fd_set *readfds, fd_set *writefds, fd_set *exceptfds, struct timeval *timeout)
+{
+    errno = ENOSYS;
+    return -1;
+}
+
+int getrlimit(int resource, struct rlimit *rlim)
+{
+    errno = ENOSYS;
+    return -1;
+}
+
+int execl(const char* path, const char* arg0, ...)
+{
+    va_list va;
+
+    /* Count the number of arguments */
+    int num_args = 1 /* terminating \0 */;
+    va_start(va, arg0);
+    while (1) {
+        const char* arg = va_arg(va, const char*);
+        if (arg == NULL)
+            break;
+        num_args++;
+    }
+    va_end(va);
+
+    /* Construct the argument list */
+    const char** args = malloc(num_args * sizeof(char*));
+    if (args == NULL) {
+        errno = ENOMEM;
+        return -1;
+    }
+    int pos = 0;
+    va_start(va, arg0);
+    while (1) {
+        const char* arg = va_arg(va, const char*);
+        if (arg == NULL)
+            break;
+        args[pos++] = arg;
+    }
+    args[pos] = NULL;
+    va_end(va);
+
+    execve(path, (char* const*)args, environ);
+
+    /* If we got here, execve() failed (and set errno) and we must clean up after ourselves */
+    free(args);
+    return -1;
+}
+
+char* ttyname(int fd)
+{
+    return "console";
+}
+
+int uname(struct utsname* u)
+{
+    errno = ENOSYS;
+    return -1;
+}

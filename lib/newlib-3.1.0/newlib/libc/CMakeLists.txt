@@ -1500,9 +1500,9 @@ set(HEADERS
     include/malloc.h
     include/math.h
     include/memory.h
+    include/netdb.h
     include/newlib.h
     include/paths.h
-    include/pthread.h
     include/pwd.h
     include/reent.h
     include/regdef.h
@@ -1533,6 +1533,7 @@ set(HEADERS
     include/wordexp.h
     include/xlocale.h
 )
+    #include/pthread.h
 
 set(HEADERS_SSP
     ${HEADERS_SSP}
@@ -1616,6 +1617,12 @@ set(HEADERS_RPC
     ${HEADERS_RPC}
     include/rpc/types.h
     include/rpc/xdr.h
+)
+set(HEADERS_ARPA
+    include/arpa/inet.h
+)
+set(HEADERS_NETINET
+    include/netinet/in.h
 )
 
 # add libM
@@ -1997,5 +2004,7 @@ install(FILES ${HEADERS_SSP} DESTINATION usr/include/ssp)
 install(FILES ${HEADERS_MACHINE} DESTINATION usr/include/machine)
 install(FILES ${HEADERS_SYS} DESTINATION usr/include/sys)
 install(FILES ${HEADERS_RPC} DESTINATION usr/include/rpc)
+install(FILES ${HEADERS_ARPA} DESTINATION usr/include/arpa)
+install(FILES ${HEADERS_NETINET} DESTINATION usr/include/netinet)
 
 install(TARGETS c DESTINATION usr/lib)

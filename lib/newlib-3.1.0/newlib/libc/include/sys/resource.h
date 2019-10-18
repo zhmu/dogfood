@@ -1,17 +1,58 @@
-#ifndef _SYS_RESOURCE_H_
-#define _SYS_RESOURCE_H_
+/*-
+ * SPDX-License-Identifier: Zlib
+ *
+ * Copyright (c) 2009-2018 Rink Springer <rink@rink.nu>
+ * For conditions of distribution and use, see LICENSE file
+ */
+#ifndef __SYS_RESOURCE_H__
+#define __SYS_RESOURCE_H__
 
 #include <sys/time.h>
+#include <sys/cdefs.h>
 
-#define	RUSAGE_SELF	0		/* calling process */
-#define	RUSAGE_CHILDREN	-1		/* terminated child processes */
+#define PRIO_PROCESS 0
+#define PRIO_PGRP 1
+#define PRIO_USER 2
 
-struct rusage {
-  	struct timeval ru_utime;	/* user time used */
-	struct timeval ru_stime;	/* system time used */
+typedef unsigned int rlim_t;
+
+#define RLIM_INFINITY ((rlim_t)-1)
+#define RLIM_SAVED_MAX RLIM_INFINITY
+#define RLIM_SAVED_CUR RLIM_INFINITY
+
+#define RUSAGE_SELF 0
+#define RUSAGE_CHILDREN 1
+
+#define RLIMIT_CORE 0
+#define RLIMIT_CPU 1
+#define RLIMIT_DATA 2
+#define RLIMIT_FSIZE 3
+#define RLIMIT_NOFILE 4
+#define RLIMIT_STACK 5
+#define RLIMIT_AS 6
+
+struct rlimit {
+    rlim_t rlim_cur;
+    rlim_t rlim_max;
 };
 
-int	getrusage (int, struct rusage*);
+struct rusage {
+    struct timeval ru_utime;
+    struct timeval ru_stime;
+};
 
+#ifdef __cplusplus
+extern "C" {
 #endif
 
+int getpriority(int, id_t);
+int getrlimit(int, struct rlimit*);
+int getrusage(int, struct rusage*);
+int setpriority(int, id_t, int);
+int setrlimit(int, const struct rlimit*);
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif /* __SYS_RESOURCE_H__ */

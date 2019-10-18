@@ -219,7 +219,7 @@ typedef	__suseconds_t	suseconds_t;
 
 typedef	__int64_t	sbintime_t;
 
-#include <sys/_pthreadtypes.h>
+//#include <sys/_pthreadtypes.h>
 
 #if __BSD_VISIBLE
 #include <machine/endian.h>
