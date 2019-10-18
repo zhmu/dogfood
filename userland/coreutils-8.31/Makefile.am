@@ -17,7 +17,7 @@
 
 ALL_RECURSIVE_TARGETS =
 
-SUBDIRS = po . gnulib-tests
+SUBDIRS = po .
 
 EXTRA_DIST =				\
   .mailmap				\

@@ -484,20 +484,6 @@ AC_MSG_CHECKING([whether this system supports stdbuf])
 CFLAGS="-fPIC $CFLAGS"
 LDFLAGS="-shared $LDFLAGS"
 stdbuf_supported=no
-# Note we only LINK here rather than RUN to support cross compilation
-AC_LINK_IFELSE(
-  [AC_LANG_PROGRAM([[
-    static int stdbuf = 0;
-
-    void __attribute__ ((constructor))
-    stdbuf_init (void)
-    {
-      stdbuf = 1;
-    }]],[[
-    if (stdbuf != 1)
-      return 1;]])
-  ],
-  [stdbuf_supported=yes])
 AC_MSG_RESULT([$stdbuf_supported])
 if test "$stdbuf_supported" = "yes" && test -z "$EXEEXT"; then
   gl_ADD_PROG([optional_bin_progs], [stdbuf])
@@ -634,6 +620,5 @@ gt_LOCALE_FR
 AC_CONFIG_FILES(
   Makefile
   po/Makefile.in
-  gnulib-tests/Makefile
   )
 AC_OUTPUT
