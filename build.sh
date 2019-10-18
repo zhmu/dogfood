@@ -13,11 +13,12 @@ GCC=0
 NEWLIB=0
 DASH=0
 COREUTILS=0
+INIT=0
 while [ "$1" != "" ]; do
 	P="$1"
 	case "$P" in
 		-h)
-			echo "usage: build.sh [-hc] [-bg] [-ndu]"
+			echo "usage: build.sh [-hc] [-bg] [-ndui]"
             echo ""
             echo " -h    this help"
             echo " -c    clean (forces a rebuild of toolchain)"
@@ -29,6 +30,7 @@ while [ "$1" != "" ]; do
             echo " -n    build: newlib"
             echo " -d    build: dash"
             echo " -u    build: coreutils"
+            echo " -i    build: init"
 			exit 1
 			;;
         -a)
@@ -37,6 +39,7 @@ while [ "$1" != "" ]; do
             NEWLIB=1
             DASH=1
             COREUTILS=1
+            INIT=1
             ;;
         -c)
             CLEAN=1
@@ -55,6 +58,9 @@ while [ "$1" != "" ]; do
             ;;
         -u)
             COREUTILS=1
+            ;;
+        -i)
+            INIT=1
             ;;
         *)
             echo "unexpected parameter '$P'; use '-h' for help"
@@ -147,6 +153,7 @@ if [ "$DASH" -ne 0 ]; then
     CFLAGS="--sysroot ${TOOLCHAIN} -DJOBS=0" ./configure --host=${TARGET} --prefix=${OUTDIR}
     make ${MAKE_ARGS}
     make install
+    mv ${OUTDIR}/bin/dash ${OUTDIR}/bin/sh
     cd ../..
 fi
 
@@ -160,4 +167,16 @@ if [ "$COREUTILS" -ne 0 ]; then
     make install
     cd ../..
 fi
+
+# init
+if [ "$INIT" -ne 0 ]; then
+    echo "*** Building init"
+    rm -rf build/init
+    mkdir -p build/init
+    cd build/init
+    cmake -GNinja -DCMAKE_TOOLCHAIN_FILE=${TOOLCHAIN_FILE} -DCMAKE_INSTALL_PREFIX=${OUTDIR} ../../userland/init
+    ninja install
+    cd ../..
+fi
+
 
