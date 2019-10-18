@@ -5,12 +5,6 @@
 #include "syscall.h"
 
 initcode:
-        movq $SYS_write, %rax
-        movq $1, %rdi   // stdout
-        leaq msg(%rip), %rsi // ptr
-        movq $12, %rdx  // len
-        syscall
-
         movq $SYS_execve, %rax
         leaq init(%rip), %rdi
         leaq argv(%rip), %rsi
@@ -24,8 +18,7 @@ initcode:
 
 1:      jmp     1b
 
-msg:    .ascii  "Hello world!\0"
-init:   .ascii  "/init\0"
+init:   .ascii  "/sbin/init\0"
 argv:   .quad   0
 envp:   .quad   0
 
