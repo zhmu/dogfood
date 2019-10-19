@@ -7,6 +7,11 @@ namespace ext2
     struct Inode;
 }
 
+namespace process
+{
+    struct Process;
+}
+
 namespace fs
 {
     using Device = int;
@@ -31,5 +36,8 @@ namespace fs
 
     Inode* iget(Device dev, InodeNumber inum);
     void iput(Inode& inode);
+    void iref(Inode& inode);
     Inode* namei(const char* path);
+
+    void CloneTable(const process::Process& parent, process::Process& child);
 } // namespace fs

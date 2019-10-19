@@ -1,6 +1,7 @@
 #pragma once
 
 #include "types.h"
+#include "file.h"
 #include "fs.h"
 
 namespace amd64
@@ -12,6 +13,8 @@ namespace amd64
 namespace process
 {
     enum class State { Unused, Construct, Runnable, Running, Zombie, Sleeping };
+
+    constexpr int maxFiles = 10;
 
     struct Process {
         State state = State::Unused;
@@ -26,6 +29,7 @@ namespace process
         void* kernelStack = nullptr; // start of kernel stack
         struct amd64::TrapFrame* trapFrame = nullptr;
         struct amd64::Context* context = nullptr;
+        file::File files[maxFiles];
         fs::Inode* cwd = nullptr;
     };
 

@@ -33,6 +33,13 @@ namespace process
             return kstack + vm::PageSize;
         }
 
+        void AllocateConsoleFile(Process& proc)
+        {
+            auto file = file::Allocate(proc);
+            assert(file != nullptr);
+            file->f_console = true;
+        }
+
         Process* AllocateProcess()
         {
             for (auto& proc : process) {
@@ -42,6 +49,9 @@ namespace process
                 proc = Process{};
                 proc.state = State::Construct;
                 proc.pid = next_pid++;
+                AllocateConsoleFile(proc); // stdin
+                AllocateConsoleFile(proc); // stdout
+                AllocateConsoleFile(proc); // stderr
 
                 auto sp = CreateUserKernelStack(proc);
                 // Allocate trap frame for trap_return()
@@ -125,6 +135,7 @@ namespace process
         if (new_process == nullptr)
             return -ENOMEM;
         new_process->ppid = current->pid;
+        file::CloneTable(*current, *new_process);
 
         auto current_pd =
             reinterpret_cast<uint64_t*>(vm::PhysicalToVirtual(current->pageDirectory));
@@ -207,6 +218,10 @@ namespace process
             panic("init exiting?");
 
         current->state = State::Zombie;
+        for(auto& file: current->files) {
+            if (file.f_refcount == 0) continue;
+            file::Free(file);
+        }
         switch_to(&current->context, cpu_context);
         for (;;)
             ;

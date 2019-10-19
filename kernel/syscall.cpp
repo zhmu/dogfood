@@ -3,6 +3,8 @@
 #include "amd64.h"
 #include "console.h"
 #include "exec.h"
+#include "file.h"
+#include "errno.h"
 #include "process.h"
 #include "lib.h"
 #include "vm.h"
@@ -13,19 +15,18 @@ extern "C" uint64_t perform_syscall(amd64::TrapFrame* tf)
         case SYS_exit:
             return process::Exit(*tf);
         case SYS_write: {
-            auto s = reinterpret_cast<const char*>(syscall::GetArgument<2>(*tf));
+            auto file = file::FindByIndex(process::GetCurrent(), syscall::GetArgument<1>(*tf));
+            if (file == nullptr) return -EBADF;
+            auto buf = reinterpret_cast<const void*>(syscall::GetArgument<2>(*tf));
             auto len = syscall::GetArgument<3>(*tf);
-            for (auto n = len; n > 0; n--)
-                console::put_char(*s++);
-            return len;
+            return file::Write(*file, buf, len);
         }
         case SYS_read: {
-            printf(
-                "read: %d %p %x\n", syscall::GetArgument<1>(*tf), syscall::GetArgument<2>(*tf),
-                syscall::GetArgument<3>(*tf));
+            auto file = file::FindByIndex(process::GetCurrent(), syscall::GetArgument<1>(*tf));
+            if (file == nullptr) return -EBADF;
             auto buf = reinterpret_cast<void*>(syscall::GetArgument<2>(*tf));
             auto len = syscall::GetArgument<3>(*tf);
-            return console::Read(buf, len);
+            return file::Read(*file, buf, len);
         }
         case SYS_vmop:
             return vm::VmOp(*tf);

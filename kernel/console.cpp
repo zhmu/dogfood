@@ -49,6 +49,16 @@ namespace console
         return inb(port + registers::DATA);
     }
 
+    int Write(const void* buf, int len)
+    {
+        auto ptr = reinterpret_cast<const char*>(buf);
+        while(len > 0) {
+            put_char(*ptr++);
+            --len;
+        }
+        return ptr - reinterpret_cast<const char*>(buf);
+    }
+
     int Read(void* buf, int len)
     {
         auto ptr = reinterpret_cast<char*>(buf);
