@@ -339,6 +339,13 @@ namespace
 
 extern "C" void exception(struct TrapFrame* tf)
 {
+    const bool isUserMode = (tf->cs & 3) == static_cast<int>(DescriptorPrivilege::User);
+    const bool isPageFault = tf->trapno == exception::PF && isUserMode;
+
+    const auto faultAddress = read_cr2();
+    if (isUserMode && isPageFault && vm::HandlePageFault(faultAddress, tf->errnum))
+        return;
+
     printf("exception #%d @ cs:rip = %lx:%lx\n", tf->trapno, tf->cs, tf->rip);
     printf("rax %lx rbx %lx rcx %lx rdx %lx\n", tf->rax, tf->rbx, tf->rcx, tf->rdx);
     printf("rsi %lx rdi %lx rbp %lx rsp %lx\n", tf->rsi, tf->rdi, tf->rbp, tf->rsp);
@@ -347,11 +354,11 @@ extern "C" void exception(struct TrapFrame* tf)
     printf(
         "errnum %lx cs %lx rflags %lx ss:esp %lx:%lx\n", tf->errnum, tf->cs, tf->rflags, tf->ss,
         tf->rsp);
+    if (isPageFault)
+        printf("fault address %lx\n", faultAddress);
 
-    if ((tf->cs & 3) == static_cast<int>(DescriptorPrivilege::User)) {
-        // Userland exception: terminate the process
+    if (isUserMode)
         process::Exit(*tf);
-    }
 
     while (1)
         ;

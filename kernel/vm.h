@@ -22,6 +22,7 @@ namespace vm
     namespace userland
     {
         inline constexpr uint64_t stackBase = 0x10000;
+        inline constexpr uint64_t stackSize = 1024 * 1024;
         inline constexpr uint64_t heapBase = 0x0000002000000000;
     } // namespace userland
 
@@ -33,6 +34,7 @@ namespace vm
     void FreeUserlandPageDirectory(uint64_t* pml);
     uint64_t* CloneMappings(uint64_t* src_pml4);
     long VmOp(amd64::TrapFrame& tf);
+    bool HandlePageFault(uint64_t va, int errnum);
 
     /*
      * We use the following memory map, [G] means global mapped:

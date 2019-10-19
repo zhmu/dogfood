@@ -23,6 +23,9 @@ namespace amd64
         inline constexpr uint64_t OSFXSR = (1UL << 9);      // OS FXSAVE/FXRSTOR support
 
     } // namespace cr4
+    namespace exception {
+        inline constexpr int PF = 14;
+    }
 
     enum class Selector {
         KernelCode = 0x08,
@@ -215,6 +218,13 @@ namespace amd64
     inline void wrmsr(uint32_t msr, uint64_t val)
     {
         __asm __volatile("wrmsr\n" : : "a"(val & 0xffffffff), "d"(val >> 32), "c"(msr));
+    }
+
+    inline uint64_t read_cr2()
+    {
+        uint64_t r;
+        __asm __volatile("movq %%cr2, %0\n" : "=a"(r));
+        return r;
     }
 
     inline uint64_t read_cr4()

@@ -153,7 +153,6 @@ namespace vm
     long VmOp(amd64::TrapFrame& tf)
     {
         auto vmop = reinterpret_cast<VMOP_OPTIONS*>(syscall::GetArgument<1>(tf));
-        printf("vmop: op %d addr %p len %p\n", vmop->vo_op, vmop->vo_addr, vmop->vo_len);
 
         auto& current = process::GetCurrent();
         switch (vmop->vo_op) {
@@ -171,20 +170,34 @@ namespace vm
                         return -ENOMEM;
                     memset(page, 0, vm::PageSize);
 
-                    printf(
-                        "allocating heap => %p\n",
-                        vm::userland::heapBase + current.heapSizeAllocated);
                     Map(pml4, vm::userland::heapBase + current.heapSizeAllocated, vm::PageSize,
                         vm::VirtualToPhysical(page), vm::Page_P | vm::Page_RW | vm::Page_US);
                     current.heapSizeAllocated += vm::PageSize;
                 }
-                printf("retval %p\n", vm::userland::heapBase + previousHeapSize);
                 vmop->vo_addr = reinterpret_cast<void*>(vm::userland::heapBase + previousHeapSize);
                 return 0;
             }
             default:
+                 printf("vmop: unimplemented op %d addr %p len %p\n", vmop->vo_op, vmop->vo_addr, vmop->vo_len);
                 return -EINVAL;
         }
         return -1;
+    }
+
+    bool HandlePageFault(uint64_t va, int errnum)
+    {
+        auto& current = process::GetCurrent();
+        auto pml4 = reinterpret_cast<uint64_t*>(vm::PhysicalToVirtual(current.pageDirectory));
+        auto pte = FindPTE(pml4, vm::RoundDownToPage(va), false);
+        if (pte == nullptr) return false;
+        if ((*pte & Page_P) != 0) return false;
+        if ((*pte & Page_US) == 0) return false;
+
+        auto page = page_allocator::Allocate();
+        if (page == nullptr) return false;
+        memset(page, 0, vm::PageSize);
+
+        *pte |= vm::VirtualToPhysical(page) | Page_P;
+        return true;
     }
 } // namespace vm
