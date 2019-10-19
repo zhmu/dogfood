@@ -337,7 +337,7 @@ namespace
     }
 } // namespace
 
-extern "C" void exception(const struct TrapFrame* tf)
+extern "C" void exception(struct TrapFrame* tf)
 {
     printf("exception #%d @ cs:rip = %lx:%lx\n", tf->trapno, tf->cs, tf->rip);
     printf("rax %lx rbx %lx rcx %lx rdx %lx\n", tf->rax, tf->rbx, tf->rcx, tf->rdx);
@@ -347,6 +347,12 @@ extern "C" void exception(const struct TrapFrame* tf)
     printf(
         "errnum %lx cs %lx rflags %lx ss:esp %lx:%lx\n", tf->errnum, tf->cs, tf->rflags, tf->ss,
         tf->rsp);
+
+    if ((tf->cs & 3) == static_cast<int>(DescriptorPrivilege::User)) {
+        // Userland exception: terminate the process
+        process::Exit(*tf);
+    }
+
     while (1)
         ;
 }
