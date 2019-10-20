@@ -91,6 +91,7 @@ namespace console
                 write_offset = (write_offset + 1) % size;
 
                 put_char(ch);
+                if (ch == '\r') put_char('\n');
             }
         }
     }

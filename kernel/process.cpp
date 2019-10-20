@@ -49,6 +49,7 @@ namespace process
                 proc = Process{};
                 proc.state = State::Construct;
                 proc.pid = next_pid++;
+                proc.cwd = fs::namei("/");
                 AllocateConsoleFile(proc); // stdin
                 AllocateConsoleFile(proc); // stdout
                 AllocateConsoleFile(proc); // stderr
@@ -136,6 +137,8 @@ namespace process
             return -ENOMEM;
         new_process->ppid = current->pid;
         file::CloneTable(*current, *new_process);
+        new_process->cwd = current->cwd;
+        fs::iref(*new_process->cwd);
 
         auto current_pd =
             reinterpret_cast<uint64_t*>(vm::PhysicalToVirtual(current->pageDirectory));

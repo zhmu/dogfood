@@ -9,6 +9,8 @@
 #include "lib.h"
 #include "vm.h"
 
+#include "stat.h"
+
 extern "C" uint64_t perform_syscall(amd64::TrapFrame* tf)
 {
     switch (syscall::GetNumber(*tf)) {
@@ -28,6 +30,64 @@ extern "C" uint64_t perform_syscall(amd64::TrapFrame* tf)
             auto len = syscall::GetArgument<3>(*tf);
             return file::Read(*file, buf, len);
         }
+        case SYS_open: {
+            auto path = reinterpret_cast<const char*>(syscall::GetArgument<1>(*tf));
+            auto flags = static_cast<int>(syscall::GetArgument<2>(*tf));
+            auto mode = static_cast<int>(syscall::GetArgument<3>(*tf));
+            // XXX only support opening for now
+            auto inode = fs::namei(path);
+            printf("OPEN [%s] %x %x -> %p\n", path, flags, mode, inode);
+            if (inode == nullptr) return -ENOENT;
+
+            auto& current = process::GetCurrent();
+            auto file = file::Allocate(current);
+            file->f_inode = inode;
+            printf("idx %d\n", file - &current.files[0]);
+            return file - &current.files[0];
+            break;
+        }
+        case SYS_close: {
+            auto file = file::FindByIndex(process::GetCurrent(), syscall::GetArgument<1>(*tf));
+            if (file == nullptr) return -EBADF;
+            file::Free(*file);
+            return 0;
+        }
+        case SYS_stat:
+        case SYS_lstat: {
+            auto path = reinterpret_cast<const char*>(syscall::GetArgument<1>(*tf));
+            auto buf = reinterpret_cast<stat*>(syscall::GetArgument<2>(*tf));
+
+            auto inode = fs::namei(path);
+            if (inode == nullptr) return -ENOENT;
+            auto ret = fs::Stat(*inode, *buf);
+            fs::iput(*inode);
+            printf("stat %d -> mode %x\n", !!ret, buf->st_mode);
+            return ret ? 0 : -EIO;
+        }
+        case SYS_fstat: {
+            auto file = file::FindByIndex(process::GetCurrent(), syscall::GetArgument<1>(*tf));
+            auto buf = reinterpret_cast<stat*>(syscall::GetArgument<2>(*tf));
+            if (file == nullptr) return -EBADF;
+            if (file->f_inode == nullptr) {
+                memset(buf, 0, sizeof *buf);
+                return 0;
+            }
+            return fs::Stat(*file->f_inode, *buf) ? 0 : -EIO;
+        }
+        case SYS_fcntl: {
+            auto file = file::FindByIndex(process::GetCurrent(), syscall::GetArgument<1>(*tf));
+            if (file == nullptr) return -EBADF;
+            auto op = syscall::GetArgument<2>(*tf);
+            switch(op) {
+                case F_GETFL:
+                    return 0;
+                default:
+                    printf("fcntl(): op %d not supported\n", op);
+                    return -EINVAL;
+            }
+            printf("fnctl cmd %d\n", op);
+            return 0;
+        }
         case SYS_vmop:
             return vm::VmOp(*tf);
         case SYS_kill:
@@ -45,8 +105,11 @@ extern "C" uint64_t perform_syscall(amd64::TrapFrame* tf)
         case SYS_getegid:
             return 0; // not implemented
         case SYS_getpid:
-        case SYS_getppid: // not implemented
             return process::GetCurrent().pid;
+        case SYS_getppid:
+            return process::GetCurrent().ppid;
+        case SYS_sigaction:
+            return 0; // not implemented
     }
     printf(
         "[%d] unsupported syscall %d %lx [%x %x %x %x %x %x]\n", process::GetCurrent().pid,

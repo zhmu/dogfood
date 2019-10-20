@@ -2,6 +2,8 @@
 
 #include "types.h"
 
+struct stat;
+
 namespace ext2
 {
     struct Inode;
@@ -38,6 +40,7 @@ namespace fs
     void iput(Inode& inode);
     void iref(Inode& inode);
     Inode* namei(const char* path);
+    bool Stat(Inode& inode, stat& sbuf);
 
     void CloneTable(const process::Process& parent, process::Process& child);
 } // namespace fs
