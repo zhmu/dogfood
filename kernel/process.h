@@ -29,6 +29,7 @@ namespace process
         void* kernelStack = nullptr; // start of kernel stack
         struct amd64::TrapFrame* trapFrame = nullptr;
         struct amd64::Context* context = nullptr;
+        uint8_t fpu[512] __attribute__((aligned(16)));
         file::File files[maxFiles];
         fs::Inode* cwd = nullptr;
     };

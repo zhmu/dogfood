@@ -304,6 +304,7 @@ namespace
         // Enable necessary features and use our new page tables
         wrmsr(msr::EFER, rdmsr(msr::EFER) | msr::EFER_NXE); // No-Execute pages
         write_cr4(read_cr4() | cr4::PGE);                   // Global pages
+        write_cr4(read_cr4() | cr4::OSXMMEXCPT | cr4::OSFXSR); // FPU support
         write_cr3(reinterpret_cast<uint64_t>(pml4));
         kernel_pagedir =
             reinterpret_cast<uint64_t*>(vm::PhysicalToVirtual(reinterpret_cast<uint64_t>(pml4)));

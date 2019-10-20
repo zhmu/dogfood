@@ -188,6 +188,7 @@ namespace process
 
             // TODO implement proper sleep/wakeup mechanism
             current->state = State::Runnable; // XXX
+            __asm __volatile("fxsave (%0)" : : "r" (&current->fpu[0]));
             switch_to(&current->context, cpu_context);
         }
         // NOTREACHED
@@ -225,6 +226,7 @@ namespace process
             if (file.f_refcount == 0) continue;
             file::Free(file);
         }
+        // Not saving FPU context for zombie thread
         switch_to(&current->context, cpu_context);
         for (;;)
             ;
@@ -268,6 +270,7 @@ namespace process
                     reinterpret_cast<char*>(proc.kernelStack) + vm::PageSize);
                 syscall_kernel_rsp = reinterpret_cast<uint64_t>(
                     reinterpret_cast<char*>(proc.kernelStack) + vm::PageSize);
+                __asm __volatile("frstor (%0)" : : "r" (&current->fpu[0]));
                 switch_to(&cpu_context, proc.context);
             }
         }
