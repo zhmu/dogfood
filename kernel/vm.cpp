@@ -165,13 +165,13 @@ namespace vm
                 auto pml4 =
                     reinterpret_cast<uint64_t*>(vm::PhysicalToVirtual(current.pageDirectory));
                 while (current.heapSizeAllocated < vm::RoundUpToPage(current.heapSize)) {
+                    auto pte = FindPTE(pml4, vm::userland::heapBase + current.heapSizeAllocated, true);
+                    if (pte == nullptr) return -ENOMEM;
                     auto page = page_allocator::Allocate();
-                    if (page == nullptr)
-                        return -ENOMEM;
+                    if (page == nullptr) return -ENOMEM;
                     memset(page, 0, vm::PageSize);
 
-                    Map(pml4, vm::userland::heapBase + current.heapSizeAllocated, vm::PageSize,
-                        vm::VirtualToPhysical(page), vm::Page_P | vm::Page_RW | vm::Page_US);
+                    *pte = vm::Page_P | vm::Page_RW | vm::Page_US | vm::VirtualToPhysical(page);
                     current.heapSizeAllocated += vm::PageSize;
                 }
                 vmop->vo_addr = reinterpret_cast<void*>(vm::userland::heapBase + previousHeapSize);
