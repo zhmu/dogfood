@@ -189,7 +189,7 @@ int exec(amd64::TrapFrame& tf)
     amd64::write_cr3(current.pageDirectory);
 
     tf.rip = ehdr.e_entry;
-    tf.rsp = vm::userland::stackBase + vm::userland::stackSize;
+    tf.rsp = vm::userland::stackBase + vm::userland::stackSize - vm::PageSize;
     tf.rdi = vm::userland::stackBase + vm::userland::stackSize - vm::PageSize;
 
     fs::iput(*inode);
