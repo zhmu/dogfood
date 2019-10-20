@@ -179,6 +179,7 @@ namespace process
                 have_children = true;
                 if (proc.state == State::Zombie) {
                     int pid = proc.pid;
+                    *stat_loc = 0; // TODO
                     DestroyZombieProcess(proc);
                     return pid;
                 }
