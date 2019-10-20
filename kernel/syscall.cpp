@@ -41,13 +41,12 @@ namespace
                 auto mode = static_cast<int>(syscall::GetArgument<3>(*tf));
                 // XXX only support opening for now
                 auto inode = fs::namei(path);
-                printf("OPEN [%s] %x %x -> %p\n", path, flags, mode, inode);
                 if (inode == nullptr) return -ENOENT;
 
                 auto& current = process::GetCurrent();
                 auto file = file::Allocate(current);
+                if (file == nullptr) { fs::iput(*inode); return -ENFILE; }
                 file->f_inode = inode;
-                printf("idx %d\n", file - &current.files[0]);
                 return file - &current.files[0];
                 break;
             }
@@ -66,7 +65,6 @@ namespace
                 if (inode == nullptr) return -ENOENT;
                 auto ret = fs::Stat(*inode, *buf);
                 fs::iput(*inode);
-                printf("stat %d -> mode %x\n", !!ret, buf->st_mode);
                 return ret ? 0 : -EIO;
             }
             case SYS_fstat: {
@@ -98,6 +96,18 @@ namespace
                 *offset = new_offset;
                 return 0;
             }
+            case SYS_dup: {
+                auto file = file::FindByIndex(process::GetCurrent(), syscall::GetArgument<1>(*tf));
+                if (file == nullptr) return -EBADF;
+                auto& current = process::GetCurrent();
+                auto file2 = file::Allocate(current);
+                if (file2 == nullptr) return -ENFILE;
+                *file2 = *file;
+                if (file2->f_inode != nullptr)
+                    fs::iref(*file2->f_inode);
+                return file2 - &current.files[0];
+
+            }
             case SYS_fcntl: {
                 auto file = file::FindByIndex(process::GetCurrent(), syscall::GetArgument<1>(*tf));
                 if (file == nullptr) return -EBADF;
@@ -109,7 +119,6 @@ namespace
                         printf("fcntl(): op %d not supported\n", op);
                         return -EINVAL;
                 }
-                printf("fnctl cmd %d\n", op);
                 return 0;
             }
             case SYS_vmop:
@@ -134,6 +143,8 @@ namespace
                 return process::GetCurrent().ppid;
             case SYS_sigaction:
                 return 0; // not implemented
+            case SYS_clock_gettime:
+                return -ENOSYS;
         }
         printf(
             "[%d] unsupported syscall %d %lx [%x %x %x %x %x %x]\n", process::GetCurrent().pid,
