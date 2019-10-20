@@ -203,6 +203,16 @@ void* sbrk(intptr_t incr)
     return vo.vo_addr;
 }
 
+extern long _SYS_getcwd(char*, int);
+
+char* getcwd(char* buf, size_t size)
+{
+    long r = _SYS_getcwd(buf, (int)size);
+    if (r == 0) return buf;
+    errno = -r;
+    return NULL;
+}
+
 SYSCALL4(fcntl)
 SYSCALL5(ioctl)
 SYSCALL4(mount)
@@ -230,7 +240,6 @@ SYSCALL2(clock_gettime)
 SYSCALL2(clock_getres)
 SYSCALL3(readlink)
 SYSCALL2(lstat)
-SYSCALL2(getcwd)
 SYSCALL3(sigaction)
 SYSCALL3(sigprocmask)
 SYSCALL1(sigsuspend)
@@ -278,7 +287,7 @@ int wait3(int* status, int options, struct rusage* rusage)
 {
     if (rusage != NULL)
         memset(rusage, 0, sizeof(*rusage));
-    return waitpid(0, (long*)&status, options);
+    return waitpid(0, (long*)status, options);
 }
 
 int getmntinfo(struct statfs** mntbufp, int mode)
