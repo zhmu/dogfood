@@ -10,7 +10,7 @@ DIR* opendir(const char* name)
     if (fd < 0)
         return NULL;
 
-    DIR* dir = malloc(sizeof(dir));
+    DIR* dir = malloc(sizeof(*dir));
     if (dir == NULL) {
         close(fd);
         return NULL;

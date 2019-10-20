@@ -30,6 +30,8 @@ struct dirent* readdir(DIR* dirp)
         errno = EIO;
         return NULL;
     }
+    dirp->d_dirent.d_name[de.name_len] = '\0';
 
+    lseek(dirp->d_fd, de.rec_len - (sizeof(de) + de.name_len), SEEK_CUR);
     return &dirp->d_dirent;
 }
