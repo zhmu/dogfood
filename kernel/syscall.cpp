@@ -121,6 +121,37 @@ namespace
                 }
                 return 0;
             }
+            case SYS_getcwd: {
+                auto buf = reinterpret_cast<char*>(syscall::GetArgument<1>(*tf));
+                auto len = syscall::GetArgument<2>(*tf);
+                auto& current = process::GetCurrent();
+                return -fs::ResolveDirectoryName(*current.cwd, buf, len);
+            }
+            case SYS_chdir: {
+                auto buf = reinterpret_cast<char*>(syscall::GetArgument<1>(*tf));
+                auto& current = process::GetCurrent();
+                auto inode = fs::namei(buf);
+                if (inode == nullptr) return -ENOENT;
+                if ((inode->ext2inode->i_mode & EXT2_S_IFDIR) == 0) {
+                    fs::iput(*inode);
+                    return -ENOTDIR;
+                }
+
+                fs::iput(*current.cwd);
+                current.cwd = inode;
+                return 0;
+            }
+            case SYS_fchdir: {
+                auto file = file::FindByIndex(process::GetCurrent(), syscall::GetArgument<1>(*tf));
+                if (file == nullptr) return -EBADF;
+                if ((file->f_inode->ext2inode->i_mode & EXT2_S_IFDIR) == 0) return -ENOTDIR;
+
+                auto& current = process::GetCurrent();
+                fs::iput(*current.cwd);
+                current.cwd = file->f_inode;
+                fs::iref(*current.cwd);
+                return 0;
+            }
             case SYS_vmop:
                 return vm::VmOp(*tf);
             case SYS_kill:

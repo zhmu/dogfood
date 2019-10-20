@@ -29,8 +29,8 @@ namespace fs
     };
 
     struct DEntry {
-        InodeNumber d_ino;
-        char d_name[MaxDirectoryEntryNameLength];
+        InodeNumber d_ino = 0;
+        char d_name[MaxDirectoryEntryNameLength] = {};
     };
 
     void Initialize();
@@ -41,6 +41,7 @@ namespace fs
     void iref(Inode& inode);
     Inode* namei(const char* path);
     bool Stat(Inode& inode, stat& sbuf);
+    int ResolveDirectoryName(Inode& inode, char* buffer, int bufferSize);
 
     void CloneTable(const process::Process& parent, process::Process& child);
 } // namespace fs

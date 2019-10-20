@@ -1,5 +1,6 @@
 #include "fs.h"
 #include "bio.h"
+#include "errno.h"
 #include "ext2.h"
 #include "process.h"
 #include "stat.h"
@@ -124,9 +125,8 @@ namespace fs
         off_t offset = 0;
         fs::DEntry dentry;
         while (ext2::ReadDirectory(inode, offset, dentry)) {
-            if (strcmp(dentry.d_name, item) != 0)
-                continue;
-            return iget(inode.dev, dentry.d_ino);
+            if (strcmp(dentry.d_name, item) == 0)
+                return iget(inode.dev, dentry.d_ino);
         }
         return nullptr;
     }
@@ -151,6 +151,64 @@ namespace fs
         }
 
         return current_inode;
+    }
+
+    bool LookupInodeByNumber(Inode& inode, ino_t inum, fs::DEntry& dentry)
+    {
+        off_t offset = 0;
+        while (ext2::ReadDirectory(inode, offset, dentry)) {
+            if (strcmp(dentry.d_name, ".") == 0) continue;
+            if (strcmp(dentry.d_name, "..") == 0) continue;
+            if (dentry.d_ino == inum) return true;
+        }
+        return false;
+    }
+
+    int ResolveDirectoryName(Inode& inode, char* buffer, int bufferSize)
+    {
+        if (inode.ext2inode == nullptr || (inode.ext2inode->i_mode & EXT2_S_IFDIR) == 0) return ENOTDIR;
+        if (bufferSize < 2) return ENAMETOOLONG;
+        Inode* current = &inode;
+        iref(*current);
+
+        int currentPosition = bufferSize - 1;
+        buffer[currentPosition] = '\0';
+        while(current != rootInode) {
+            Inode* parent = LookupInDirectory(*current, "..");
+            if (parent == nullptr) break;
+            printf("got parent\n");
+
+            // Find the current inode's name
+            fs::DEntry dentry;
+            if (!LookupInodeByNumber(*parent, current->inum, dentry)) {
+                fs::iput(*parent);
+                fs::iput(*current);
+                return ENOENT;
+            }
+
+            const int entryLength = strlen(dentry.d_name);
+            if (currentPosition - entryLength <= 0) {
+                fs::iput(*parent);
+                fs::iput(*current);
+                return ENAMETOOLONG;
+            }
+            memcpy(buffer + currentPosition - entryLength, dentry.d_name, entryLength);
+            buffer[currentPosition - entryLength - 1] = '/';
+            currentPosition -= entryLength + 1;
+            printf("ohai [%s]\n", dentry.d_name);
+
+            fs::iput(*current);
+            current = parent;
+        }
+        if (currentPosition == bufferSize - 1) {
+            strlcpy(buffer, "/", bufferSize);
+        } else {
+            for(int n = 0; n < bufferSize -currentPosition; n++) {
+                buffer[n] = buffer[currentPosition + n];
+            }
+            buffer[bufferSize - currentPosition] = '\0';
+        }
+        return 0;
     }
 
     bool Stat(Inode& inode, stat& sbuf)
