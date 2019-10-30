@@ -88,9 +88,9 @@ CXXFLAGS="$save_CXXFLAGS"
 GLIBCXX_CONFIGURE
 
 # Libtool setup.
-if test "x${with_newlib}" != "xyes"; then
-  AC_LIBTOOL_DLOPEN
-fi
+#if test "x${with_newlib}" != "xyes"; then
+#  AC_LIBTOOL_DLOPEN
+#fi
 AM_PROG_LIBTOOL
 ACX_LT_HOST_FLAGS
 AC_SUBST(enable_shared)
