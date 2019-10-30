@@ -587,6 +587,12 @@ set(SOURCES
     time/tzset_r.c
     time/tzvars.c
     time/wcsftime.c
+    unix/basename.c
+    unix/dirname.c
+    unix/getpwent.c
+    unix/pread.c
+    unix/pwrite.c
+    unix/sigset.c
 )
 
 set(SOURCES
@@ -1441,18 +1447,6 @@ set(SOURCES_notyet
     syscalls/sysunlink.c
     syscalls/syswait.c
     syscalls/syswrite.c
-    unix/basename.c
-    unix/dirname.c
-    unix/getcwd.c
-    unix/getlogin.c
-    unix/getpass.c
-    unix/getpwent.c
-    unix/getut.c
-    unix/pread.c
-    unix/pwrite.c
-    unix/sigset.c
-    unix/ttyname.c
-    unix/ttyname_r.c
     xdr/dummy.c
     xdr/xdr.c
     xdr/xdr_array.c

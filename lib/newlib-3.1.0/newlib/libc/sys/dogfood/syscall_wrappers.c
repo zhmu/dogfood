@@ -311,6 +311,11 @@ int execvp(const char* path, char* const argv[])
     return execve(path, argv, environ);
 }
 
+int execv(const char* path, char* const argv[])
+{
+    return execve(path, argv, environ);
+}
+
 int setpgid(pid_t pid, pid_t pgid)
 {
     errno = -ENOSYS;
@@ -340,8 +345,15 @@ int setregid(gid_t rgid, gid_t egid)
     return -1;
 }
 
+#define _SC_PAGESIZE 8
+#define _SC_CLK_TCK 2
+
 long sysconf(int name)
 {
+    switch(name) {
+        case _SC_PAGESIZE: return 4096;
+        case _SC_CLK_TCK: return 100;
+    }
     return 0;
 }
 
@@ -354,18 +366,6 @@ struct group *getgrgid(gid_t gid)
 {
     return NULL;
 }
-
-
-struct passwd *getpwnam(const char *name)
-{
-    return NULL;
-}
-
-struct passwd *getpwuid(uid_t uid)
-{
-    return NULL;
-}
-
 
 int fchown(int fd, uid_t owner, gid_t group)
 {
@@ -548,4 +548,20 @@ int setrlimit(int resource, const struct rlimit *rlim)
 {
     errno = ENOSYS;
     return -1;
+}
+
+int chown(const char* pathname, int owner, int group)
+{
+    errno = ENOSYS;
+    return -1;
+}
+
+unsigned int sleep(unsigned int seconds)
+{
+    return 0;
+}
+
+int wait(int* wstatus)
+{
+    return waitpid(-1, &wstatus, 0);
 }

@@ -10,3 +10,4 @@ set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DMISSING_SYSCALL_NAMES")
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -g") # XXX
 
 add_subdirectory(newlib/libc)
+add_subdirectory(newlib/libm)
