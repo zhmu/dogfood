@@ -12,40 +12,37 @@ typedef long blksize_t;
 typedef long blkcnt_t;
 typedef long time_t;
 
-struct stat
-{
-  dev_t st_dev;
-  ino_t st_ino;
-  mode_t st_mode;
-  nlink_t st_nlink;
-  uid_t st_uid;
-  gid_t st_gid;
-  dev_t st_rdev;
-  off_t st_size;
-  time_t st_atime;
-  long st_spare1;
-  time_t st_mtime;
-  long st_spare2;
-  time_t st_ctime;
-  long st_spare3;
-  blksize_t st_blksize;
-  blkcnt_t st_blocks;
-  long st_spare4[2];
-
-
+struct stat {
+    dev_t st_dev;
+    ino_t st_ino;
+    mode_t st_mode;
+    nlink_t st_nlink;
+    uid_t st_uid;
+    gid_t st_gid;
+    dev_t st_rdev;
+    off_t st_size;
+    time_t st_atime;
+    long st_spare1;
+    time_t st_mtime;
+    long st_spare2;
+    time_t st_ctime;
+    long st_spare3;
+    blksize_t st_blksize;
+    blkcnt_t st_blocks;
+    long st_spare4[2];
 };
 
-  #define _IFMT       0170000 /* type of file */
-  #define     _IFDIR  0040000 /* directory */
-  #define     _IFCHR  0020000 /* character special */
-  #define     _IFBLK  0060000 /* block special */
-  #define     _IFREG  0100000 /* regular */
-  #define     _IFLNK  0120000 /* symbolic link */
-  #define     _IFSOCK 0140000 /* socket */
-  #define     _IFIFO  0010000 /* fifo */
+#define _IFMT 0170000   /* type of file */
+#define _IFDIR 0040000  /* directory */
+#define _IFCHR 0020000  /* character special */
+#define _IFBLK 0060000  /* block special */
+#define _IFREG 0100000  /* regular */
+#define _IFLNK 0120000  /* symbolic link */
+#define _IFSOCK 0140000 /* socket */
+#define _IFIFO 0010000  /* fifo */
 
-  #define F_GETFL     3   /* Get file flags */
+#define F_GETFL 3 /* Get file flags */
 
-  #define    SEEK_SET    0
-  #define    SEEK_CUR    1
-  #define    SEEK_END    2
+#define SEEK_SET 0
+#define SEEK_CUR 1
+#define SEEK_END 2

@@ -302,8 +302,8 @@ namespace
         mapKernel(&__bss_begin, &__bss_end, vm::Page_NX | vm::Page_RW);       // bss
 
         // Enable necessary features and use our new page tables
-        wrmsr(msr::EFER, rdmsr(msr::EFER) | msr::EFER_NXE); // No-Execute pages
-        write_cr4(read_cr4() | cr4::PGE);                   // Global pages
+        wrmsr(msr::EFER, rdmsr(msr::EFER) | msr::EFER_NXE);    // No-Execute pages
+        write_cr4(read_cr4() | cr4::PGE);                      // Global pages
         write_cr4(read_cr4() | cr4::OSXMMEXCPT | cr4::OSFXSR); // FPU support
         write_cr3(reinterpret_cast<uint64_t>(pml4));
         kernel_pagedir =

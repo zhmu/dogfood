@@ -157,25 +157,31 @@ namespace fs
     {
         off_t offset = 0;
         while (ext2::ReadDirectory(inode, offset, dentry)) {
-            if (strcmp(dentry.d_name, ".") == 0) continue;
-            if (strcmp(dentry.d_name, "..") == 0) continue;
-            if (dentry.d_ino == inum) return true;
+            if (strcmp(dentry.d_name, ".") == 0)
+                continue;
+            if (strcmp(dentry.d_name, "..") == 0)
+                continue;
+            if (dentry.d_ino == inum)
+                return true;
         }
         return false;
     }
 
     int ResolveDirectoryName(Inode& inode, char* buffer, int bufferSize)
     {
-        if (inode.ext2inode == nullptr || (inode.ext2inode->i_mode & EXT2_S_IFDIR) == 0) return ENOTDIR;
-        if (bufferSize < 2) return ENAMETOOLONG;
+        if (inode.ext2inode == nullptr || (inode.ext2inode->i_mode & EXT2_S_IFDIR) == 0)
+            return ENOTDIR;
+        if (bufferSize < 2)
+            return ENAMETOOLONG;
         Inode* current = &inode;
         iref(*current);
 
         int currentPosition = bufferSize - 1;
         buffer[currentPosition] = '\0';
-        while(current != rootInode) {
+        while (current != rootInode) {
             Inode* parent = LookupInDirectory(*current, "..");
-            if (parent == nullptr) break;
+            if (parent == nullptr)
+                break;
             printf("got parent\n");
 
             // Find the current inode's name
@@ -203,7 +209,7 @@ namespace fs
         if (currentPosition == bufferSize - 1) {
             strlcpy(buffer, "/", bufferSize);
         } else {
-            for(int n = 0; n < bufferSize -currentPosition; n++) {
+            for (int n = 0; n < bufferSize - currentPosition; n++) {
                 buffer[n] = buffer[currentPosition + n];
             }
             buffer[bufferSize - currentPosition] = '\0';
@@ -213,7 +219,8 @@ namespace fs
 
     bool Stat(Inode& inode, stat& sbuf)
     {
-        if(inode.ext2inode == nullptr) return false;
+        if (inode.ext2inode == nullptr)
+            return false;
         const auto& e2i = *inode.ext2inode;
         sbuf.st_dev = inode.dev;
         sbuf.st_ino = inode.inum;

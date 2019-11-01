@@ -113,7 +113,8 @@ namespace
             uint64_t ptr;
             if (p != nullptr) {
                 len = strlen(p) + 1;
-                ptr = vm::userland::stackBase + vm::userland::stackSize - vm::PageSize + (data_sp - ustack);
+                ptr = vm::userland::stackBase + vm::userland::stackSize - vm::PageSize +
+                      (data_sp - ustack);
             } else {
                 len = 0;
                 ptr = 0;
@@ -180,9 +181,11 @@ int exec(amd64::TrapFrame& tf)
     {
         auto pd = reinterpret_cast<uint64_t*>(vm::PhysicalToVirtual(current.pageDirectory));
         vm::Map(
-            pd, vm::userland::stackBase + vm::userland::stackSize - vm::PageSize, vm::PageSize, vm::VirtualToPhysical(ustack),
-            vm::Page_P | vm::Page_RW | vm::Page_US);
-        for(uint64_t va = vm::userland::stackBase; va < vm::userland::stackBase + vm::userland::stackSize - vm::PageSize; va += vm::PageSize) {
+            pd, vm::userland::stackBase + vm::userland::stackSize - vm::PageSize, vm::PageSize,
+            vm::VirtualToPhysical(ustack), vm::Page_P | vm::Page_RW | vm::Page_US);
+        for (uint64_t va = vm::userland::stackBase;
+             va < vm::userland::stackBase + vm::userland::stackSize - vm::PageSize;
+             va += vm::PageSize) {
             vm::Map(pd, va, vm::PageSize, 0, vm::Page_RW | vm::Page_US);
         }
     }

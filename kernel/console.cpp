@@ -6,12 +6,13 @@ using namespace amd64::io;
 namespace console
 {
     inline constexpr int port = 0x3f8; // COM1
-    namespace input_buffer {
+    namespace input_buffer
+    {
         inline constexpr size_t size = 16;
         char data[size];
         size_t read_offset = 0;
         size_t write_offset = 0;
-    }
+    } // namespace input_buffer
 
     namespace registers
     {
@@ -52,7 +53,7 @@ namespace console
     int Write(const void* buf, int len)
     {
         auto ptr = reinterpret_cast<const char*>(buf);
-        while(len > 0) {
+        while (len > 0) {
             put_char(*ptr++);
             --len;
         }
@@ -62,7 +63,7 @@ namespace console
     int Read(void* buf, int len)
     {
         auto ptr = reinterpret_cast<char*>(buf);
-        while(len > 0) {
+        while (len > 0) {
             using namespace input_buffer;
             while (read_offset == write_offset) {
                 // Not enough data; wait for more TODO mechanism
@@ -71,27 +72,31 @@ namespace console
 
             auto ch = data[read_offset];
             read_offset = (read_offset + 1) % size;
-            if (ch == '\r') ch = '\n';
+            if (ch == '\r')
+                ch = '\n';
 
             *ptr++ = ch;
             --len;
-            if (ch == '\n') break;
+            if (ch == '\n')
+                break;
         }
         return ptr - reinterpret_cast<char*>(buf);
     }
 
     void OnIRQ()
     {
-        while(true) {
+        while (true) {
             auto ch = get_char();
-            if (ch == 0) break;
+            if (ch == 0)
+                break;
             {
                 using namespace input_buffer;
                 data[write_offset] = ch;
                 write_offset = (write_offset + 1) % size;
 
                 put_char(ch);
-                if (ch == '\r') put_char('\n');
+                if (ch == '\r')
+                    put_char('\n');
             }
         }
     }

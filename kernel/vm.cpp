@@ -165,10 +165,13 @@ namespace vm
                 auto pml4 =
                     reinterpret_cast<uint64_t*>(vm::PhysicalToVirtual(current.pageDirectory));
                 while (current.heapSizeAllocated < vm::RoundUpToPage(current.heapSize)) {
-                    auto pte = FindPTE(pml4, vm::userland::heapBase + current.heapSizeAllocated, true);
-                    if (pte == nullptr) return -ENOMEM;
+                    auto pte =
+                        FindPTE(pml4, vm::userland::heapBase + current.heapSizeAllocated, true);
+                    if (pte == nullptr)
+                        return -ENOMEM;
                     auto page = page_allocator::Allocate();
-                    if (page == nullptr) return -ENOMEM;
+                    if (page == nullptr)
+                        return -ENOMEM;
                     memset(page, 0, vm::PageSize);
 
                     *pte = vm::Page_P | vm::Page_RW | vm::Page_US | vm::VirtualToPhysical(page);
@@ -178,7 +181,9 @@ namespace vm
                 return 0;
             }
             default:
-                 printf("vmop: unimplemented op %d addr %p len %p\n", vmop->vo_op, vmop->vo_addr, vmop->vo_len);
+                printf(
+                    "vmop: unimplemented op %d addr %p len %p\n", vmop->vo_op, vmop->vo_addr,
+                    vmop->vo_len);
                 return -EINVAL;
         }
         return -1;
@@ -189,12 +194,16 @@ namespace vm
         auto& current = process::GetCurrent();
         auto pml4 = reinterpret_cast<uint64_t*>(vm::PhysicalToVirtual(current.pageDirectory));
         auto pte = FindPTE(pml4, vm::RoundDownToPage(va), false);
-        if (pte == nullptr) return false;
-        if ((*pte & Page_P) != 0) return false;
-        if ((*pte & Page_US) == 0) return false;
+        if (pte == nullptr)
+            return false;
+        if ((*pte & Page_P) != 0)
+            return false;
+        if ((*pte & Page_US) == 0)
+            return false;
 
         auto page = page_allocator::Allocate();
-        if (page == nullptr) return false;
+        if (page == nullptr)
+            return false;
         memset(page, 0, vm::PageSize);
 
         *pte |= vm::VirtualToPhysical(page) | Page_P;

@@ -23,7 +23,8 @@ namespace amd64
         inline constexpr uint64_t OSFXSR = (1UL << 9);      // OS FXSAVE/FXRSTOR support
 
     } // namespace cr4
-    namespace exception {
+    namespace exception
+    {
         inline constexpr int PF = 14;
     }
 
