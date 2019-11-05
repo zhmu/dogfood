@@ -49,13 +49,13 @@ struct VMOP_OPTIONS {
     off_t vo_offset;
 };
 
-int set_errno_or_extract_value(int v)
+long set_errno_or_extract_value(long v)
 {
-    if (v & 0x80000000) {
-        errno = v & 0x1ff;
+    if (v < 0) {
+        errno = -v;
         return -1;
     }
-    return v & 0x7fffffff;
+    return v;
 }
 
 void _exit(int n)

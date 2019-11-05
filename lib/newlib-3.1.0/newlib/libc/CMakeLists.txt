@@ -1602,6 +1602,7 @@ set(HEADERS_SYS
     include/sys/utime.h
     include/sys/wait.h
     sys/dogfood/sys/dirent.h
+    sys/dogfood/sys/errno.h
     sys/dogfood/sys/ioctl.h
     sys/dogfood/sys/mman.h
     sys/dogfood/sys/mount.h

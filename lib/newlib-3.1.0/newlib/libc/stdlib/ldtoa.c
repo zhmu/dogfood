@@ -6,6 +6,7 @@
 #include <reent.h>
 #include <string.h>
 #include <stdlib.h>
+#include <errno.h>
 #include "mprec.h"
 
 /* These are the externally visible entries. */
@@ -367,8 +368,8 @@ static const char *const ermsg[7] = {
 #define TLOSS		5	/* total loss of precision */
 #define PLOSS		6	/* partial loss of precision */
 
-#define EDOM		33
-#define ERANGE		34
+//#define EDOM		33
+//#define ERANGE		34
 
 typedef struct
 {
