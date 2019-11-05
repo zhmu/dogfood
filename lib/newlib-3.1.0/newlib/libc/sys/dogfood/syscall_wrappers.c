@@ -327,12 +327,6 @@ unsigned int alarm(unsigned int seconds)
     return 0;
 }
 
-int access(const char* filename, int mode)
-{
-    errno = -ENOSYS;
-    return -1;
-}
-
 int setreuid(uid_t ruid, uid_t euid)
 {
     errno = -ENOSYS;
@@ -403,7 +397,6 @@ int gettimeofday(struct timeval * tv, void* __tz)
     errno = ENOSYS;
     return -1;
 }
-
 
 int settimeofday(const struct timeval *tv, const struct timezone *tz)
 {

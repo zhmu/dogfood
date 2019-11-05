@@ -604,6 +604,7 @@ set(SOURCES
 
 set(SOURCES
     ${SOURCES}
+    sys/dogfood/access.c
     sys/dogfood/syscall.S
     sys/dogfood/syscall_wrappers.c
     sys/dogfood/isatty.c
