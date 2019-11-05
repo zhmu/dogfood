@@ -25,6 +25,7 @@ namespace fs
         Device dev = 0;
         InodeNumber inum = 0;
         int refcount = 0;
+        bool dirty = false;
         ext2::Inode* ext2inode = nullptr;
     };
 
@@ -35,13 +36,17 @@ namespace fs
 
     void Initialize();
     int Read(Inode& inode, void* dst, off_t offset, unsigned int count);
+    int Write(fs::Inode& inode, const void* dst, off_t offset, unsigned int count);
 
     Inode* iget(Device dev, InodeNumber inum);
     void iput(Inode& inode);
     void iref(Inode& inode);
+    void idirty(Inode& inode);
     Inode* namei(const char* path);
     bool Stat(Inode& inode, stat& sbuf);
     int ResolveDirectoryName(Inode& inode, char* buffer, int bufferSize);
+
+    int Open(const char* path, int flags, int mode, Inode*& inode);
 
     void CloneTable(const process::Process& parent, process::Process& child);
 } // namespace fs

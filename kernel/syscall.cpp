@@ -194,7 +194,7 @@ const char* errnoStrings[] = {
 
 const char* ErrnoToString(int errno)
 {
-    if (errno < 1 || errno > ELAST)
+    if (errno < 1 || errno > (sizeof(errnoStrings) / sizeof(errnoStrings[0]) - 1))
         return "?";
     return errnoStrings[errno - 1];
 }
@@ -295,20 +295,19 @@ namespace
                 auto path = reinterpret_cast<const char*>(syscall::GetArgument<1>(*tf));
                 auto flags = static_cast<int>(syscall::GetArgument<2>(*tf));
                 auto mode = static_cast<int>(syscall::GetArgument<3>(*tf));
-                // XXX only support opening for now
-                auto inode = fs::namei(path);
-                if (inode == nullptr)
-                    return -ENOENT;
 
                 auto& current = process::GetCurrent();
                 auto file = file::Allocate(current);
-                if (file == nullptr) {
-                    fs::iput(*inode);
-                    return -ENFILE;
+                if (file == nullptr) return -ENFILE;
+
+                fs::Inode* inode;
+                if (int errno = fs::Open(path, flags, mode, inode); errno != 0) {
+                    file::Free(*file);
+                    return -errno;
                 }
+
                 file->f_inode = inode;
                 return file - &current.files[0];
-                break;
             }
             case SYS_close: {
                 auto file = file::FindByIndex(process::GetCurrent(), syscall::GetArgument<1>(*tf));

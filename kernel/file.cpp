@@ -52,7 +52,9 @@ namespace file
         if (file.f_console)
             return console::Write(buf, len);
 
-        return -EROFS;
+        const auto count = fs::Write(*file.f_inode, buf, file.f_offset, len);
+        file.f_offset += count;
+        return count;
     }
 
     int Read(File& file, void* buf, int len)

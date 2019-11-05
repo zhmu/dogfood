@@ -199,7 +199,10 @@ namespace ext2
 
     fs::Inode* Mount(fs::Device dev);
     void ReadInode(fs::Device dev, fs::InodeNumber inum, Inode& inode);
-    uint32_t bmap(fs::Inode& inode, unsigned int inodeBlockNr);
+    void WriteInode(fs::Inode& inode);
+    uint32_t bmap(fs::Inode& inode, unsigned int inodeBlockNr, bool createIfNecessary);
     bool ReadDirectory(fs::Inode& dirInode, off_t& offset, fs::DEntry& dentry);
+    bool AddEntryToDirectory(fs::Inode& dirInode, const fs::Inode& inode, const char* name);
+    uint32_t AllocateInode(fs::Inode& dirInode);
 
 } // namespace ext2

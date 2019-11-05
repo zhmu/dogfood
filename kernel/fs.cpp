@@ -52,6 +52,7 @@ namespace fs
         available->dev = dev;
         available->inum = inum;
         available->refcount = 1;
+        available->dirty = false;
 
         ext2::ReadInode(dev, inum, *available->ext2inode);
         return available;
@@ -60,15 +61,21 @@ namespace fs
     void iput(Inode& inode)
     {
         assert(inode.refcount > 0);
-        if (--inode.refcount == 0) {
-            // TODO: write dirty inode, etc
-        }
+        if (--inode.refcount == 0 && inode.dirty)
+            ext2::WriteInode(inode);
     }
 
     void iref(Inode& inode)
     {
         assert(inode.refcount > 0);
         ++inode.refcount;
+    }
+
+    void idirty(Inode& inode)
+    {
+        assert(inode.refcount > 0);
+        //inode.dirty = true;
+        ext2::WriteInode(inode);
     }
 
     int Read(fs::Inode& inode, void* dst, off_t offset, unsigned int count)
@@ -90,9 +97,7 @@ namespace fs
             if (chunkLen > bio::BlockSize)
                 chunkLen = bio::BlockSize;
 
-            // printf("{offset %d count %d chunkLen %d inodeblock %d}\n", offset,count, chunkLen,
-            // offset / bio::BlockSize);
-            const uint32_t blockNr = ext2::bmap(inode, offset / bio::BlockSize);
+            const uint32_t blockNr = ext2::bmap(inode, offset / bio::BlockSize, false);
             auto& buf = bio::bread(inode.dev, blockNr);
             memcpy(d, buf.data + (offset % bio::BlockSize), chunkLen);
             bio::brelse(buf);
@@ -102,6 +107,40 @@ namespace fs
             count -= chunkLen;
         }
         return d - reinterpret_cast<char*>(dst);
+    }
+
+    int Write(fs::Inode& inode, const void* src, off_t offset, unsigned int count)
+    {
+        printf("write: inode %d @ %d, len %d\n", (int)inode.inum, (int)offset, (int)count);
+        const auto newSize = offset + count;
+        auto s = reinterpret_cast<const char*>(src);
+        while (count > 0) {
+            int chunkLen = count;
+            if (offset % bio::BlockSize) {
+                chunkLen = bio::BlockSize - (offset % bio::BlockSize);
+                if (chunkLen > count)
+                    chunkLen = count;
+            }
+            if (chunkLen > bio::BlockSize)
+                chunkLen = bio::BlockSize;
+
+            const uint32_t blockNr = ext2::bmap(inode, offset / bio::BlockSize, true);
+            printf("offs %d suboffs %d, block %d -> %d\n", offset, offset % bio::BlockSize, offset / bio::BlockSize, blockNr);
+            auto& buf = bio::bread(inode.dev, blockNr);
+            memcpy(buf.data + (offset % bio::BlockSize), s, chunkLen);
+            bio::bwrite(buf);
+            bio::brelse(buf);
+
+            s += chunkLen;
+            offset += chunkLen;
+            count -= chunkLen;
+        }
+
+        if (newSize > inode.ext2inode->i_size) {
+            inode.ext2inode->i_size = newSize;
+            fs::idirty(inode);
+        }
+        return s - reinterpret_cast<const char*>(src);
     }
 
     bool IsolatePathComponent(const char*& path, char component[MaxDirectoryEntryNameLength])
@@ -131,7 +170,8 @@ namespace fs
         return nullptr;
     }
 
-    Inode* namei(const char* path)
+    // Does namei() but yields parent inode if the final piece did not exist
+    Inode* namei2(const char* path, Inode*& parent, char* component)
     {
         auto current_inode = [&]() {
             if (path[0] == '/')
@@ -141,16 +181,68 @@ namespace fs
         }();
         iref(*current_inode);
 
-        char component[MaxPathLength];
+        const char* last_path = path;
+        parent = nullptr;
         while (IsolatePathComponent(path, component)) {
             auto new_inode = LookupInDirectory(*current_inode, component);
-            iput(*current_inode);
-            if (new_inode == nullptr)
+            if (new_inode == nullptr) {
+                if (strchr(path, '/') == nullptr) {
+                    parent = current_inode;
+                    path = last_path;
+                } else
+                    iput(*current_inode); // not final piece
                 return nullptr;
+            }
+            iput(*current_inode);
             current_inode = new_inode;
+            last_path = path;
         }
 
         return current_inode;
+    }
+
+    Inode* namei(const char* path)
+    {
+        Inode* parent;
+        char component[MaxPathLength];
+        auto inode = namei2(path, parent, component);
+        if (inode != nullptr) return inode;
+        if (parent != nullptr) iput(*parent);
+        return nullptr;
+    }
+
+    int Open(const char* path, int flags, int mode, Inode*& inode)
+    {
+        Inode* parent;
+        char component[MaxPathLength];
+        inode = namei2(path, parent, component);
+        if (inode != nullptr) {
+            if ((flags & (O_CREAT | O_EXCL)) == (O_CREAT | O_EXCL)) return EEXIST;
+            return 0;
+        }
+        if (parent == nullptr) return ENOENT;
+        if ((flags & O_CREAT) == 0) return ENOENT;
+
+        auto inum = ext2::AllocateInode(*parent);
+        if (inum == 0) return ENOSPC;
+
+        auto newInode = fs::iget(parent->dev, inum);
+        assert(newInode != nullptr);
+        {
+            auto e2i = *newInode->ext2inode;
+            memset(&e2i, 0, sizeof(e2i));
+            e2i.i_mode = EXT2_S_IFREG | mode;
+            e2i.i_links_count = 1;
+        }
+        fs::idirty(*newInode);
+
+        if (!ext2::AddEntryToDirectory(*parent, *newInode, component)) {
+            // TODO deallocate inode
+            return ENOSPC;
+        }
+        //printf("OHAI we ought to make file '%s', orig '%s' parent %p\n", component, path);
+        inode = newInode;
+        return 0;
     }
 
     bool LookupInodeByNumber(Inode& inode, ino_t inum, fs::DEntry& dentry)

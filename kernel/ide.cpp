@@ -57,7 +57,6 @@ namespace ide
     {
         const bool isWrite = (buffer.flags & bio::flag::Dirty) != 0;
         const auto command = isWrite ? command::WriteSectors : command::ReadSectors;
-        assert(!isWrite); // XXX safety net for now
 
         outb(
             io::Port + port::DeviceHead,
