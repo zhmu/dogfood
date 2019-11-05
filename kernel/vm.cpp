@@ -184,7 +184,7 @@ namespace vm
                 printf(
                     "vmop: unimplemented op %d addr %p len %p\n", vmop->vo_op, vmop->vo_addr,
                     vmop->vo_len);
-                return -EINVAL;
+                return -ENODEV;
         }
         return -1;
     }
