@@ -207,3 +207,14 @@ if [ "$TOOLCHAIN_TARGET" -ne 0 ]; then
     make ${MAKE_ARGS} install
     cd ../..
 fi
+
+if [ "$TOOLCHAIN_TARGET" -ne 0 ]; then
+    echo "*** Building newlib (target)"
+    rm -rf build/newlib-target
+    mkdir build/newlib-target
+    cd build/newlib-target
+    cmake -GNinja -DCMAKE_TOOLCHAIN_FILE=${TOOLCHAIN_FILE} -DCMAKE_INSTALL_PREFIX=${OUTDIR} ../../lib/newlib-3.1.0
+    ninja install
+    mv ${OUTDIR}/usr/include ${OUTDIR}/${TARGET}/include
+    cd ../..
+fi
