@@ -341,10 +341,10 @@ namespace
 extern "C" void exception(struct TrapFrame* tf)
 {
     const bool isUserMode = (tf->cs & 3) == static_cast<int>(DescriptorPrivilege::User);
-    const bool isPageFault = tf->trapno == exception::PF && isUserMode;
+    const bool isPageFault = tf->trapno == exception::PF;
 
     const auto faultAddress = read_cr2();
-    if (isUserMode && isPageFault && vm::HandlePageFault(faultAddress, tf->errnum))
+    if (isPageFault && vm::HandlePageFault(faultAddress, tf->errnum))
         return;
 
     printf("exception #%d @ cs:rip = %lx:%lx\n", tf->trapno, tf->cs, tf->rip);
@@ -358,7 +358,7 @@ extern "C" void exception(struct TrapFrame* tf)
     if (isPageFault)
         printf("fault address %lx\n", faultAddress);
 
-    if (isUserMode)
+    if (isUserMode && isUserMode)
         process::Exit(*tf);
 
     while (1)
