@@ -226,14 +226,20 @@ namespace ext2
 
         uint32_t newBlock;
         if (!AllocateBlock(inode, newBlock)) return false;
-        printf("allocating new block for inode %d -> %d\n", inode.inum, newBlock);
 
         *block = newBlock;
         ++inode.ext2inode->i_blocks;
         fs::idirty(inode);
         if (bio != nullptr)
             bio::bwrite(*bio);
-        // TODO: zero out new block
+
+        // Zero new block content
+        for(int n = 0; n < biosPerBlock; ++n) {
+            auto& newBIO = bio::bread(inode.dev, (newBlock * biosPerBlock) + n);
+            memset(newBIO.data, 0, bio::BlockSize);
+            bio::bwrite(newBIO);
+            bio::brelse(newBIO);
+        }
         return true;
     }
 
@@ -369,9 +375,6 @@ namespace ext2
         blockSize = 1024L << superblock.s_log_block_size;
         biosPerBlock = blockSize / bio::BlockSize;
         numberOfBlockGroups = (superblock.s_blocks_count - superblock.s_first_data_block) / superblock.s_blocks_per_group;
-        auto rootInode = fs::iget(dev, rootInodeNumber);
-        //printf("AllocateInode -> %d\n", AllocateInode(*rootInode));
-        //printf("AllocateBlock -> %d\n", AllocateBlock(*rootInode));
-        return rootInode;
+        return fs::iget(dev, rootInodeNumber);
     }
 } // namespace ext2
