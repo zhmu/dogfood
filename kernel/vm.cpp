@@ -156,6 +156,34 @@ namespace vm
 
         auto& current = process::GetCurrent();
         switch (vmop->vo_op) {
+            case OP_MAP: {
+                // XXX no inode-based mappings just yet
+                if ((vmop->vo_flags & (VMOP_FLAG_PRIVATE | VMOP_FLAG_FD | VMOP_FLAG_FIXED)) != VMOP_FLAG_PRIVATE)
+                    return -EINVAL;
+
+                vmop->vo_addr = reinterpret_cast<void*>(current.nextMmapAddress);
+                auto pd = reinterpret_cast<uint64_t*>(vm::PhysicalToVirtual(current.pageDirectory));
+                for(int n = 0; n < vmop->vo_len / vm::PageSize; ++n) {
+                    vm::Map(pd, current.nextMmapAddress, vm::PageSize, 0, vm::Page_RW | vm::Page_US);
+                    current.nextMmapAddress += vm::PageSize;
+                }
+                return 0;
+            }
+            case OP_UNMAP: {
+                auto va = reinterpret_cast<uint64_t>(vmop->vo_addr);
+                if (va < vm::userland::mmapBase) return -EINVAL;
+                if (va >= current.nextMmapAddress) return -EINVAL;
+                if ((va & ~(vm::PageSize - 1)) != 0) return -EINVAL;
+
+                auto pd = reinterpret_cast<uint64_t*>(vm::PhysicalToVirtual(current.pageDirectory));
+                for(int n = 0; n < vm::RoundUpToPage(vmop->vo_size) / vm::PageSize; ++n) {
+                    auto pte = FindPTE(pd, va, false);
+                    if (pte == nullptr) return -EINVAL;
+                    page_allocator::Free(MakePointerToEntry(*pte));
+                    *pte = 0;
+                }
+                return 0;
+            }
             case OP_SBRK: {
                 if (vmop->vo_len < 0)
                     return -EINVAL;
