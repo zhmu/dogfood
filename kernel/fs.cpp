@@ -14,7 +14,7 @@ namespace fs
 
         namespace cache
         {
-            inline constexpr unsigned int NumberOfInodes = 20;
+            inline constexpr unsigned int NumberOfInodes = 40;
             Inode inode[NumberOfInodes];
             ext2::Inode ext2inode[NumberOfInodes];
         } // namespace cache
@@ -111,7 +111,6 @@ namespace fs
 
     int Write(fs::Inode& inode, const void* src, off_t offset, unsigned int count)
     {
-        printf("write: inode %d @ %d, len %d\n", (int)inode.inum, (int)offset, (int)count);
         const auto newSize = offset + count;
         auto s = reinterpret_cast<const char*>(src);
         while (count > 0) {
@@ -125,7 +124,6 @@ namespace fs
                 chunkLen = bio::BlockSize;
 
             const uint32_t blockNr = ext2::bmap(inode, offset / bio::BlockSize, true);
-            printf("offs %d suboffs %d, block %d -> %d\n", offset, offset % bio::BlockSize, offset / bio::BlockSize, blockNr);
             auto& buf = bio::bread(inode.dev, blockNr);
             memcpy(buf.data + (offset % bio::BlockSize), s, chunkLen);
             bio::bwrite(buf);
@@ -240,7 +238,6 @@ namespace fs
             // TODO deallocate inode
             return ENOSPC;
         }
-        //printf("OHAI we ought to make file '%s', orig '%s' parent %p\n", component, path);
         inode = newInode;
         return 0;
     }
@@ -274,7 +271,6 @@ namespace fs
             Inode* parent = LookupInDirectory(*current, "..");
             if (parent == nullptr)
                 break;
-            printf("got parent\n");
 
             // Find the current inode's name
             fs::DEntry dentry;
@@ -293,7 +289,6 @@ namespace fs
             memcpy(buffer + currentPosition - entryLength, dentry.d_name, entryLength);
             buffer[currentPosition - entryLength - 1] = '/';
             currentPosition -= entryLength + 1;
-            printf("ohai [%s]\n", dentry.d_name);
 
             fs::iput(*current);
             current = parent;

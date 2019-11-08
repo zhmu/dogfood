@@ -8,7 +8,7 @@ namespace console
     inline constexpr int port = 0x3f8; // COM1
     namespace input_buffer
     {
-        inline constexpr size_t size = 16;
+        inline constexpr size_t size = 128;
         char data[size];
         size_t read_offset = 0;
         size_t write_offset = 0;
