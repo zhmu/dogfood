@@ -14,7 +14,7 @@ namespace process
 {
     enum class State { Unused, Construct, Runnable, Running, Zombie, Sleeping };
 
-    constexpr int maxFiles = 10;
+    constexpr int maxFiles = 20;
 
     struct Process {
         State state = State::Unused;
@@ -24,6 +24,7 @@ namespace process
         Process* parent = nullptr;
         uint64_t heapSize = 0;
         uint64_t heapSizeAllocated = 0;
+        uint64_t nextMmapAddress = 0;
         //
         uint64_t pageDirectory = 0;  // physical address
         void* kernelStack = nullptr; // start of kernel stack

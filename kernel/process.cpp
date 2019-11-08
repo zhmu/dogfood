@@ -50,6 +50,7 @@ namespace process
                 proc.state = State::Construct;
                 proc.pid = next_pid++;
                 proc.cwd = fs::namei("/");
+                proc.nextMmapAddress = vm::userland::mmapBase;
                 AllocateConsoleFile(proc); // stdin
                 AllocateConsoleFile(proc); // stdout
                 AllocateConsoleFile(proc); // stderr

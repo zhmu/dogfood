@@ -24,6 +24,7 @@ namespace vm
         inline constexpr uint64_t stackBase = 0x10000;
         inline constexpr uint64_t stackSize = 1024 * 1024;
         inline constexpr uint64_t heapBase = 0x0000002000000000;
+        inline constexpr uint64_t mmapBase = 0x0000008000000000;
     } // namespace userland
 
     void

@@ -24,6 +24,7 @@ namespace file
     void Free(File&);
     void CloneTable(const process::Process& parent, process::Process& child);
     File* FindByIndex(process::Process& proc, int fd);
+    File* AllocateByIndex(process::Process& proc, int fd);
 
     int Write(File& file, const void* buf, int len);
     int Read(File& file, void* buf, int len);

@@ -77,4 +77,14 @@ namespace file
         return &file;
     }
 
+    File* AllocateByIndex(process::Process& proc, int fd)
+    {
+        if (fd < 0 || fd >= process::maxFiles)
+            return nullptr;
+        File& file = proc.files[fd];
+        while (file.f_refcount > 0)
+            Free(file);
+        return &file;
+    }
+
 } // namespace file

@@ -41,6 +41,9 @@ struct stat {
 #define _IFSOCK 0140000 /* socket */
 #define _IFIFO 0010000  /* fifo */
 
+#define F_DUPFD 0
+#define F_GETFD 1
+#define F_SETFL 2
 #define F_GETFL 3 /* Get file flags */
 
 #define O_RDONLY    0       /* +1 == FREAD */

@@ -12,7 +12,7 @@
 
 #include "stat.h"
 
-#define DEBUG_SYSCALL 1
+#define DEBUG_SYSCALL 0
 
 #if DEBUG_SYSCALL
 enum class ArgumentType {
@@ -253,11 +253,15 @@ void PrintArguments(amd64::TrapFrame* tf, bool in, const SyscallArgument args[])
                 printf("%s: '%s'", arg->name, p);
                 break;
             }
+            case ArgumentType::OffsetPtr:
+            case ArgumentType::SizePtr: {
+                auto p = reinterpret_cast<const long*>(getArgument(n));
+                printf("*%s: %ld", arg->name, *p);
+                break;
+            }
             case ArgumentType::IntPtr:
             case ArgumentType::Void:
-            case ArgumentType::SizePtr:
             case ArgumentType::CharPtrArray:
-            case ArgumentType::OffsetPtr:
             default: {
                 auto p = reinterpret_cast<const void*>(getArgument(n));
                 printf("%s: %p", arg->name, p);
@@ -270,6 +274,18 @@ void PrintArguments(amd64::TrapFrame* tf, bool in, const SyscallArgument args[])
 
 namespace
 {
+    int DupFD(file::File& file)
+    {
+        auto& current = process::GetCurrent();
+        auto file2 = file::Allocate(current);
+        if (file2 == nullptr)
+            return -ENFILE;
+        *file2 = file;
+        if (file2->f_inode != nullptr)
+            fs::iref(*file2->f_inode);
+        return file2 - &current.files[0];
+    }
+
     uint64_t DoSyscall(amd64::TrapFrame* tf)
     {
         switch (syscall::GetNumber(*tf)) {
@@ -362,8 +378,10 @@ namespace
                 }
                 if (new_offset < 0)
                     new_offset = 0;
-                if (new_offset > file_size)
-                    new_offset = file_size;
+                // Do not limit offset here; writing past the end of the file should be okay
+                // TODO check this and make it proper
+                /*if (new_offset > file_size)
+                    new_offset = file_size;*/
                 file->f_offset = new_offset;
                 *offset = new_offset;
                 return 0;
@@ -372,8 +390,15 @@ namespace
                 auto file = file::FindByIndex(process::GetCurrent(), syscall::GetArgument<1>(*tf));
                 if (file == nullptr)
                     return -EBADF;
+                return DupFD(*file);
+            }
+            case SYS_dup2: {
+                auto file = file::FindByIndex(process::GetCurrent(), syscall::GetArgument<1>(*tf));
+                if (file == nullptr)
+                    return -EBADF;
+                auto newfd = syscall::GetArgument<2>(*tf);
                 auto& current = process::GetCurrent();
-                auto file2 = file::Allocate(current);
+                auto file2 = file::AllocateByIndex(current, newfd);
                 if (file2 == nullptr)
                     return -ENFILE;
                 *file2 = *file;
@@ -387,7 +412,11 @@ namespace
                     return -EBADF;
                 auto op = syscall::GetArgument<2>(*tf);
                 switch (op) {
+                    case F_DUPFD:
+                        return DupFD(*file);
+                    case F_GETFD:
                     case F_GETFL:
+                    case F_SETFL:
                         return 0;
                     default:
                         printf("fcntl(): op %d not supported\n", op);
@@ -399,6 +428,7 @@ namespace
                 auto buf = reinterpret_cast<char*>(syscall::GetArgument<1>(*tf));
                 auto len = syscall::GetArgument<2>(*tf);
                 auto& current = process::GetCurrent();
+                // TODO do this in userspace instead
                 return -fs::ResolveDirectoryName(*current.cwd, buf, len);
             }
             case SYS_chdir: {
