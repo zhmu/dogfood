@@ -47,7 +47,7 @@
 
 /* Define if the linker supports .preinit_array/.init_array/.fini_array
  * sections.  */
-/* #undef HAVE_INITFINI_ARRAY */
+#define HAVE_INITFINI_ARRAY
 
 /* True if atexit() may dynamically allocate space for cleanup
    functions.  */
