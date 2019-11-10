@@ -50,7 +50,7 @@ constexpr Syscall syscalls[] = {
      {{"fd", ArgumentType::FD, Direction::In},
       {"buf", ArgumentType::Void, Direction::In},
       {"size", ArgumentType::Size, Direction::In}}},
-    {"write ",
+    {"write",
      SYS_write,
      {{"fd", ArgumentType::FD, Direction::In},
       {"buf", ArgumentType::Void, Direction::Out},
@@ -61,7 +61,7 @@ constexpr Syscall syscalls[] = {
       {"flags", ArgumentType::Int, Direction::In},
       {"mode", ArgumentType::Int, Direction::In}}},
     {"close", SYS_close, {{"fd", ArgumentType::FD, Direction::In}}},
-    {"unlink ", SYS_unlink, {{"path", ArgumentType::PathString, Direction::In}}},
+    {"unlink", SYS_unlink, {{"path", ArgumentType::PathString, Direction::In}}},
     {"seek",
      SYS_seek,
      {{"fd", ArgumentType::FD, Direction::In},
@@ -435,6 +435,7 @@ namespace
                 auto op = syscall::GetArgument<2>(*tf);
                 switch (op) {
                     case F_DUPFD:
+                    case F_DUPFD_CLOEXEC:
                         return DupFD(*file);
                     case F_GETFD:
                     case F_GETFL:
@@ -572,6 +573,31 @@ namespace
                 fs::idirty(*file->f_inode);
                 fs::iput(*file->f_inode);
                 return 0;
+            }
+            case SYS_link: {
+                auto oldPath = reinterpret_cast<const char*>(syscall::GetArgument<1>(*tf));
+                auto newPath = reinterpret_cast<const char*>(syscall::GetArgument<2>(*tf));
+                return -fs::Link(oldPath, newPath);
+            }
+            case SYS_readlink: {
+                auto path = reinterpret_cast<const char*>(syscall::GetArgument<1>(*tf));
+                auto buf = reinterpret_cast<char*>(syscall::GetArgument<2>(*tf));
+                auto size = reinterpret_cast<size_t>(syscall::GetArgument<2>(*tf));
+                auto inode = fs::namei(path);
+                if (inode == nullptr)
+                    return -ENOENT;
+                if ((inode->ext2inode->i_mode & EXT2_S_IFMASK) != EXT2_S_IFLNK) {
+                    fs::iput(*inode);
+                    return -EINVAL;
+                }
+                const auto numBytesRead = fs::Read(*inode, buf, 0, size);
+                fs::iput(*inode);
+                return numBytesRead;
+            }
+            case SYS_symlink: {
+                auto oldPath = reinterpret_cast<const char*>(syscall::GetArgument<1>(*tf));
+                auto newPath = reinterpret_cast<const char*>(syscall::GetArgument<2>(*tf));
+                return -fs::SymLink(oldPath, newPath);
             }
         }
         printf(

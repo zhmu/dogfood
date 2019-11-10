@@ -279,6 +279,75 @@ namespace fs
         return 0;
     }
 
+    int Link(const char* source, const char* dest)
+    {
+        auto sourceInode = namei(source);
+        if (sourceInode == nullptr)
+            return ENOENT;
+
+        Inode* parent;
+        char component[MaxPathLength];
+        if (auto inode = namei2(dest, parent, component); inode != nullptr) {
+            if (parent != nullptr)
+                fs::iput(*parent);
+            return EEXIST;
+        }
+        if (parent == nullptr)
+            return ENOENT;
+
+        // XXX EXT2_FT_REG_FILE should be looked up
+        if (!ext2::AddEntryToDirectory(*parent, sourceInode->inum, EXT2_FT_REG_FILE, component)) {
+            return ENOSPC;
+        }
+        ++sourceInode->ext2inode->i_links_count;
+        fs::idirty(*sourceInode);
+        fs::iput(*sourceInode);
+        fs::iput(*parent);
+        return 0;
+    }
+
+    int SymLink(const char* source, const char* dest)
+    {
+        Inode* parent;
+        char component[MaxPathLength];
+        if (auto inode = namei2(dest, parent, component); inode != nullptr) {
+            if (parent != nullptr)
+                fs::iput(*parent);
+            return EEXIST;
+        }
+        if (parent == nullptr)
+            return ENOENT;
+
+        auto inum = ext2::AllocateInode(*parent);
+        if (inum == 0)
+            return ENOSPC;
+
+        auto newInode = fs::iget(parent->dev, inum);
+        assert(newInode != nullptr);
+        {
+            auto& e2i = *newInode->ext2inode;
+            memset(&e2i, 0, sizeof(e2i));
+            e2i.i_mode = EXT2_S_IFLNK | 0777;
+            e2i.i_links_count = 1;
+        }
+        fs::idirty(*newInode);
+        if (fs::Write(*newInode, source, 0, strlen(source)) != strlen(source)) {
+            // XXX undo damage
+            fs::iput(*newInode);
+            fs::iput(*parent);
+            return EIO;
+        }
+        fs::iput(*newInode);
+
+        if (!ext2::AddEntryToDirectory(*parent, inum, EXT2_FT_SYMLINK, component)) {
+            // TODO deallocate inode
+            return ENOSPC;
+        }
+        fs::idirty(*parent);
+        fs::iput(*parent);
+        return 0;
+    }
+
     int MakeDirectory(const char* path, int mode)
     {
         Inode* parent;

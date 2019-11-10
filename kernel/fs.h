@@ -45,6 +45,8 @@ namespace fs
     Inode* namei(const char* path);
     bool Stat(Inode& inode, stat& sbuf);
     int ResolveDirectoryName(Inode& inode, char* buffer, int bufferSize);
+    int Link(const char* source, const char* dest);
+    int SymLink(const char* source, const char* dest);
 
     int Open(const char* path, int flags, int mode, Inode*& inode);
     int MakeDirectory(const char* path, int mode);

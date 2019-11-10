@@ -45,6 +45,7 @@ struct stat {
 #define F_GETFD 1
 #define F_SETFL 2
 #define F_GETFL 3 /* Get file flags */
+#define F_DUPFD_CLOEXEC 14
 
 #define O_RDONLY 0 /* +1 == FREAD */
 #define O_WRONLY 1 /* +1 == FWRITE */
