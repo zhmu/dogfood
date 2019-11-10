@@ -18,7 +18,7 @@ struct dirent* readdir(DIR* dirp)
     if (dirp->d_done)
         return NULL;
 
-    for(;;) {
+    for (;;) {
         struct DIRENTRY de;
         if (read(dirp->d_fd, &de, sizeof(de)) < sizeof(de)) {
             dirp->d_done = 1;

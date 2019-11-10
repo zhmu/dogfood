@@ -14,8 +14,8 @@ int access(const char* filename, int mode)
         ok = 0;
     if ((mode & W_OK) && (sb.st_mode & 0444) == 0)
         ok = 0;
-    if (ok) return 0;
+    if (ok)
+        return 0;
     errno = EACCES;
     return -1;
 }
-

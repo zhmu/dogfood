@@ -15,5 +15,4 @@ struct sockaddr {
     char sa_data[];
 };
 
-
 #endif // __SYS_SOCKET_H__

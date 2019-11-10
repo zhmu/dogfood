@@ -208,7 +208,8 @@ extern long _SYS_getcwd(char*, int);
 char* getcwd(char* buf, size_t size)
 {
     long r = _SYS_getcwd(buf, (int)size);
-    if (r == 0) return buf;
+    if (r == 0)
+        return buf;
     errno = -r;
     return NULL;
 }
@@ -296,25 +297,13 @@ int getmntinfo(struct statfs** mntbufp, int mode)
     return -1;
 }
 
-int fsync(int fd)
-{
-    return 0;
-}
+int fsync(int fd) { return 0; }
 
-struct servent* getservbyname(const char *name, const char *proto)
-{
-    return NULL;
-}
+struct servent* getservbyname(const char* name, const char* proto) { return NULL; }
 
-int execvp(const char* path, char* const argv[])
-{
-    return execve(path, argv, environ);
-}
+int execvp(const char* path, char* const argv[]) { return execve(path, argv, environ); }
 
-int execv(const char* path, char* const argv[])
-{
-    return execve(path, argv, environ);
-}
+int execv(const char* path, char* const argv[]) { return execve(path, argv, environ); }
 
 int setpgid(pid_t pid, pid_t pgid)
 {
@@ -322,10 +311,7 @@ int setpgid(pid_t pid, pid_t pgid)
     return -1;
 }
 
-unsigned int alarm(unsigned int seconds)
-{
-    return 0;
-}
+unsigned int alarm(unsigned int seconds) { return 0; }
 
 int setreuid(uid_t ruid, uid_t euid)
 {
@@ -344,22 +330,18 @@ int setregid(gid_t rgid, gid_t egid)
 
 long sysconf(int name)
 {
-    switch(name) {
-        case _SC_PAGESIZE: return 4096;
-        case _SC_CLK_TCK: return 100;
+    switch (name) {
+        case _SC_PAGESIZE:
+            return 4096;
+        case _SC_CLK_TCK:
+            return 100;
     }
     return 0;
 }
 
-struct group *getgrnam(const char *name)
-{
-    return NULL;
-}
+struct group* getgrnam(const char* name) { return NULL; }
 
-struct group *getgrgid(gid_t gid)
-{
-    return NULL;
-}
+struct group* getgrgid(gid_t gid) { return NULL; }
 
 int ftruncate(int fd, off_t length)
 {
@@ -367,13 +349,13 @@ int ftruncate(int fd, off_t length)
     return -1;
 }
 
-int gettimeofday(struct timeval * tv, void* __tz)
+int gettimeofday(struct timeval* tv, void* __tz)
 {
     errno = ENOSYS;
     return -1;
 }
 
-int settimeofday(const struct timeval *tv, const struct timezone *tz)
+int settimeofday(const struct timeval* tv, const struct timezone* tz)
 {
     errno = ENOSYS;
     return -1;
@@ -385,25 +367,17 @@ long fpathconf(int fd, int name)
     return -1;
 }
 
-long pathconf(const char *path, int name)
+long pathconf(const char* path, int name)
 {
     errno = ENOSYS;
     return -1;
 }
 
-struct group *getgrent(void)
-{
-    return NULL;
-}
+struct group* getgrent(void) { return NULL; }
 
-void setgrent(void)
-{
-}
+void setgrent(void) {}
 
-void endgrent(void)
-{
-}
-
+void endgrent(void) {}
 
 int execlp(const char* path, const char* arg0, ...)
 {
@@ -444,13 +418,13 @@ int execlp(const char* path, const char* arg0, ...)
     return -1;
 }
 
-int select(int nfds, fd_set *readfds, fd_set *writefds, fd_set *exceptfds, struct timeval *timeout)
+int select(int nfds, fd_set* readfds, fd_set* writefds, fd_set* exceptfds, struct timeval* timeout)
 {
     errno = ENOSYS;
     return -1;
 }
 
-int getrlimit(int resource, struct rlimit *rlim)
+int getrlimit(int resource, struct rlimit* rlim)
 {
     errno = ENOSYS;
     return -1;
@@ -495,10 +469,7 @@ int execl(const char* path, const char* arg0, ...)
     return -1;
 }
 
-char* ttyname(int fd)
-{
-    return "console";
-}
+char* ttyname(int fd) { return "console"; }
 
 int uname(struct utsname* u)
 {
@@ -506,24 +477,18 @@ int uname(struct utsname* u)
     return -1;
 }
 
-clock_t times(struct tms *buf)
+clock_t times(struct tms* buf)
 {
     errno = ENOSYS;
     return (clock_t)-1;
 }
 
-int setrlimit(int resource, const struct rlimit *rlim)
+int setrlimit(int resource, const struct rlimit* rlim)
 {
     errno = ENOSYS;
     return -1;
 }
 
-unsigned int sleep(unsigned int seconds)
-{
-    return 0;
-}
+unsigned int sleep(unsigned int seconds) { return 0; }
 
-int wait(int* wstatus)
-{
-    return waitpid(-1, &wstatus, 0);
-}
+int wait(int* wstatus) { return waitpid(-1, &wstatus, 0); }

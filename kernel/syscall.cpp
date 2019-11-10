@@ -176,14 +176,26 @@ constexpr Syscall syscalls[] = {
      {{"oldpath", ArgumentType::PathString, Direction::In},
       {"newpath", ArgumentType::PathString, Direction::In}}},
     {"reboot", SYS_reboot, {{"how", ArgumentType::Int, Direction::In}}},
-    {"chown", SYS_chown, {{"path", ArgumentType::PathString, Direction::In}, {"uid", ArgumentType::Int, Direction::In}, {"gid", ArgumentType::Int, Direction::In}}},
-    {"fchown", SYS_fchown, {{"fd", ArgumentType::FD, Direction::In}, {"uid", ArgumentType::Int, Direction::In}, {"gid", ArgumentType::Int, Direction::In}}},
-    {"umask", SYS_umask,
-     {{"mask", ArgumentType::Int, Direction::In}}},
-    {"chmod", SYS_chmod, {{"path", ArgumentType::PathString, Direction::In}, {"mode", ArgumentType::Int, Direction::In}}},
+    {"chown",
+     SYS_chown,
+     {{"path", ArgumentType::PathString, Direction::In},
+      {"uid", ArgumentType::Int, Direction::In},
+      {"gid", ArgumentType::Int, Direction::In}}},
+    {"fchown",
+     SYS_fchown,
+     {{"fd", ArgumentType::FD, Direction::In},
+      {"uid", ArgumentType::Int, Direction::In},
+      {"gid", ArgumentType::Int, Direction::In}}},
+    {"umask", SYS_umask, {{"mask", ArgumentType::Int, Direction::In}}},
+    {"chmod",
+     SYS_chmod,
+     {{"path", ArgumentType::PathString, Direction::In},
+      {"mode", ArgumentType::Int, Direction::In}}},
     {"mkdir", SYS_mkdir, {{"path", ArgumentType::PathString, Direction::In}}},
     {"rmdir", SYS_mkdir, {{"path", ArgumentType::PathString, Direction::In}}},
-    {"fchmod", SYS_fchmod, {{"fd", ArgumentType::FD, Direction::In}, {"mode", ArgumentType::Int, Direction::In}}},
+    {"fchmod",
+     SYS_fchmod,
+     {{"fd", ArgumentType::FD, Direction::In}, {"mode", ArgumentType::Int, Direction::In}}},
 };
 
 const char* errnoStrings[] = {
@@ -323,7 +335,8 @@ namespace
 
                 auto& current = process::GetCurrent();
                 auto file = file::Allocate(current);
-                if (file == nullptr) return -ENFILE;
+                if (file == nullptr)
+                    return -ENFILE;
 
                 fs::Inode* inode;
                 if (int errno = fs::Open(path, flags, mode & 0777, inode); errno != 0) {
@@ -554,7 +567,8 @@ namespace
                     return -ENOENT;
                 auto mode = static_cast<int>(syscall::GetArgument<2>(*tf));
                 mode &= 0777;
-                file->f_inode->ext2inode->i_mode = (file->f_inode->ext2inode->i_mode & ~0777) | mode;
+                file->f_inode->ext2inode->i_mode =
+                    (file->f_inode->ext2inode->i_mode & ~0777) | mode;
                 fs::idirty(*file->f_inode);
                 fs::iput(*file->f_inode);
                 return 0;

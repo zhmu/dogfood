@@ -27,12 +27,14 @@ namespace ext2
         }
 
         template<typename Buffer>
-        void WriteBlocks(fs::Device dev, bio::BlockNumber blockNr, unsigned int count, const Buffer* source)
+        void WriteBlocks(
+            fs::Device dev, bio::BlockNumber blockNr, unsigned int count, const Buffer* source)
         {
             for (unsigned int n = 0; n < count; ++n) {
                 auto& buf = bio::bread(dev, blockNr + n);
                 memcpy(
-                    buf.data, reinterpret_cast<const char*>(source) + n * bio::BlockSize, bio::BlockSize);
+                    buf.data, reinterpret_cast<const char*>(source) + n * bio::BlockSize,
+                    bio::BlockSize);
                 bio::bwrite(buf);
                 bio::brelse(buf);
             }
@@ -61,8 +63,7 @@ namespace ext2
             auto& buf = bio::bread(dev, CalculateBlockGroupBioBlockNumber(bgNumber));
             memcpy(
                 buf.data + (bgNumber * sizeof(BlockGroup) % bio::BlockSize),
-                reinterpret_cast<void*>(&blockGroup),
-                sizeof(BlockGroup));
+                reinterpret_cast<void*>(&blockGroup), sizeof(BlockGroup));
             bio::bwrite(buf);
             bio::brelse(buf);
         }
@@ -139,7 +140,8 @@ namespace ext2
     }
 
     template<typename Strategy>
-    bool AllocateFromBitmap(const fs::Device dev, const uint32_t initialBlockGroup, uint32_t& inum, Strategy)
+    bool AllocateFromBitmap(
+        const fs::Device dev, const uint32_t initialBlockGroup, uint32_t& inum, Strategy)
     {
         constexpr auto bitsPerBlock = bio::BlockSize * 8;
         uint32_t bgroup = initialBlockGroup;
@@ -148,7 +150,7 @@ namespace ext2
             ReadBlockGroup(dev, bgroup, blockGroup);
             if (Strategy::HasFreeItems(blockGroup)) {
                 const auto bitmapFirstBlockNr = Strategy::GetBitmapBlock(blockGroup) * biosPerBlock;
-                for(int itemIndex = 0; itemIndex < Strategy::GetItemsPerGroup(); ++itemIndex) {
+                for (int itemIndex = 0; itemIndex < Strategy::GetItemsPerGroup(); ++itemIndex) {
                     auto& buf = bio::bread(dev, bitmapFirstBlockNr + (itemIndex / bitsPerBlock));
                     auto& bitmapPtr = buf.data[(itemIndex % bitsPerBlock) / 8];
                     auto bitmapBit = (1 << (itemIndex % 8));
@@ -172,7 +174,8 @@ namespace ext2
     }
 
     template<typename Strategy>
-    bool FreeFromBitmap(const fs::Device dev, const uint32_t bgroup, const uint32_t itemIndex, Strategy)
+    bool
+    FreeFromBitmap(const fs::Device dev, const uint32_t bgroup, const uint32_t itemIndex, Strategy)
     {
         constexpr auto bitsPerBlock = bio::BlockSize * 8;
         BlockGroup blockGroup;
@@ -195,8 +198,7 @@ namespace ext2
         return true;
     }
 
-    struct InodeStrategy
-    {
+    struct InodeStrategy {
         static uint32_t GetBitmapBlock(const BlockGroup& bg) { return bg.bg_inode_bitmap; }
         static uint32_t GetItemsPerGroup() { return superblock.s_inodes_per_group; }
         static bool HasFreeItems(const BlockGroup& bg) { return bg.bg_free_inodes_count > 0; }
@@ -204,8 +206,7 @@ namespace ext2
         static void IncrementFreeItemCount(BlockGroup& bg) { ++bg.bg_free_inodes_count; }
     };
 
-    struct BlockStrategy
-    {
+    struct BlockStrategy {
         static uint32_t GetBitmapBlock(const BlockGroup& bg) { return bg.bg_block_bitmap; }
         static uint32_t GetItemsPerGroup() { return superblock.s_blocks_per_group; }
         static bool HasFreeItems(const BlockGroup& bg) { return bg.bg_free_blocks_count > 0; }
@@ -252,7 +253,7 @@ namespace ext2
     {
         const auto pointersPerBlock = blockSize / sizeof(uint32_t);
         const auto pointersPerBioBlock = bio::BlockSize / sizeof(uint32_t);
-        for(int n = 0; n < pointersPerBlock; ++n) {
+        for (int n = 0; n < pointersPerBlock; ++n) {
             const auto bioBlockNr = blockNr * biosPerBlock + (n / pointersPerBioBlock);
             const auto offset = (n % pointersPerBioBlock) * sizeof(uint32_t);
             auto& bio = bio::bread(dev, bioBlockNr);
@@ -265,41 +266,44 @@ namespace ext2
     void FreeDataBlocks(fs::Inode& inode)
     {
         auto freeBlockIfInUse = [&](const uint32_t blockNr) {
-            if (blockNr == 0) return;
+            if (blockNr == 0)
+                return;
             FreeDataBlock(inode.dev, blockNr);
         };
 
         auto blocks = &inode.ext2inode->i_block[0];
-        for(int n = 0; n < 12; ++n) {
+        for (int n = 0; n < 12; ++n) {
             freeBlockIfInUse(blocks[n]);
         }
 
         if (blocks[12] != 0) {
-            TraverseBlockPointers(inode.dev, blocks[12], [&](const auto block) {
-                freeBlockIfInUse(block);
-            });
+            TraverseBlockPointers(
+                inode.dev, blocks[12], [&](const auto block) { freeBlockIfInUse(block); });
             freeBlockIfInUse(blocks[12]);
         }
         if (blocks[13] != 0) {
             TraverseBlockPointers(inode.dev, blocks[13], [&](const auto indirectBlockNr) {
-                if (indirectBlockNr == 0) return;
-                TraverseBlockPointers(inode.dev, indirectBlockNr, [&](const auto block) {
-                    freeBlockIfInUse(block);
-                });
+                if (indirectBlockNr == 0)
+                    return;
+                TraverseBlockPointers(
+                    inode.dev, indirectBlockNr, [&](const auto block) { freeBlockIfInUse(block); });
                 freeBlockIfInUse(indirectBlockNr);
             });
             freeBlockIfInUse(blocks[13]);
         }
         if (blocks[14] != 0) {
             TraverseBlockPointers(inode.dev, blocks[14], [&](const auto firstIndirectBlockNr) {
-                if (firstIndirectBlockNr == 0) return;
-                TraverseBlockPointers(inode.dev, firstIndirectBlockNr, [&](const auto secondIndirectBlockNumber) {
-                    if (secondIndirectBlockNumber == 0) return;
-                    TraverseBlockPointers(inode.dev, secondIndirectBlockNumber, [&](const auto block) {
-                        freeBlockIfInUse(block);
+                if (firstIndirectBlockNr == 0)
+                    return;
+                TraverseBlockPointers(
+                    inode.dev, firstIndirectBlockNr, [&](const auto secondIndirectBlockNumber) {
+                        if (secondIndirectBlockNumber == 0)
+                            return;
+                        TraverseBlockPointers(
+                            inode.dev, secondIndirectBlockNumber,
+                            [&](const auto block) { freeBlockIfInUse(block); });
+                        freeBlockIfInUse(secondIndirectBlockNumber);
                     });
-                    freeBlockIfInUse(secondIndirectBlockNumber);
-                });
                 freeBlockIfInUse(firstIndirectBlockNr);
             });
             freeBlockIfInUse(blocks[14]);
@@ -344,13 +348,17 @@ namespace ext2
         panic("fourth indirect");
     }
 
-    bool AllocateNewBlockAsNecessary(fs::Inode& inode, uint32_t* block, bio::Buffer* bio, const bool createIfNecessary)
+    bool AllocateNewBlockAsNecessary(
+        fs::Inode& inode, uint32_t* block, bio::Buffer* bio, const bool createIfNecessary)
     {
-        if (!createIfNecessary) return *block != 0;
-        if (*block != 0) return true;
+        if (!createIfNecessary)
+            return *block != 0;
+        if (*block != 0)
+            return true;
 
         uint32_t newBlock;
-        if (!AllocateBlock(inode, newBlock)) return false;
+        if (!AllocateBlock(inode, newBlock))
+            return false;
 
         *block = newBlock;
         ++inode.ext2inode->i_blocks;
@@ -359,7 +367,7 @@ namespace ext2
             bio::bwrite(*bio);
 
         // Zero new block content
-        for(int n = 0; n < biosPerBlock; ++n) {
+        for (int n = 0; n < biosPerBlock; ++n) {
             auto& newBIO = bio::bread(inode.dev, (newBlock * biosPerBlock) + n);
             memset(newBIO.data, 0, bio::BlockSize);
             bio::bwrite(newBIO);
@@ -374,13 +382,15 @@ namespace ext2
         uint32_t bioBlockOffset = inodeBlockNr % biosPerBlock;
         if (ext2BlockNr < 12) {
             auto block = &inode.ext2inode->i_block[ext2BlockNr];
-            if (!AllocateNewBlockAsNecessary(inode, block, nullptr, createIfNecessary)) return 0;
+            if (!AllocateNewBlockAsNecessary(inode, block, nullptr, createIfNecessary))
+                return 0;
             return (*block * biosPerBlock) + bioBlockOffset;
         }
 
         int level;
         auto indirectPtr = DetermineIndirect(*inode.ext2inode, ext2BlockNr, level);
-        if (!AllocateNewBlockAsNecessary(inode, indirectPtr, nullptr, createIfNecessary)) return 0;
+        if (!AllocateNewBlockAsNecessary(inode, indirectPtr, nullptr, createIfNecessary))
+            return 0;
         auto indirect = *indirectPtr;
         int block_shift = superblock.s_log_block_size + 8;
         do {
@@ -395,7 +405,8 @@ namespace ext2
             indirect = [&]() -> uint32_t {
                 const auto blocks = reinterpret_cast<uint32_t*>(buf.data);
                 auto blockPtr = &blocks[blockIndex];
-                if (!AllocateNewBlockAsNecessary(inode, blockPtr, &buf, createIfNecessary)) return 0;
+                if (!AllocateNewBlockAsNecessary(inode, blockPtr, &buf, createIfNecessary))
+                    return 0;
                 return *blockPtr;
             }();
             bio::brelse(buf);
@@ -446,7 +457,9 @@ namespace ext2
         return value;
     }
 
-    bool WriteDirectoryEntry(fs::Inode& dirInode, off_t offset, fs::InodeNumber inum, uint16_t newEntryRecordLength, int type, const char* name)
+    bool WriteDirectoryEntry(
+        fs::Inode& dirInode, off_t offset, fs::InodeNumber inum, uint16_t newEntryRecordLength,
+        int type, const char* name)
     {
         union {
             DirectoryEntry de;
@@ -458,7 +471,8 @@ namespace ext2
         newEntry.de.file_type = type;
         memcpy(newEntry.de.name, name, newEntry.de.name_len);
         const auto entryLength = sizeof(DirectoryEntry) + newEntry.de.name_len;
-        return fs::Write(dirInode, reinterpret_cast<void*>(&newEntry), offset, entryLength) == entryLength;
+        return fs::Write(dirInode, reinterpret_cast<void*>(&newEntry), offset, entryLength) ==
+               entryLength;
     }
 
     bool AddEntryToDirectory(fs::Inode& dirInode, fs::InodeNumber inum, int type, const char* name)
@@ -468,12 +482,14 @@ namespace ext2
         while (offset < dirInode.ext2inode->i_size) {
             DirectoryEntry dentry;
             int n = fs::Read(
-                dirInode, reinterpret_cast<void*>(&dentry), offset,
-                sizeof(DirectoryEntry));
+                dirInode, reinterpret_cast<void*>(&dentry), offset, sizeof(DirectoryEntry));
             if (n <= 0)
                 break;
 
-            const auto currentEntryLength = dentry.inode != 0 ? RoundUpToMultipleOf4(sizeof(struct DirectoryEntry) + dentry.name_len) : 0;
+            const auto currentEntryLength =
+                dentry.inode != 0
+                    ? RoundUpToMultipleOf4(sizeof(struct DirectoryEntry) + dentry.name_len)
+                    : 0;
             if (dentry.rec_len - currentEntryLength < newEntryLength) {
                 offset += dentry.rec_len;
                 continue;
@@ -485,7 +501,9 @@ namespace ext2
             const auto newEntryRecordLength = dentry.rec_len - currentEntryLength;
             if (currentEntryLength > 0) {
                 dentry.rec_len = currentEntryLength;
-                if (fs::Write(dirInode, reinterpret_cast<void*>(&dentry), offset, sizeof(DirectoryEntry)) != sizeof(DirectoryEntry))
+                if (fs::Write(
+                        dirInode, reinterpret_cast<void*>(&dentry), offset,
+                        sizeof(DirectoryEntry)) != sizeof(DirectoryEntry))
                     return false;
                 offset += dentry.rec_len;
             }
@@ -509,11 +527,12 @@ namespace ext2
             DirectoryEntry dentry;
             char component[fs::MaxPathLength];
             if (fs::Read(
-                dirInode, reinterpret_cast<void*>(&dentry), offset,
-                sizeof(DirectoryEntry)) != sizeof(DirectoryEntry))
+                    dirInode, reinterpret_cast<void*>(&dentry), offset, sizeof(DirectoryEntry)) !=
+                sizeof(DirectoryEntry))
                 return false;
             if (fs::Read(
-                dirInode, reinterpret_cast<void*>(component), offset + sizeof(DirectoryEntry), dentry.name_len) != dentry.name_len) {
+                    dirInode, reinterpret_cast<void*>(component), offset + sizeof(DirectoryEntry),
+                    dentry.name_len) != dentry.name_len) {
                 return false;
             }
             if (dentry.name_len != nameLength || memcmp(component, name, nameLength) != 0) {
@@ -525,11 +544,15 @@ namespace ext2
 
             if (previousEntry.rec_len > 0) {
                 previousEntry.rec_len += dentry.rec_len;
-                return fs::Write(dirInode, reinterpret_cast<void*>(&previousEntry), previousOffset, sizeof(DirectoryEntry)) == sizeof(DirectoryEntry);
+                return fs::Write(
+                           dirInode, reinterpret_cast<void*>(&previousEntry), previousOffset,
+                           sizeof(DirectoryEntry)) == sizeof(DirectoryEntry);
             }
 
             dentry.inode = 0;
-            return fs::Write(dirInode, reinterpret_cast<void*>(&dentry), offset, sizeof(DirectoryEntry)) == sizeof(DirectoryEntry);
+            return fs::Write(
+                       dirInode, reinterpret_cast<void*>(&dentry), offset,
+                       sizeof(DirectoryEntry)) == sizeof(DirectoryEntry);
         }
         return false;
     }
@@ -537,7 +560,8 @@ namespace ext2
     int CreateDirectory(fs::Inode& parent, const char* name, int mode)
     {
         auto inum = ext2::AllocateInode(parent);
-        if (inum == 0) return ENOSPC;
+        if (inum == 0)
+            return ENOSPC;
 
         auto newInode = fs::iget(parent.dev, inum);
         assert(newInode != nullptr);
@@ -573,9 +597,8 @@ namespace ext2
         ++parent.ext2inode->i_links_count;
         fs::idirty(parent);
 
-        UpdateInodeBlockGroup(newInode->dev, newInode->inum, [](auto& bg) {
-            ++bg.bg_used_dirs_count;
-        });
+        UpdateInodeBlockGroup(
+            newInode->dev, newInode->inum, [](auto& bg) { ++bg.bg_used_dirs_count; });
 
         fs::idirty(*newInode);
         fs::iput(*newInode);
@@ -596,11 +619,11 @@ namespace ext2
 
     int RemoveDirectory(fs::Inode& inode)
     {
-        if (!ext2::RemoveEntryFromDirectory(inode, "..")) return EIO;
-        if (!ext2::RemoveEntryFromDirectory(inode, ".")) return EIO;
-        UpdateInodeBlockGroup(inode.dev, inode.inum, [](auto& bg) {
-            --bg.bg_used_dirs_count;
-        });
+        if (!ext2::RemoveEntryFromDirectory(inode, ".."))
+            return EIO;
+        if (!ext2::RemoveEntryFromDirectory(inode, "."))
+            return EIO;
+        UpdateInodeBlockGroup(inode.dev, inode.inum, [](auto& bg) { --bg.bg_used_dirs_count; });
 
         FreeDataBlocks(inode);
         FreeInode(inode);
@@ -615,7 +638,8 @@ namespace ext2
             return nullptr;
         blockSize = 1024L << superblock.s_log_block_size;
         biosPerBlock = blockSize / bio::BlockSize;
-        numberOfBlockGroups = (superblock.s_blocks_count - superblock.s_first_data_block) / superblock.s_blocks_per_group;
+        numberOfBlockGroups = (superblock.s_blocks_count - superblock.s_first_data_block) /
+                              superblock.s_blocks_per_group;
         return fs::iget(dev, rootInodeNumber);
     }
 } // namespace ext2

@@ -46,13 +46,13 @@ struct stat {
 #define F_SETFL 2
 #define F_GETFL 3 /* Get file flags */
 
-#define O_RDONLY    0       /* +1 == FREAD */
-#define O_WRONLY    1       /* +1 == FWRITE */
-#define O_RDWR      2       /* +1 == FREAD|FWRITE */
+#define O_RDONLY 0 /* +1 == FREAD */
+#define O_WRONLY 1 /* +1 == FWRITE */
+#define O_RDWR 2   /* +1 == FREAD|FWRITE */
 #define O_DIRECTORY 0x200000
-#define O_CREAT     0x0200
-#define O_TRUNC     0x0400
-#define O_EXCL      0x0800
+#define O_CREAT 0x0200
+#define O_TRUNC 0x0400
+#define O_EXCL 0x0800
 
 #define SEEK_SET 0
 #define SEEK_CUR 1

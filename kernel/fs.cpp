@@ -74,7 +74,7 @@ namespace fs
     void idirty(Inode& inode)
     {
         assert(inode.refcount > 0);
-        //inode.dirty = true;
+        // inode.dirty = true;
         ext2::WriteInode(inode);
     }
 
@@ -189,7 +189,8 @@ namespace fs
                     iput(*current_inode); // not final piece
                 return nullptr;
             }
-            if (parent != nullptr) iput(*parent);
+            if (parent != nullptr)
+                iput(*parent);
             parent = current_inode;
             current_inode = new_inode;
         }
@@ -202,8 +203,10 @@ namespace fs
         Inode* parent;
         char component[MaxPathLength];
         auto inode = namei2(path, parent, component);
-        if (parent != nullptr) iput(*parent);
-        if (inode != nullptr) return inode;
+        if (parent != nullptr)
+            iput(*parent);
+        if (inode != nullptr)
+            return inode;
         return nullptr;
     }
 
@@ -213,15 +216,20 @@ namespace fs
         char component[MaxPathLength];
         inode = namei2(path, parent, component);
         if (inode != nullptr) {
-            if(parent != nullptr) fs::iput(*parent);
-            if ((flags & (O_CREAT | O_EXCL)) == (O_CREAT | O_EXCL)) return EEXIST;
+            if (parent != nullptr)
+                fs::iput(*parent);
+            if ((flags & (O_CREAT | O_EXCL)) == (O_CREAT | O_EXCL))
+                return EEXIST;
             return 0;
         }
-        if (parent == nullptr) return ENOENT;
-        if ((flags & O_CREAT) == 0) return ENOENT;
+        if (parent == nullptr)
+            return ENOENT;
+        if ((flags & O_CREAT) == 0)
+            return ENOENT;
 
         auto inum = ext2::AllocateInode(*parent);
-        if (inum == 0) return ENOSPC;
+        if (inum == 0)
+            return ENOSPC;
 
         auto newInode = fs::iget(parent->dev, inum);
         assert(newInode != nullptr);
@@ -250,7 +258,8 @@ namespace fs
         char component[MaxPathLength];
         Inode* inode = namei2(path, parent, component);
         if (inode == nullptr) {
-            if (parent != nullptr) fs::iput(*parent);
+            if (parent != nullptr)
+                fs::iput(*parent);
             return ENOENT;
         }
 
@@ -279,7 +288,8 @@ namespace fs
             fs::iput(*inode);
             return EEXIST;
         }
-        if (parent == nullptr) return ENOENT;
+        if (parent == nullptr)
+            return ENOENT;
 
         auto r = ext2::CreateDirectory(*parent, component, mode);
         fs::iput(*parent);
@@ -303,7 +313,8 @@ namespace fs
         char component[MaxPathLength];
         Inode* inode = namei2(path, parent, component);
         if (inode == nullptr) {
-            if (parent != nullptr) fs::iput(*parent);
+            if (parent != nullptr)
+                fs::iput(*parent);
             return ENOENT;
         }
 
