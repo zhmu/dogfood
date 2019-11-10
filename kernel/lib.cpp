@@ -197,3 +197,10 @@ int strcmp(const char* a, const char* b)
         ++a, ++b;
     return *a - *b;
 }
+
+int memcmp(const char* a, const char* b, size_t len)
+{
+    for(size_t n = 0; n < len; ++n)
+        if (a[n] != b[n]) return a[n] - b[n];
+    return 0;
+}

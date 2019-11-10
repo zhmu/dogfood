@@ -228,7 +228,6 @@ SYSCALL3(write)
 SYSCALL1(unlink)
 SYSCALL3(execve)
 SYSCALL1(dup)
-//SYSCALL2(rename)
 SYSCALL2(stat)
 SYSCALL1(chdir)
 SYSCALL2(fstat)
@@ -257,14 +256,15 @@ SYSCALL0(getppid)
 SYSCALL2(symlink)
 SYSCALL1(reboot)
 SYSCALL3(waitpid)
+SYSCALL3(chown)
+SYSCALL3(fchown)
+SYSCALL1(umask)
+SYSCALL2(chmod)
+SYSCALL1(mkdir)
+SYSCALL1(rmdir)
+SYSCALL2(fchmod)
 
 int pipe(int* fd)
-{
-    errno = ENOSYS;
-    return -1;
-}
-
-int umask(int mask)
 {
     errno = ENOSYS;
     return -1;
@@ -360,31 +360,6 @@ struct group *getgrgid(gid_t gid)
 {
     return NULL;
 }
-
-int fchown(int fd, uid_t owner, gid_t group)
-{
-    errno = ENOSYS;
-    return -1;
-}
-
-int chmod(const char *pathname, mode_t mode)
-{
-    errno = ENOSYS;
-    return -1;
-}
-
-int mkdir(const char *pathname, mode_t mode)
-{
-    errno = ENOSYS;
-    return -1;
-}
-
-int rmdir(const char *pathname)
-{
-    errno = ENOSYS;
-    return -1;
-}
-
 
 int ftruncate(int fd, off_t length)
 {
@@ -538,12 +513,6 @@ clock_t times(struct tms *buf)
 }
 
 int setrlimit(int resource, const struct rlimit *rlim)
-{
-    errno = ENOSYS;
-    return -1;
-}
-
-int chown(const char* pathname, int owner, int group)
 {
     errno = ENOSYS;
     return -1;

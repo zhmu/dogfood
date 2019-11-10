@@ -47,6 +47,9 @@ namespace fs
     int ResolveDirectoryName(Inode& inode, char* buffer, int bufferSize);
 
     int Open(const char* path, int flags, int mode, Inode*& inode);
+    int MakeDirectory(const char* path, int mode);
+    int RemoveDirectory(const char* path);
+    int Unlink(const char* path);
 
     void CloneTable(const process::Process& parent, process::Process& child);
 } // namespace fs

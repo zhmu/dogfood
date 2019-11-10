@@ -175,7 +175,16 @@ constexpr Syscall syscalls[] = {
      SYS_symlink,
      {{"oldpath", ArgumentType::PathString, Direction::In},
       {"newpath", ArgumentType::PathString, Direction::In}}},
-    {"reboot", SYS_reboot, {{"how", ArgumentType::Int, Direction::In}}}};
+    {"reboot", SYS_reboot, {{"how", ArgumentType::Int, Direction::In}}},
+    {"chown", SYS_chown, {{"path", ArgumentType::PathString, Direction::In}, {"uid", ArgumentType::Int, Direction::In}, {"gid", ArgumentType::Int, Direction::In}}},
+    {"fchown", SYS_fchown, {{"fd", ArgumentType::FD, Direction::In}, {"uid", ArgumentType::Int, Direction::In}, {"gid", ArgumentType::Int, Direction::In}}},
+    {"umask", SYS_umask,
+     {{"mask", ArgumentType::Int, Direction::In}}},
+    {"chmod", SYS_chmod, {{"path", ArgumentType::PathString, Direction::In}, {"mode", ArgumentType::Int, Direction::In}}},
+    {"mkdir", SYS_mkdir, {{"path", ArgumentType::PathString, Direction::In}}},
+    {"rmdir", SYS_mkdir, {{"path", ArgumentType::PathString, Direction::In}}},
+    {"fchmod", SYS_fchmod, {{"fd", ArgumentType::FD, Direction::In}, {"mode", ArgumentType::Int, Direction::In}}},
+};
 
 const char* errnoStrings[] = {
     "E2BIG",        "EACCES",          "EADDRINUSE",  "EADDRNOTAVAIL", "EAFNOSUPPORT", "EAGAIN",
@@ -317,7 +326,7 @@ namespace
                 if (file == nullptr) return -ENFILE;
 
                 fs::Inode* inode;
-                if (int errno = fs::Open(path, flags, mode, inode); errno != 0) {
+                if (int errno = fs::Open(path, flags, mode & 0777, inode); errno != 0) {
                     file::Free(*file);
                     return -errno;
                 }
@@ -483,6 +492,73 @@ namespace
                 return 0; // not implemented
             case SYS_clock_gettime:
                 return -ENOSYS;
+            case SYS_chown: {
+                auto path = reinterpret_cast<const char*>(syscall::GetArgument<1>(*tf));
+                auto uid = static_cast<int>(syscall::GetArgument<2>(*tf));
+                auto gid = static_cast<int>(syscall::GetArgument<3>(*tf));
+                auto inode = fs::namei(path);
+                if (inode == nullptr)
+                    return -ENOENT;
+
+                inode->ext2inode->i_uid = uid;
+                inode->ext2inode->i_gid = gid;
+                fs::idirty(*inode);
+                fs::iput(*inode);
+                return 0;
+            }
+            case SYS_umask:
+                break;
+            case SYS_chmod: {
+                auto path = reinterpret_cast<const char*>(syscall::GetArgument<1>(*tf));
+                auto mode = static_cast<int>(syscall::GetArgument<2>(*tf));
+                auto inode = fs::namei(path);
+                if (inode == nullptr)
+                    return -ENOENT;
+                mode &= 0777;
+                inode->ext2inode->i_mode = (inode->ext2inode->i_mode & ~0777) | mode;
+                fs::idirty(*inode);
+                fs::iput(*inode);
+                return 0;
+            }
+            case SYS_unlink: {
+                auto path = reinterpret_cast<const char*>(syscall::GetArgument<1>(*tf));
+                return -fs::Unlink(path);
+            }
+            case SYS_mkdir: {
+                auto path = reinterpret_cast<const char*>(syscall::GetArgument<1>(*tf));
+                auto mode = static_cast<int>(syscall::GetArgument<2>(*tf));
+                return -fs::MakeDirectory(path, mode & 0777);
+            }
+            case SYS_rmdir: {
+                auto path = reinterpret_cast<const char*>(syscall::GetArgument<1>(*tf));
+                return -fs::RemoveDirectory(path);
+            }
+            case SYS_fchown: {
+                auto file = file::FindByIndex(process::GetCurrent(), syscall::GetArgument<1>(*tf));
+                if (file == nullptr)
+                    return -EBADF;
+                if (file->f_inode == nullptr || file->f_inode->ext2inode == nullptr)
+                    return -ENOENT;
+                auto uid = static_cast<int>(syscall::GetArgument<2>(*tf));
+                auto gid = static_cast<int>(syscall::GetArgument<3>(*tf));
+                file->f_inode->ext2inode->i_uid = uid;
+                file->f_inode->ext2inode->i_gid = gid;
+                fs::idirty(*file->f_inode);
+                return 0;
+            }
+            case SYS_fchmod: {
+                auto file = file::FindByIndex(process::GetCurrent(), syscall::GetArgument<1>(*tf));
+                if (file == nullptr)
+                    return -EBADF;
+                if (file->f_inode == nullptr || file->f_inode->ext2inode == nullptr)
+                    return -ENOENT;
+                auto mode = static_cast<int>(syscall::GetArgument<2>(*tf));
+                mode &= 0777;
+                file->f_inode->ext2inode->i_mode = (file->f_inode->ext2inode->i_mode & ~0777) | mode;
+                fs::idirty(*file->f_inode);
+                fs::iput(*file->f_inode);
+                return 0;
+            }
         }
         printf(
             "[%d] unsupported syscall %d %lx [%x %x %x %x %x %x]\n", process::GetCurrent().pid,

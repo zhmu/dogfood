@@ -168,7 +168,7 @@ namespace fs
         return nullptr;
     }
 
-    // Does namei() but yields parent inode if the final piece did not exist
+    // Does namei() but yields parent inode
     Inode* namei2(const char* path, Inode*& parent, char* component)
     {
         auto current_inode = [&]() {
@@ -179,21 +179,19 @@ namespace fs
         }();
         iref(*current_inode);
 
-        const char* last_path = path;
         parent = nullptr;
         while (IsolatePathComponent(path, component)) {
             auto new_inode = LookupInDirectory(*current_inode, component);
             if (new_inode == nullptr) {
                 if (strchr(path, '/') == nullptr) {
                     parent = current_inode;
-                    path = last_path;
                 } else
                     iput(*current_inode); // not final piece
                 return nullptr;
             }
-            iput(*current_inode);
+            if (parent != nullptr) iput(*parent);
+            parent = current_inode;
             current_inode = new_inode;
-            last_path = path;
         }
 
         return current_inode;
@@ -204,8 +202,8 @@ namespace fs
         Inode* parent;
         char component[MaxPathLength];
         auto inode = namei2(path, parent, component);
-        if (inode != nullptr) return inode;
         if (parent != nullptr) iput(*parent);
+        if (inode != nullptr) return inode;
         return nullptr;
     }
 
@@ -215,6 +213,7 @@ namespace fs
         char component[MaxPathLength];
         inode = namei2(path, parent, component);
         if (inode != nullptr) {
+            if(parent != nullptr) fs::iput(*parent);
             if ((flags & (O_CREAT | O_EXCL)) == (O_CREAT | O_EXCL)) return EEXIST;
             return 0;
         }
@@ -227,19 +226,108 @@ namespace fs
         auto newInode = fs::iget(parent->dev, inum);
         assert(newInode != nullptr);
         {
-            auto e2i = *newInode->ext2inode;
+            auto& e2i = *newInode->ext2inode;
             memset(&e2i, 0, sizeof(e2i));
             e2i.i_mode = EXT2_S_IFREG | mode;
             e2i.i_links_count = 1;
         }
         fs::idirty(*newInode);
 
-        if (!ext2::AddEntryToDirectory(*parent, *newInode, component)) {
+        if (!ext2::AddEntryToDirectory(*parent, inum, EXT2_FT_REG_FILE, component)) {
             // TODO deallocate inode
             return ENOSPC;
         }
+        fs::idirty(*parent);
+        fs::iput(*parent);
+
         inode = newInode;
         return 0;
+    }
+
+    int Unlink(const char* path)
+    {
+        Inode* parent;
+        char component[MaxPathLength];
+        Inode* inode = namei2(path, parent, component);
+        if (inode == nullptr) {
+            if (parent != nullptr) fs::iput(*parent);
+            return ENOENT;
+        }
+
+        if ((inode->ext2inode->i_mode & EXT2_S_IFMASK) == EXT2_S_IFDIR) {
+            fs::iput(*parent);
+            fs::iput(*inode);
+            return EPERM;
+        }
+
+        if (!ext2::RemoveEntryFromDirectory(*parent, component)) {
+            fs::iput(*parent);
+            fs::iput(*inode);
+            return EIO;
+        }
+        fs::iput(*parent);
+        ext2::Unlink(*inode);
+        return 0;
+    }
+
+    int MakeDirectory(const char* path, int mode)
+    {
+        Inode* parent;
+        char component[MaxPathLength];
+        if (auto inode = namei2(path, parent, component); inode != nullptr) {
+            fs::iput(*parent);
+            fs::iput(*inode);
+            return EEXIST;
+        }
+        if (parent == nullptr) return ENOENT;
+
+        auto r = ext2::CreateDirectory(*parent, component, mode);
+        fs::iput(*parent);
+        return -r;
+    }
+
+    bool IsDirectoryEmpty(fs::Inode& inode)
+    {
+        off_t offset = 0;
+        fs::DEntry dentry;
+        while (ext2::ReadDirectory(inode, offset, dentry)) {
+            if (strcmp(dentry.d_name, ".") != 0 && strcmp(dentry.d_name, "..") != 0)
+                return false;
+        }
+        return true;
+    }
+
+    int RemoveDirectory(const char* path)
+    {
+        Inode* parent;
+        char component[MaxPathLength];
+        Inode* inode = namei2(path, parent, component);
+        if (inode == nullptr) {
+            if (parent != nullptr) fs::iput(*parent);
+            return ENOENT;
+        }
+
+        if ((inode->ext2inode->i_mode & EXT2_S_IFMASK) != EXT2_S_IFDIR) {
+            fs::iput(*parent);
+            fs::iput(*inode);
+            return ENOTDIR;
+        }
+
+        if (!IsDirectoryEmpty(*inode)) {
+            fs::iput(*parent);
+            fs::iput(*inode);
+            return ENOTEMPTY;
+        }
+
+        if (!ext2::RemoveEntryFromDirectory(*parent, component)) {
+            fs::iput(*parent);
+            fs::iput(*inode);
+            return EIO;
+        }
+        --parent->ext2inode->i_links_count;
+        fs::idirty(*parent);
+        fs::iput(*parent);
+        return ext2::RemoveDirectory(*inode);
     }
 
     bool LookupInodeByNumber(Inode& inode, ino_t inum, fs::DEntry& dentry)
@@ -322,5 +410,4 @@ namespace fs
         sbuf.st_blocks = e2i.i_blocks;
         return true;
     }
-
 } // namespace fs

@@ -114,6 +114,7 @@ namespace ext2
 
     struct Inode {
         uint16_t i_mode;
+#define EXT2_S_IFMASK 0xf000
 #define EXT2_S_IFSOCK 0xc000
 #define EXT2_S_IFLNK 0xa000
 #define EXT2_S_IFREG 0x8000
@@ -202,7 +203,12 @@ namespace ext2
     void WriteInode(fs::Inode& inode);
     uint32_t bmap(fs::Inode& inode, unsigned int inodeBlockNr, bool createIfNecessary);
     bool ReadDirectory(fs::Inode& dirInode, off_t& offset, fs::DEntry& dentry);
-    bool AddEntryToDirectory(fs::Inode& dirInode, const fs::Inode& inode, const char* name);
+    bool AddEntryToDirectory(fs::Inode& dirInode, fs::InodeNumber inum, int type, const char* name);
+    bool RemoveEntryFromDirectory(fs::Inode& dirInode, const char* name);
     uint32_t AllocateInode(fs::Inode& dirInode);
+
+    int CreateDirectory(fs::Inode& parent, const char* name, int mode);
+    int RemoveDirectory(fs::Inode& inode);
+    void Unlink(fs::Inode& inode);
 
 } // namespace ext2

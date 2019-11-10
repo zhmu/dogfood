@@ -50,3 +50,10 @@
 #define SYS_getppid 47
 #define SYS_symlink 48
 #define SYS_reboot 49
+#define SYS_chown 50
+#define SYS_fchown 51
+#define SYS_umask 52
+#define SYS_chmod 53
+#define SYS_mkdir 54
+#define SYS_rmdir 55
+#define SYS_fchmod 56

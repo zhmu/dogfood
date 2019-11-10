@@ -98,6 +98,20 @@
 // Result sys_symlink(const char* oldpath, const char* newpath);
 #define SYS_reboot 49
 // Result sys_reboot(int how);
+#define SYS_chown 50
+// Result sys_chown(const char* pathname, uid_t uid, gid_t gid)
+#define SYS_fchown 51
+// Result sys_fchown(int fd, uid_t uid, gid_t gid)
+#define SYS_umask 52
+// Result sys_umask(mode_t mask)
+#define SYS_chmod 53
+// Result chmod(const char* pathname, mode_t mode)
+#define SYS_mkdir 54
+// Result mkdir(const char* pathname, mode_t mode)
+#define SYS_rmdir 55
+// Result rmdir(const char* pathname)
+#define SYS_fchmod 56
+// Result fchmod(int fd, mode_t mode)
 
 #ifdef __cplusplus
 #include "types.h"

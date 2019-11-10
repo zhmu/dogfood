@@ -18,20 +18,25 @@ struct dirent* readdir(DIR* dirp)
     if (dirp->d_done)
         return NULL;
 
-    struct DIRENTRY de;
-    if (read(dirp->d_fd, &de, sizeof(de)) < sizeof(de)) {
-        dirp->d_done = 1;
-        return NULL;
-    }
+    for(;;) {
+        struct DIRENTRY de;
+        if (read(dirp->d_fd, &de, sizeof(de)) < sizeof(de)) {
+            dirp->d_done = 1;
+            return NULL;
+        }
 
-    dirp->d_dirent.d_ino = de.inode;
-    if (read(dirp->d_fd, dirp->d_dirent.d_name, de.name_len) != de.name_len) {
-        dirp->d_done = 1;
-        errno = EIO;
-        return NULL;
-    }
-    dirp->d_dirent.d_name[de.name_len] = '\0';
+        dirp->d_dirent.d_ino = de.inode;
+        if (read(dirp->d_fd, dirp->d_dirent.d_name, de.name_len) != de.name_len) {
+            dirp->d_done = 1;
+            errno = EIO;
+            return NULL;
+        }
+        dirp->d_dirent.d_name[de.name_len] = '\0';
 
-    lseek(dirp->d_fd, de.rec_len - (sizeof(de) + de.name_len), SEEK_CUR);
-    return &dirp->d_dirent;
+        lseek(dirp->d_fd, de.rec_len - (sizeof(de) + de.name_len), SEEK_CUR);
+        if (dirp->d_dirent.d_ino == 0)
+            continue; // removed entry, skip
+
+        return &dirp->d_dirent;
+    }
 }

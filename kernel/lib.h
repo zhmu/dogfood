@@ -15,5 +15,6 @@ void* memcpy(void* dst, const void* src, size_t len);
 size_t strlcpy(char* dst, const char* src, size_t len);
 char* strchr(const char* s, int ch);
 int strcmp(const char* a, const char* b);
+int memcmp(const char* a, const char* b, size_t len);
 [[noreturn]] void panic(const char* s);
 size_t strlen(const char* src);
