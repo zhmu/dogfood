@@ -345,11 +345,10 @@ set(SOURCES
     stdlib/atoll.c
     stdlib/btowc.c
     stdlib/calloc.c
-    stdlib/callocr.c
-    stdlib/cfreer.c
     stdlib/cxa_atexit.c
     stdlib/cxa_finalize.c
     stdlib/div.c
+    stdlib/dlmalloc.c
     stdlib/drand48.c
     stdlib/dtoa.c
     stdlib/dtoastub.c
@@ -360,7 +359,6 @@ set(SOURCES
     stdlib/eprintf.c
     stdlib/erand48.c
     stdlib/exit.c
-    stdlib/freer.c
     stdlib/gdtoa-gethex.c
     stdlib/gdtoa-hexnan.c
     stdlib/getenv.c
@@ -381,12 +379,7 @@ set(SOURCES
     stdlib/lldiv.c
     stdlib/lrand48.c
     stdlib/malign.c
-    stdlib/malignr.c
-    stdlib/mallinfor.c
     stdlib/malloc.c
-    stdlib/mallocr-base.c
-    stdlib/malloptr.c
-    stdlib/mallstatsr.c
     stdlib/mblen.c
     stdlib/mblen_r.c
     stdlib/mbrlen.c
@@ -402,7 +395,6 @@ set(SOURCES
     stdlib/mprec.c
     stdlib/mrand48.c
     stdlib/msize.c
-    stdlib/msizer.c
     stdlib/mstats.c
     stdlib/mtrim.c
     stdlib/nrand48.c
@@ -410,7 +402,6 @@ set(SOURCES
     stdlib/on_exit_args.c
     stdlib/putenv.c
     stdlib/putenv_r.c
-    stdlib/pvallocr.c
     stdlib/quick_exit.c
     stdlib/rand.c
     stdlib/rand48.c
@@ -419,7 +410,6 @@ set(SOURCES
     stdlib/realloc.c
     stdlib/reallocarray.c
     stdlib/reallocf.c
-    stdlib/reallocr.c
     stdlib/rpmatch.c
     stdlib/sb_charsets.c
     stdlib/seed48.c
@@ -441,7 +431,6 @@ set(SOURCES
     stdlib/system.c
     stdlib/utoa.c
     stdlib/valloc.c
-    stdlib/vallocr.c
     stdlib/wcrtomb.c
     stdlib/wcsnrtombs.c
     stdlib/wcsrtombs.c
