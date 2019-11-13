@@ -42,7 +42,7 @@ namespace fs
     void iput(Inode& inode);
     void iref(Inode& inode);
     void idirty(Inode& inode);
-    Inode* namei(const char* path);
+    Inode* namei(const char* path, const bool follow);
     bool Stat(Inode& inode, stat& sbuf);
     int ResolveDirectoryName(Inode& inode, char* buffer, int bufferSize);
     int Link(const char* source, const char* dest);

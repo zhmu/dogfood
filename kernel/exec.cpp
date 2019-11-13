@@ -149,7 +149,7 @@ int exec(amd64::TrapFrame& tf)
     const auto path = reinterpret_cast<const char*>(syscall::GetArgument<1>(tf));
     const auto argv = reinterpret_cast<const char**>(syscall::GetArgument<2>(tf));
     const auto envp = reinterpret_cast<const char**>(syscall::GetArgument<3>(tf));
-    auto inode = fs::namei(path);
+    auto inode = fs::namei(path, true);
     if (inode == nullptr)
         return -ENOENT;
 

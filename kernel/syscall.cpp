@@ -309,7 +309,8 @@ namespace
 
     uint64_t DoSyscall(amd64::TrapFrame* tf)
     {
-        switch (syscall::GetNumber(*tf)) {
+        const auto num = syscall::GetNumber(*tf);
+        switch (num) {
             case SYS_exit:
                 return process::Exit(*tf);
             case SYS_write: {
@@ -359,7 +360,7 @@ namespace
                 auto path = reinterpret_cast<const char*>(syscall::GetArgument<1>(*tf));
                 auto buf = reinterpret_cast<stat*>(syscall::GetArgument<2>(*tf));
 
-                auto inode = fs::namei(path);
+                auto inode = fs::namei(path, num != SYS_lstat);
                 if (inode == nullptr)
                     return -ENOENT;
                 auto ret = fs::Stat(*inode, *buf);
@@ -457,7 +458,7 @@ namespace
             case SYS_chdir: {
                 auto buf = reinterpret_cast<char*>(syscall::GetArgument<1>(*tf));
                 auto& current = process::GetCurrent();
-                auto inode = fs::namei(buf);
+                auto inode = fs::namei(buf, true);
                 if (inode == nullptr)
                     return -ENOENT;
                 if ((inode->ext2inode->i_mode & EXT2_S_IFDIR) == 0) {
@@ -510,7 +511,7 @@ namespace
                 auto path = reinterpret_cast<const char*>(syscall::GetArgument<1>(*tf));
                 auto uid = static_cast<int>(syscall::GetArgument<2>(*tf));
                 auto gid = static_cast<int>(syscall::GetArgument<3>(*tf));
-                auto inode = fs::namei(path);
+                auto inode = fs::namei(path, true);
                 if (inode == nullptr)
                     return -ENOENT;
 
@@ -525,7 +526,7 @@ namespace
             case SYS_chmod: {
                 auto path = reinterpret_cast<const char*>(syscall::GetArgument<1>(*tf));
                 auto mode = static_cast<int>(syscall::GetArgument<2>(*tf));
-                auto inode = fs::namei(path);
+                auto inode = fs::namei(path, true);
                 if (inode == nullptr)
                     return -ENOENT;
                 mode &= 0777;
@@ -583,7 +584,7 @@ namespace
                 auto path = reinterpret_cast<const char*>(syscall::GetArgument<1>(*tf));
                 auto buf = reinterpret_cast<char*>(syscall::GetArgument<2>(*tf));
                 auto size = reinterpret_cast<size_t>(syscall::GetArgument<2>(*tf));
-                auto inode = fs::namei(path);
+                auto inode = fs::namei(path, false);
                 if (inode == nullptr)
                     return -ENOENT;
                 if ((inode->ext2inode->i_mode & EXT2_S_IFMASK) != EXT2_S_IFLNK) {

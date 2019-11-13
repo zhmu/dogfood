@@ -49,7 +49,7 @@ namespace process
                 proc = Process{};
                 proc.state = State::Construct;
                 proc.pid = next_pid++;
-                proc.cwd = fs::namei("/");
+                proc.cwd = fs::namei("/", true);
                 proc.nextMmapAddress = vm::userland::mmapBase;
                 AllocateConsoleFile(proc); // stdin
                 AllocateConsoleFile(proc); // stdout

@@ -11,6 +11,7 @@ namespace fs
     namespace
     {
         constexpr inline Device rootDeviceNumber = 0;
+        constexpr inline int maxSymLinkDepth = 10;
 
         namespace cache
         {
@@ -168,19 +169,43 @@ namespace fs
         return nullptr;
     }
 
-    // Does namei() but yields parent inode
-    Inode* namei2(const char* path, Inode*& parent, char* component)
+    Inode* Lookup(Inode* root, const char* path, const bool follow, Inode*& parent, char* component, int& depth);
+
+    bool IsSymLink(const Inode& inode)
     {
-        auto current_inode = [&]() {
-            if (path[0] == '/')
-                return rootInode;
-            else
-                return process::GetCurrent().cwd;
-        }();
+        return (inode.ext2inode->i_mode & EXT2_S_IFMASK) == EXT2_S_IFLNK;
+    }
+
+    int FollowSymLink(Inode*& parent, Inode*& inode, int& depth)
+    {
+        if (!IsSymLink(*inode)) return 0;
+        ++depth;
+        if (depth == maxSymLinkDepth) return ELOOP;
+
+        char symlink[MaxPathLength];
+        const auto n = fs::Read(*inode, symlink, 0, sizeof(symlink) - 1);
+        if (n <= 0) return EIO;
+        symlink[n] = '\0';
+
+        char component[MaxPathLength];
+        Inode* newParent = nullptr;
+        auto next = Lookup(parent, symlink, true, newParent, component, depth);
+        if (next == nullptr) return ENOENT;
+        iput(*parent);
+        parent= newParent;
+        inode = next;
+        return 0;
+    }
+
+    Inode* Lookup(Inode* current_inode, const char* path, const bool follow, Inode*& parent, char* component, int& depth)
+    {
         iref(*current_inode);
 
         parent = nullptr;
         while (IsolatePathComponent(path, component)) {
+            if (FollowSymLink(parent, current_inode, depth) != 0) {
+                return nullptr;
+            }
             auto new_inode = LookupInDirectory(*current_inode, component);
             if (new_inode == nullptr) {
                 if (strchr(path, '/') == nullptr) {
@@ -195,14 +220,32 @@ namespace fs
             current_inode = new_inode;
         }
 
+        if (follow && IsSymLink(*current_inode)) {
+            if (auto result = FollowSymLink(parent, current_inode, depth); result != 0)
+                return nullptr;
+        }
+
         return current_inode;
     }
 
-    Inode* namei(const char* path)
+    Inode* namei2(const char* path, const bool follow, Inode*& parent, char* component)
+    {
+        auto current_inode = [&]() {
+            if (path[0] == '/')
+                return rootInode;
+            else
+                return process::GetCurrent().cwd;
+        }();
+
+        int depth = 0;
+        return Lookup(current_inode, path, follow, parent, component, depth);
+    }
+
+    Inode* namei(const char* path, const bool follow)
     {
         Inode* parent;
         char component[MaxPathLength];
-        auto inode = namei2(path, parent, component);
+        auto inode = namei2(path, follow, parent, component);
         if (parent != nullptr)
             iput(*parent);
         if (inode != nullptr)
@@ -214,7 +257,7 @@ namespace fs
     {
         Inode* parent;
         char component[MaxPathLength];
-        inode = namei2(path, parent, component);
+        inode = namei2(path, false /* ? */, parent, component);
         if (inode != nullptr) {
             if (parent != nullptr)
                 fs::iput(*parent);
@@ -256,7 +299,7 @@ namespace fs
     {
         Inode* parent;
         char component[MaxPathLength];
-        Inode* inode = namei2(path, parent, component);
+        Inode* inode = namei2(path, false, parent, component);
         if (inode == nullptr) {
             if (parent != nullptr)
                 fs::iput(*parent);
@@ -281,13 +324,13 @@ namespace fs
 
     int Link(const char* source, const char* dest)
     {
-        auto sourceInode = namei(source);
+        auto sourceInode = namei(source, true);
         if (sourceInode == nullptr)
             return ENOENT;
 
         Inode* parent;
         char component[MaxPathLength];
-        if (auto inode = namei2(dest, parent, component); inode != nullptr) {
+        if (auto inode = namei2(dest, true, parent, component); inode != nullptr) {
             if (parent != nullptr)
                 fs::iput(*parent);
             return EEXIST;
@@ -310,7 +353,7 @@ namespace fs
     {
         Inode* parent;
         char component[MaxPathLength];
-        if (auto inode = namei2(dest, parent, component); inode != nullptr) {
+        if (auto inode = namei2(dest, true, parent, component); inode != nullptr) {
             if (parent != nullptr)
                 fs::iput(*parent);
             return EEXIST;
@@ -352,7 +395,7 @@ namespace fs
     {
         Inode* parent;
         char component[MaxPathLength];
-        if (auto inode = namei2(path, parent, component); inode != nullptr) {
+        if (auto inode = namei2(path, true, parent, component); inode != nullptr) {
             fs::iput(*parent);
             fs::iput(*inode);
             return EEXIST;
@@ -380,7 +423,7 @@ namespace fs
     {
         Inode* parent;
         char component[MaxPathLength];
-        Inode* inode = namei2(path, parent, component);
+        Inode* inode = namei2(path, true, parent, component);
         if (inode == nullptr) {
             if (parent != nullptr)
                 fs::iput(*parent);
