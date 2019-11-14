@@ -11,8 +11,6 @@ typedef enum {
 
     /* Change permissions of a mapping - only va_addr/va_len/va_flags are used */
     OP_CHANGE_ACCESS,
-
-    OP_SBRK
 } VMOP_OPERATION;
 
 #define VMOP_FLAG_READ 0x0001

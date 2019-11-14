@@ -190,30 +190,6 @@ namespace vm
                 }
                 return 0;
             }
-            case OP_SBRK: {
-                if (vmop->vo_len < 0)
-                    return -EINVAL;
-                const auto previousHeapSize = current.heapSize;
-                current.heapSize += vmop->vo_len;
-
-                auto pml4 =
-                    reinterpret_cast<uint64_t*>(vm::PhysicalToVirtual(current.pageDirectory));
-                while (current.heapSizeAllocated < vm::RoundUpToPage(current.heapSize)) {
-                    auto pte =
-                        FindPTE(pml4, vm::userland::heapBase + current.heapSizeAllocated, true);
-                    if (pte == nullptr)
-                        return -ENOMEM;
-                    auto page = page_allocator::Allocate();
-                    if (page == nullptr)
-                        return -ENOMEM;
-                    memset(page, 0, vm::PageSize);
-
-                    *pte = vm::Page_P | vm::Page_RW | vm::Page_US | vm::VirtualToPhysical(page);
-                    current.heapSizeAllocated += vm::PageSize;
-                }
-                vmop->vo_addr = reinterpret_cast<void*>(vm::userland::heapBase + previousHeapSize);
-                return 0;
-            }
             default:
                 printf(
                     "vmop: unimplemented op %d addr %p len %p\n", vmop->vo_op, vmop->vo_addr,

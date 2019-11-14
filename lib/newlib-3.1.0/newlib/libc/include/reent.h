@@ -119,7 +119,6 @@ struct timezone;
 #define _open_r(__reent, __path, __flag, __m)     open(__path, __flag, __m)
 #define _read_r(__reent, __fd, __buff, __cnt)     read(__fd, __buff, __cnt)
 #define _rename_r(__reent, __old, __new)	  rename(__old, __new)
-#define _sbrk_r(__reent, __incr)                  sbrk(__incr)
 #define _stat_r(__reent, __path, __buff)          stat(__path, __buff)
 #define _times_r(__reent, __time)                 times(__time)
 #define _unlink_r(__reent, __path)                unlink(__path)
@@ -150,7 +149,6 @@ extern int _mkdir_r (struct _reent *, const char *, int);
 extern int _open_r (struct _reent *, const char *, int, int);
 extern _ssize_t _read_r (struct _reent *, int, void *, size_t);
 extern int _rename_r (struct _reent *, const char *, const char *);
-extern void *_sbrk_r (struct _reent *, ptrdiff_t);
 extern int _stat_r (struct _reent *, const char *, struct stat *);
 extern _CLOCK_T_ _times_r (struct _reent *, struct tms *);
 extern int _unlink_r (struct _reent *, const char *);

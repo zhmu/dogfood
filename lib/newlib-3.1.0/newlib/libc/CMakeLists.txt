@@ -123,7 +123,6 @@ set(SOURCES
     reent/readr.c
     reent/reent.c
     reent/renamer.c
-    reent/sbrkr.c
     reent/signalr.c
     reent/signgam.c
     reent/statr.c
@@ -732,7 +731,6 @@ set(SOURCES_notyet
     syscalls/syslseek.c
     syscalls/sysopen.c
     syscalls/sysread.c
-    syscalls/syssbrk.c
     syscalls/sysstat.c
     syscalls/systimes.c
     syscalls/sysunlink.c
