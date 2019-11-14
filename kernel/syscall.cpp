@@ -373,7 +373,9 @@ namespace
                 if (file == nullptr)
                     return -EBADF;
                 if (file->f_inode == nullptr) {
+                    // Assume this is the console
                     memset(buf, 0, sizeof *buf);
+                    buf->st_mode = EXT2_S_IFCHR | 0666;
                     return 0;
                 }
                 return fs::Stat(*file->f_inode, *buf) ? 0 : -EIO;
