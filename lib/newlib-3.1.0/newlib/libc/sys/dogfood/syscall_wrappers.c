@@ -186,23 +186,6 @@ int munmap(void* addr, size_t len)
     return set_errno_or_extract_value(_SYS_vmop(&vo));
 }
 
-void* sbrk(intptr_t incr)
-{
-    struct VMOP_OPTIONS vo;
-
-    memset(&vo, 0, sizeof(vo));
-    vo.vo_size = sizeof(vo);
-    vo.vo_op = OP_SBRK;
-    vo.vo_len = incr;
-    long r = _SYS_vmop(&vo);
-    if (r < 0) {
-        errno = r & 0x1ff;
-        return MAP_FAILED;
-    }
-
-    return vo.vo_addr;
-}
-
 extern long _SYS_getcwd(char*, int);
 
 char* getcwd(char* buf, size_t size)
