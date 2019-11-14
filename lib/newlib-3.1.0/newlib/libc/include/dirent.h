@@ -59,11 +59,6 @@ int	 readdir_r(DIR *__restrict, struct dirent *__restrict,
 	    struct dirent **__restrict);
 #endif
 void	 rewinddir(DIR *);
-#if __MISC_VISIBLE || __POSIX_VISIBLE >= 200809 || __XSI_VISIBLE >= 700
-int	 scandir(const char *, struct dirent ***,
-	    int (*)(const struct dirent *), int (*)(const struct dirent **,
-	    const struct dirent **));
-#endif
 #ifdef _COMPILING_NEWLIB
 void	 _seekdir(DIR *, long);
 #endif

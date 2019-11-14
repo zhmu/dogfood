@@ -1,10 +1,21 @@
 /* isatty.c */
 
-#include <unistd.h>
-#include <reent.h>
+/* Dumb implementation so programs will at least run.  */
+
+#include <sys/stat.h>
+#include <errno.h>
 
 int
 isatty (int fd)
 {
-  return _isatty (fd);
+  struct stat buf;
+
+  if (fstat (fd, &buf) < 0) {
+    errno = EBADF;
+    return 0;
+  }
+  if (S_ISCHR (buf.st_mode))
+    return 1;
+  errno = ENOTTY;
+  return 0;
 }

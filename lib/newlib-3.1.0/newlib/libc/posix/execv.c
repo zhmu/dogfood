@@ -17,7 +17,7 @@ int
 execv (const char *path,
 	char * const argv[])
 {
-  return _execve (path, (char * const *) argv, *p_environ);
+  return execve (path, (char * const *) argv, *p_environ);
 }
 
 #endif /* !_NO_EXECVE  */

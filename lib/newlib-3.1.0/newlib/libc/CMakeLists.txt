@@ -14,7 +14,6 @@ set(SOURCES
     argz/argz_replace.c
     argz/argz_stringify.c
     argz/buf_findstr.c
-    argz/dummy.c
     argz/envz_add.c
     argz/envz_entry.c
     argz/envz_get.c
@@ -108,6 +107,24 @@ set(SOURCES
     misc/fini.c
     misc/init.c
     misc/unctrl.c
+    posix/creat.c
+    posix/execl.c
+    posix/execle.c
+    posix/execlp.c
+    posix/execv.c
+    posix/execvp.c
+    posix/isatty.c
+    posix/popen.c
+    posix/glob.c
+    posix/popen.c
+    posix/regcomp.c
+    posix/regerror.c
+    posix/regexec.c
+    posix/regfree.c
+    posix/sleep.c
+    posix/usleep.c
+    posix/wordexp.c
+    posix/wordfree.c
     reent/closer.c
     reent/execr.c
     reent/fcntlr.c
@@ -595,7 +612,6 @@ set(SOURCES
     sys/dogfood/access.c
     sys/dogfood/syscall.S
     sys/dogfood/syscall_wrappers.c
-    sys/dogfood/isatty.c
     sys/dogfood/lseek.c
     sys/dogfood/opendir.c
     sys/dogfood/readdir.c
@@ -664,79 +680,10 @@ set(SOURCES_notyet
     iconv/lib/nullconv.c
     iconv/lib/ucsconv.c
     misc/lock.c
-    posix/_isatty.c
-    posix/closedir.c
     posix/collate.c
     posix/collcmp.c
-    posix/creat.c
-    posix/dirfd.c
     posix/engine.c
-    posix/execl.c
-    posix/execle.c
-    posix/execlp.c
-    posix/execv.c
-    posix/execve.c
-    posix/execvp.c
     posix/fnmatch.c
-    posix/glob.c
-    posix/isatty.c
-    posix/opendir.c
-    posix/popen.c
-    posix/posix_spawn.c
-    posix/readdir.c
-    posix/readdir_r.c
-    posix/regcomp.c
-    posix/regerror.c
-    posix/regexec.c
-    posix/regfree.c
-    posix/rewinddir.c
-    posix/scandir.c
-    posix/seekdir.c
-    posix/sleep.c
-    posix/telldir.c
-    posix/usleep.c
-    posix/wordexp.c
-    posix/wordfree.c
-    reent/fstat64r.c
-    reent/lseek64r.c
-    reent/open64r.c
-    reent/stat64r.c
-    stdio/nano-vfprintf.c
-    stdio/nano-vfprintf_float.c
-    stdio/nano-vfprintf_i.c
-    stdio/nano-vfscanf.c
-    stdio/nano-vfscanf_float.c
-    stdio/nano-vfscanf_i.c
-    stdio64/dummy.c
-    stdio64/fdopen64.c
-    stdio64/fgetpos64.c
-    stdio64/fopen64.c
-    stdio64/freopen64.c
-    stdio64/fseeko64.c
-    stdio64/fsetpos64.c
-    stdio64/ftello64.c
-    stdio64/stdio64.c
-    stdio64/tmpfile64.c
-    stdlib/nano-mallocr.c
-    syscalls/sysclose.c
-    syscalls/sysexecve.c
-    syscalls/sysfcntl.c
-    syscalls/sysfork.c
-    syscalls/sysfstat.c
-    syscalls/sysgetpid.c
-    syscalls/sysgettod.c
-    syscalls/sysisatty.c
-    syscalls/syskill.c
-    syscalls/syslink.c
-    syscalls/syslseek.c
-    syscalls/sysopen.c
-    syscalls/sysread.c
-    syscalls/sysstat.c
-    syscalls/systimes.c
-    syscalls/sysunlink.c
-    syscalls/syswait.c
-    syscalls/syswrite.c
-    xdr/dummy.c
     xdr/xdr.c
     xdr/xdr_array.c
     xdr/xdr_float.c
@@ -794,7 +741,6 @@ set(HEADERS
     include/search.h
     include/setjmp.h
     include/signal.h
-    include/spawn.h
     include/stdatomic.h
     include/stdint.h
     include/stdio.h
@@ -816,7 +762,6 @@ set(HEADERS
     include/wordexp.h
     include/xlocale.h
 )
-    #include/pthread.h
 
 set(HEADERS_SSP
     ${HEADERS_SSP}
@@ -842,7 +787,6 @@ set(HEADERS_MACHINE
     include/machine/ieeefp.h
     include/machine/malloc.h
     include/machine/param.h
-    include/machine/setjmp-dj.h
     include/machine/setjmp.h
     include/machine/stdlib.h
     include/machine/termios.h

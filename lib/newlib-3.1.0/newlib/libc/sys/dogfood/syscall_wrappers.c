@@ -284,10 +284,6 @@ int fsync(int fd) { return 0; }
 
 struct servent* getservbyname(const char* name, const char* proto) { return NULL; }
 
-int execvp(const char* path, char* const argv[]) { return execve(path, argv, environ); }
-
-int execv(const char* path, char* const argv[]) { return execve(path, argv, environ); }
-
 int setpgid(pid_t pid, pid_t pgid)
 {
     errno = -ENOSYS;
@@ -362,45 +358,6 @@ void setgrent(void) {}
 
 void endgrent(void) {}
 
-int execlp(const char* path, const char* arg0, ...)
-{
-    va_list va;
-
-    /* Count the number of arguments */
-    int num_args = 1 /* terminating \0 */;
-    va_start(va, arg0);
-    while (1) {
-        const char* arg = va_arg(va, const char*);
-        if (arg == NULL)
-            break;
-        num_args++;
-    }
-    va_end(va);
-
-    /* Construct the argument list */
-    const char** args = malloc(num_args * sizeof(char*));
-    if (args == NULL) {
-        errno = ENOMEM;
-        return -1;
-    }
-    int pos = 0;
-    va_start(va, arg0);
-    while (1) {
-        const char* arg = va_arg(va, const char*);
-        if (arg == NULL)
-            break;
-        args[pos++] = arg;
-    }
-    args[pos] = NULL;
-    va_end(va);
-
-    execve(path, (char* const*)args, environ);
-
-    /* If we got here, execve() failed (and set errno) and we must clean up after ourselves */
-    free(args);
-    return -1;
-}
-
 int select(int nfds, fd_set* readfds, fd_set* writefds, fd_set* exceptfds, struct timeval* timeout)
 {
     errno = ENOSYS;
@@ -410,45 +367,6 @@ int select(int nfds, fd_set* readfds, fd_set* writefds, fd_set* exceptfds, struc
 int getrlimit(int resource, struct rlimit* rlim)
 {
     errno = ENOSYS;
-    return -1;
-}
-
-int execl(const char* path, const char* arg0, ...)
-{
-    va_list va;
-
-    /* Count the number of arguments */
-    int num_args = 1 /* terminating \0 */;
-    va_start(va, arg0);
-    while (1) {
-        const char* arg = va_arg(va, const char*);
-        if (arg == NULL)
-            break;
-        num_args++;
-    }
-    va_end(va);
-
-    /* Construct the argument list */
-    const char** args = malloc(num_args * sizeof(char*));
-    if (args == NULL) {
-        errno = ENOMEM;
-        return -1;
-    }
-    int pos = 0;
-    va_start(va, arg0);
-    while (1) {
-        const char* arg = va_arg(va, const char*);
-        if (arg == NULL)
-            break;
-        args[pos++] = arg;
-    }
-    args[pos] = NULL;
-    va_end(va);
-
-    execve(path, (char* const*)args, environ);
-
-    /* If we got here, execve() failed (and set errno) and we must clean up after ourselves */
-    free(args);
     return -1;
 }
 

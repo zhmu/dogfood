@@ -34,6 +34,6 @@ execl (const char *path,
   while (argv[i++] != NULL);
   va_end (args);
 
-  return _execve (path, (char * const  *) argv, *p_environ);
+  return execve (path, (char * const  *) argv, *p_environ);
 }
 #endif /* !_NO_EXECVE  */
