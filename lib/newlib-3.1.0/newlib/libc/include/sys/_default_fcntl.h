@@ -1,3 +1,4 @@
+#include <dogfood/fcntl.h>
 
 #ifndef	_SYS__DEFAULT_FCNTL_H_
 #ifdef __cplusplus
@@ -39,50 +40,6 @@ extern "C" {
 
 #define	O_ACCMODE	(O_RDONLY|O_WRONLY|O_RDWR)
 
-/*
- * Flag values for open(2) and fcntl(2)
- * The kernel adds 1 to the open modes to turn it into some
- * combination of FREAD and FWRITE.
- */
-#define	O_RDONLY	0		/* +1 == FREAD */
-#define	O_WRONLY	1		/* +1 == FWRITE */
-#define	O_RDWR		2		/* +1 == FREAD|FWRITE */
-#define	O_APPEND	_FAPPEND
-#define	O_CREAT		_FCREAT
-#define	O_TRUNC		_FTRUNC
-#define	O_EXCL		_FEXCL
-#define O_SYNC		_FSYNC
-/*	O_NDELAY	_FNDELAY 	set in include/fcntl.h */
-/*	O_NDELAY	_FNBIO 		set in include/fcntl.h */
-#define	O_NONBLOCK	_FNONBLOCK
-#define	O_NOCTTY	_FNOCTTY
-
-/* POSIX-1.2008 specific flags */
-#if __POSIX_VISIBLE >= 200809
-#define	O_CLOEXEC	_FNOINHERIT
-#define	O_NOFOLLOW	_FNOFOLLOW
-#define	O_DIRECTORY	_FDIRECTORY
-#define	O_EXEC		_FEXECSRCH
-#define	O_SEARCH	_FEXECSRCH
-#endif
-
-#if __BSD_VISIBLE
-#define	O_DIRECT	_FDIRECT
-#endif
-
-#if defined (__CYGWIN__)
-#define O_BINARY	_FBINARY
-#define O_TEXT		_FTEXT
-#define O_DSYNC         _FSYNC
-#define O_RSYNC         _FSYNC
-
-/* Linux-specific flags */
-#if __GNU_VISIBLE
-#define O_TMPFILE	_FTMPFILE
-#define O_NOATIME	_FNOATIME
-#endif
-#endif
-
 #if __MISC_VISIBLE
 
 /*
@@ -123,48 +80,6 @@ extern "C" {
 
 /* XXX close on exec request; must match UF_EXCLOSE in user.h */
 #define	FD_CLOEXEC	1	/* posix */
-
-/* fcntl(2) requests */
-#define	F_DUPFD		0	/* Duplicate fildes */
-#define	F_GETFD		1	/* Get fildes flags (close on exec) */
-#define	F_SETFD		2	/* Set fildes flags (close on exec) */
-#define	F_GETFL		3	/* Get file flags */
-#define	F_SETFL		4	/* Set file flags */
-#if __BSD_VISIBLE || __POSIX_VISIBLE >= 200112
-#define	F_GETOWN 	5	/* Get owner - for ASYNC */
-#define	F_SETOWN 	6	/* Set owner - for ASYNC */
-#endif /* __BSD_VISIBLE || __POSIX_VISIBLE >= 200112 */
-#define	F_GETLK  	7	/* Get record-locking information */
-#define	F_SETLK  	8	/* Set or Clear a record-lock (Non-Blocking) */
-#define	F_SETLKW 	9	/* Set or Clear a record-lock (Blocking) */
-#if __MISC_VISIBLE
-#define	F_RGETLK 	10	/* Test a remote lock to see if it is blocked */
-#define	F_RSETLK 	11	/* Set or unlock a remote lock */
-#define	F_CNVT 		12	/* Convert a fhandle to an open fd */
-#define	F_RSETLKW 	13	/* Set or Clear remote record-lock(Blocking) */
-#endif	/* __MISC_VISIBLE */
-#if __POSIX_VISIBLE >= 200809
-#define	F_DUPFD_CLOEXEC	14	/* As F_DUPFD, but set close-on-exec flag */
-#endif
-
-/* fcntl(2) flags (l_type field of flock structure) */
-#define	F_RDLCK		1	/* read lock */
-#define	F_WRLCK		2	/* write lock */
-#define	F_UNLCK		3	/* remove lock(s) */
-#if __MISC_VISIBLE
-#define	F_UNLKSYS	4	/* remove remote locks for a given system */
-#endif	/* __MISC_VISIBLE */
-
-#if __BSD_VISIBLE || __POSIX_VISIBLE >= 200809
-/* Special descriptor value to denote the cwd in calls to openat(2) etc. */
-#define AT_FDCWD -2
-
-/* Flag values for faccessat2) et al. */
-#define AT_EACCESS              1
-#define AT_SYMLINK_NOFOLLOW     2
-#define AT_SYMLINK_FOLLOW       4
-#define AT_REMOVEDIR            8
-#endif
 
 #if __BSD_VISIBLE
 /* lock operations for flock(2) */

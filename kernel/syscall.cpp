@@ -9,8 +9,9 @@
 #include "process.h"
 #include "lib.h"
 #include "vm.h"
-
-#include "stat.h"
+#include "dogfood/fcntl.h"
+#include "dogfood/stat.h"
+#include "dogfood/syscall.h"
 
 #define DEBUG_SYSCALL 0
 
@@ -438,7 +439,6 @@ namespace
                 auto op = syscall::GetArgument<2>(*tf);
                 switch (op) {
                     case F_DUPFD:
-                    case F_DUPFD_CLOEXEC:
                         return DupFD(*file);
                     case F_GETFD:
                     case F_GETFL:

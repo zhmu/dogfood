@@ -2,7 +2,7 @@
 
 .global initcode, initcode_end
 
-#include "syscall.h"
+#include "dogfood/syscall.h"
 
 initcode:
         movq $SYS_execve, %rax

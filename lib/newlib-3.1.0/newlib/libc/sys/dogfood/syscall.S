@@ -1,4 +1,4 @@
-#include "../../../../../../kernel/syscall.h"
+#include "dogfood/syscall.h"
 
 .text
 

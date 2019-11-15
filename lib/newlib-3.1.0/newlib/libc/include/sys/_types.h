@@ -24,117 +24,7 @@
 #include <machine/_types.h>
 #include <sys/lock.h>
 
-#ifndef __machine_blkcnt_t_defined
-typedef long __blkcnt_t;
-#endif
-
-#ifndef __machine_blksize_t_defined
-typedef long __blksize_t;
-#endif
-
-#ifndef __machine_fsblkcnt_t_defined
-typedef __uint64_t __fsblkcnt_t;
-#endif
-
-#ifndef __machine_fsfilcnt_t_defined
-typedef __uint32_t __fsfilcnt_t;
-#endif
-
-#ifndef __machine_off_t_defined
-typedef long _off_t;
-#endif
-
-#if defined(__XMK__)
-typedef signed char __pid_t;
-#else
-typedef int __pid_t;
-#endif
-
-#ifndef __machine_dev_t_defined
-typedef short __dev_t;
-#endif
-
-#ifndef __machine_uid_t_defined
-typedef unsigned short __uid_t;
-#endif
-#ifndef __machine_gid_t_defined
-typedef unsigned short __gid_t;
-#endif
-
-#ifndef __machine_id_t_defined
-typedef __uint32_t __id_t;
-#endif
-
-#ifndef __machine_ino_t_defined
-#if (defined(__i386__) && (defined(GO32) || defined(__MSDOS__))) || \
-    defined(__sparc__) || defined(__SPU__)
-typedef unsigned long __ino_t;
-#else
-typedef unsigned short __ino_t;
-#endif
-#endif
-
-#ifndef __machine_mode_t_defined
-#if defined(__i386__) && (defined(GO32) || defined(__MSDOS__))
-typedef int __mode_t;
-#else
-#if defined(__sparc__) && !defined(__sparc_v9__)
-#ifdef __svr4__
-typedef unsigned long __mode_t;
-#else
-typedef unsigned short __mode_t;
-#endif
-#else
-typedef __uint32_t __mode_t;
-#endif
-#endif
-#endif
-
-#ifndef __machine_off64_t_defined
-__extension__ typedef long long _off64_t;
-#endif
-
-#if defined(__CYGWIN__) && !defined(__LP64__)
-typedef _off64_t __off_t;
-#else
-typedef _off_t __off_t;
-#endif
-
-typedef _off64_t __loff_t;
-
-#ifndef __machine_key_t_defined
-typedef long __key_t;
-#endif
-
-/*
- * We need fpos_t for the following, but it doesn't have a leading "_",
- * so we use _fpos_t instead.
- */
-#ifndef __machine_fpos_t_defined
-typedef long _fpos_t;		/* XXX must match off_t in <sys/types.h> */
-				/* (and must be `long' for now) */
-#endif
-
-#ifdef __LARGE64_FILES
-#ifndef __machine_fpos64_t_defined
-typedef _off64_t _fpos64_t;
-#endif
-#endif
-
-/* Defined by GCC provided <stddef.h> */
-#undef __size_t
-
-#ifndef __machine_size_t_defined
-#ifdef __SIZE_TYPE__
-typedef __SIZE_TYPE__ __size_t;
-#else
-#if defined(__INT_MAX__) && __INT_MAX__ == 2147483647
-typedef unsigned int __size_t;
-#else
-typedef unsigned long __size_t;
-#endif
-#endif
-#endif
+#include <dogfood/types.h>
 
 #ifndef __machine_ssize_t_defined
 #ifdef __SIZE_TYPE__
@@ -153,7 +43,9 @@ typedef long _ssize_t;
 #endif
 #endif
 
+typedef __off_t _off_t;
 typedef _ssize_t __ssize_t;
+typedef _off_t _fpos_t;
 
 #define __need_wint_t
 #include <stddef.h>

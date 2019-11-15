@@ -20,6 +20,7 @@
 #include <_ansi.h>
 #include <sys/cdefs.h>
 #include <machine/_types.h>
+#include <dogfood/types.h>
 
 /* BSD types permitted by POSIX and always exposed as in Glibc.  Only provided
    for backward compatibility with BSD code.  The uintN_t standard types should

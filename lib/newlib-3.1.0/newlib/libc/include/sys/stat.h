@@ -10,6 +10,7 @@ extern "C" {
 #include <sys/cdefs.h>
 #include <sys/types.h>
 #include <sys/_timespec.h>
+#include <dogfood/stat.h>
 
 /* dj's stat defines _STAT_H_ */
 #ifndef _STAT_H_
@@ -23,42 +24,6 @@ extern "C" {
 #ifdef _COMPILING_NEWLIB
 #define stat64 stat
 #endif
-#else
-struct	stat 
-{
-  dev_t		st_dev;
-  ino_t		st_ino;
-  mode_t	st_mode;
-  nlink_t	st_nlink;
-  uid_t		st_uid;
-  gid_t		st_gid;
-  dev_t		st_rdev;
-  off_t		st_size;
-#if defined(__rtems__)
-  struct timespec st_atim;
-  struct timespec st_mtim;
-  struct timespec st_ctim;
-  blksize_t     st_blksize;
-  blkcnt_t	st_blocks;
-#else
-  /* SysV/sco doesn't have the rest... But Solaris, eabi does.  */
-#if defined(__svr4__) && !defined(__PPC__) && !defined(__sun__)
-  time_t	st_atime;
-  time_t	st_mtime;
-  time_t	st_ctime;
-#else
-  time_t	st_atime;
-  long		st_spare1;
-  time_t	st_mtime;
-  long		st_spare2;
-  time_t	st_ctime;
-  long		st_spare3;
-  blksize_t	st_blksize;
-  blkcnt_t	st_blocks;
-  long	st_spare4[2];
-#endif
-#endif
-};
 
 #if defined(__rtems__)
 #define st_atime st_atim.tv_sec
@@ -67,15 +32,6 @@ struct	stat
 #endif
 
 #endif
-
-#define	_IFMT		0170000	/* type of file */
-#define		_IFDIR	0040000	/* directory */
-#define		_IFCHR	0020000	/* character special */
-#define		_IFBLK	0060000	/* block special */
-#define		_IFREG	0100000	/* regular */
-#define		_IFLNK	0120000	/* symbolic link */
-#define		_IFSOCK	0140000	/* socket */
-#define		_IFIFO	0010000	/* fifo */
 
 #define 	S_BLKSIZE  1024 /* size of a block */
 
@@ -97,19 +53,6 @@ struct	stat
 #define	S_IFLNK		_IFLNK
 #define	S_IFSOCK	_IFSOCK
 #define	S_IFIFO		_IFIFO
-
-#ifdef _WIN32
-/* The Windows header files define _S_ forms of these, so we do too
-   for easier portability.  */
-#define _S_IFMT		_IFMT
-#define _S_IFDIR	_IFDIR
-#define _S_IFCHR	_IFCHR
-#define _S_IFIFO	_IFIFO
-#define _S_IFREG	_IFREG
-#define _S_IREAD	0000400
-#define _S_IWRITE	0000200
-#define _S_IEXEC	0000100
-#endif
 
 #define	S_IRWXU 	(S_IRUSR | S_IWUSR | S_IXUSR)
 #define		S_IRUSR	0000400	/* read permission, owner */
@@ -152,10 +95,8 @@ int	mkfifo (const char *__path, mode_t __mode );
 int	stat (const char *__restrict __path, struct stat *__restrict __sbuf );
 mode_t	umask (mode_t __mask );
 
-#if defined (__SPU__) || defined(__rtems__) || defined(__CYGWIN__) && !defined(__INSIDE_CYGWIN__)
 int	lstat (const char *__restrict __path, struct stat *__restrict __buf );
 int	mknod (const char *__path, mode_t __mode, dev_t __dev );
-#endif
 
 #if __ATFILE_VISIBLE && !defined(__INSIDE_CYGWIN__)
 int	fchmodat (int, const char *, mode_t, int);

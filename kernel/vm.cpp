@@ -5,7 +5,7 @@
 #include "page_allocator.h"
 #include "process.h"
 #include "syscall.h"
-#include "syscall-types.h"
+#include "dogfood/vmop.h"
 
 namespace vm
 {

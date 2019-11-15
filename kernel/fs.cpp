@@ -3,8 +3,9 @@
 #include "errno.h"
 #include "ext2.h"
 #include "process.h"
-#include "stat.h"
 #include "lib.h"
+#include "dogfood/fcntl.h"
+#include "dogfood/stat.h"
 
 namespace fs
 {

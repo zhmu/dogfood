@@ -130,8 +130,21 @@ if [ "$LIBS" -ne 0 ]; then
     cd build/newlib
     cmake -GNinja -DCMAKE_TOOLCHAIN_FILE=${TOOLCHAIN_FILE} -DCMAKE_INSTALL_PREFIX=${TOOLCHAIN} ../../lib/newlib-3.1.0
     ninja install
-    ln -sf ${TOOLCHAIN}/usr/include ${TOOLCHAIN}/${TARGET}/include
     cd ../..
+fi
+
+if [ "$LIBS" -ne 0 ]; then
+    echo "*** Installing kernel headers (target)"
+    rm -rf build/headers-target
+    mkdir build/headers-target
+    cd build/headers-target
+    cmake -GNinja -DCMAKE_TOOLCHAIN_FILE=${TOOLCHAIN_FILE} -DCMAKE_INSTALL_PREFIX=${TOOLCHAIN} ../../kernel-headers
+    ninja install
+    cd ../..
+fi
+
+if [ ! -d ${OUTDIR}/${TARGET}/include ]; then
+    ln -sf ${TOOLCHAIN}/usr/include ${TOOLCHAIN}/${TARGET}/include
 fi
 
 # libstdc++
@@ -216,5 +229,18 @@ if [ "$TOOLCHAIN_TARGET" -ne 0 ]; then
     cmake -GNinja -DCMAKE_TOOLCHAIN_FILE=${TOOLCHAIN_FILE} -DCMAKE_INSTALL_PREFIX=${OUTDIR} ../../lib/newlib-3.1.0
     ninja install
     mv ${OUTDIR}/usr/include ${OUTDIR}/${TARGET}/include
+    cd ../..
+fi
+
+TOOLCHAIN_TARGET=1
+if [ "$TOOLCHAIN_TARGET" -ne 0 ]; then
+    echo "*** Installing kernel headers (target)"
+    rm -rf build/headers-target
+    mkdir build/headers-target
+    cd build/headers-target
+    cmake -GNinja -DCMAKE_TOOLCHAIN_FILE=${TOOLCHAIN_FILE} -DCMAKE_INSTALL_PREFIX=${OUTDIR} ../../kernel-headers
+    ninja install
+    mv ${OUTDIR}/usr/include/dogfood ${OUTDIR}/${TARGET}/include
+    rmdir ${OUTDIR}/usr/include
     cd ../..
 fi

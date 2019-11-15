@@ -1221,7 +1221,9 @@ set(SOURCES
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -isystem ${CMAKE_CURRENT_SOURCE_DIR}/sys/dogfood")
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -isystem ${CMAKE_CURRENT_SOURCE_DIR}/include")
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -isystem ${CMAKE_SOURCE_DIR}/include")
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -isystem ${CMAKE_SOURCE_DIR}/../../kernel-headers/include")
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -I. -I${CMAKE_CURRENT_SOURCE_DIR}/../libm/common")
+set(CMAKE_ASM_FLAGS "${CMAKE_C_FLAGS}")
 add_library(c STATIC ${SOURCES})
 
 add_library(crt0 OBJECT sys/dogfood/crt0.c)
