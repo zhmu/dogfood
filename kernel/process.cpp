@@ -1,10 +1,10 @@
 #include "process.h"
 #include "amd64.h"
-#include "errno.h"
 #include "lib.h"
 #include "page_allocator.h"
 #include "syscall.h"
 #include "vm.h"
+#include <dogfood/errno.h>
 
 extern amd64::TSS kernel_tss;
 

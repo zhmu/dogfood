@@ -1,8 +1,8 @@
 #include "ext2.h"
 #include "bio.h"
-#include "errno.h"
 #include "fs.h"
 #include "lib.h"
+#include <dogfood/errno.h>
 
 namespace ext2
 {

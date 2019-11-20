@@ -4,14 +4,14 @@
 #include "console.h"
 #include "exec.h"
 #include "file.h"
-#include "errno.h"
 #include "ext2.h"
 #include "process.h"
 #include "lib.h"
 #include "vm.h"
-#include "dogfood/fcntl.h"
-#include "dogfood/stat.h"
-#include "dogfood/syscall.h"
+#include <dogfood/errno.h>
+#include <dogfood/fcntl.h>
+#include <dogfood/stat.h>
+#include <dogfood/syscall.h>
 
 #define DEBUG_SYSCALL 0
 

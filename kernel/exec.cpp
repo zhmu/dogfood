@@ -1,13 +1,13 @@
 #include "exec.h"
 #include "amd64.h"
 #include "elf.h"
-#include "errno.h"
 #include "fs.h"
 #include "lib.h"
 #include "page_allocator.h"
 #include "process.h"
 #include "syscall.h"
 #include "vm.h"
+#include <dogfood/errno.h>
 
 #define EXEC_DEBUG 0
 

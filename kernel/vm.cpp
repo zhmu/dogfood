@@ -1,11 +1,11 @@
 #include "vm.h"
 #include "amd64.h"
-#include "errno.h"
 #include "lib.h"
 #include "page_allocator.h"
 #include "process.h"
 #include "syscall.h"
-#include "dogfood/vmop.h"
+#include <dogfood/vmop.h>
+#include <dogfood/errno.h>
 
 namespace vm
 {

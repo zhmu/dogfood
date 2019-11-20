@@ -1,11 +1,11 @@
 #include "fs.h"
 #include "bio.h"
-#include "errno.h"
 #include "ext2.h"
 #include "process.h"
 #include "lib.h"
-#include "dogfood/fcntl.h"
-#include "dogfood/stat.h"
+#include <dogfood/errno.h>
+#include <dogfood/fcntl.h>
+#include <dogfood/stat.h>
 
 namespace fs
 {
