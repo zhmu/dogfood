@@ -11,18 +11,24 @@ MAKE_ARGS=
 # parse options
 CLEAN_TOOLCHAIN=0
 CLEAN_TARGET=0
-KERNEL=0
+BUILD_TOOLCHAIN=0
+BUILD_SYSROOT=0
+BUILD_KERNEL=0
+BUILD_TARGET=0
 while [ "$1" != "" ]; do
 	P="$1"
 	case "$P" in
 		-h)
-			echo "usage: build.sh [-hCc] [-k]"
+			echo "usage: build.sh [-hCc] [-Tskt]"
             echo ""
             echo " -h    this help"
             echo " -C    clean everything (forces a rebuild of toolchain)"
             echo " -c    clean target"
             echo ""
+            echo " -T     (re)build toolchain"
+            echo " -s     (re)build sysroot"
             echo " -k     (re)build kernel"
+            echo " -t     (re)build target"
             exit 1
 			;;
         -C)
@@ -32,8 +38,17 @@ while [ "$1" != "" ]; do
         -c)
             CLEAN_TARGET=1
             ;;
+        -T)
+            BUILD_TOOLCHAIN=1
+            ;;
+        -s)
+            BUILD_SYSROOT=1
+            ;;
         -k)
-            KERNEL=1
+            BUILD_KERNEL=1
+            ;;
+        -t)
+            BUILD_TARGET=1
             ;;
         *)
             echo "unexpected parameter '$P'; use '-h' for help"
@@ -65,7 +80,7 @@ OUTDIR_KERNEL=`realpath ${OUTDIR_KERNEL}`
 
 export PATH=${TOOLCHAIN}/bin:${PATH}
 
-if [ ! -f "${TOOLCHAIN}/bin/${TARGET}-ld" ]; then
+if [ "$BUILD_TOOLCHAIN" -ne "0" -o ! -f "${TOOLCHAIN}/bin/${TARGET}-ld" ]; then
     echo "*** Building binutils (toolchain)"
     rm -rf build/binutils
     mkdir -p build/binutils
@@ -77,7 +92,7 @@ if [ ! -f "${TOOLCHAIN}/bin/${TARGET}-ld" ]; then
 fi
 
 # gcc
-if [ ! -f "${TOOLCHAIN}/bin/${TARGET}-gcc" ]; then
+if [ "$BUILD_TOOLCHAIN" -ne "0" -o ! -f "${TOOLCHAIN}/bin/${TARGET}-gcc" ]; then
     echo "*** Building gcc (toolchain)"
     rm -rf build/gcc
     mkdir -p build/gcc
@@ -90,7 +105,7 @@ if [ ! -f "${TOOLCHAIN}/bin/${TARGET}-gcc" ]; then
     cd ../..
 fi
 
-if [ ! -f ${TOOLCHAIN_FILE} ]; then
+if [ "$BUILD_TOOLCHAIN" -ne "0" -o ! -f ${TOOLCHAIN_FILE} ]; then
     echo "set(CMAKE_SYSTEM_NAME Linux)
 set(CMAKE_SYSROOT ${SYSROOT})
 set(CMAKE_WARN_DEPRECATED OFF)
@@ -103,7 +118,7 @@ set(CMAKE_ASM_LINKER \${CMAKE_C_COMPILER})
 " >> ${TOOLCHAIN_FILE}
 fi
 
-if [ "$KERNEL" -ne "0" -o ! -f "${OUTDIR_KERNEL}/kernel.mb" ]; then
+if [ "$BUILD_KERNEL" -ne "0" -o ! -f "${OUTDIR_KERNEL}/kernel.mb" ]; then
     echo "*** Building kernel"
     rm -rf build/kernel
     mkdir -p build/kernel
@@ -113,7 +128,7 @@ if [ "$KERNEL" -ne "0" -o ! -f "${OUTDIR_KERNEL}/kernel.mb" ]; then
     cd ../..
 fi
 
-if [ ! -f "${SYSROOT}/usr/include/dogfood/types.h" ]; then
+if [ "$BUILD_SYSROOT" -ne "0" -o ! -f "${SYSROOT}/usr/include/dogfood/types.h" ]; then
     echo "*** Installing kernel headers (sysroot)"
     rm -rf build/headers-target
     mkdir build/headers-target
@@ -124,7 +139,7 @@ if [ ! -f "${SYSROOT}/usr/include/dogfood/types.h" ]; then
 fi
 
 
-if [ ! -f "${SYSROOT}/usr/lib/libc.a" ]; then
+if [ "$BUILD_SYSROOT" -ne "0" -o ! -f "${SYSROOT}/usr/lib/libc.a" ]; then
     echo "*** Building newlib (sysroot)"
     rm -rf build/newlib
     mkdir build/newlib
@@ -134,7 +149,7 @@ if [ ! -f "${SYSROOT}/usr/lib/libc.a" ]; then
     cd ../..
 fi
 
-if [ ! -f "${TOOLCHAIN}/lib/gcc/${TARGET}/9.2.0/libgcc.a" ]; then
+if [ "$BUILD_SYSROOT" -ne "0" -o ! -f "${TOOLCHAIN}/lib/gcc/${TARGET}/9.2.0/libgcc.a" ]; then
     echo "*** Building libgcc (sysroot)"
     cd build/gcc
     make ${MAKE_ARGS} all-target-libgcc
@@ -142,8 +157,8 @@ if [ ! -f "${TOOLCHAIN}/lib/gcc/${TARGET}/9.2.0/libgcc.a" ]; then
     cd ../..
 fi
 
-if [ ! -f "${SYSROOT}/usr/lib/libstdc++.a" ]; then
-    echo "*** Building libstdcxx (toolchain)"
+if [ "$BUILD_SYSROOT" -ne "0" -o ! -f "${SYSROOT}/usr/lib/libstdc++.a" ]; then
+    echo "*** Building libstdcxx (sysroot)"
     rm -rf build/libstdcxx
     mkdir -p build/libstdcxx
     cd build/libstdcxx
@@ -153,7 +168,7 @@ if [ ! -f "${SYSROOT}/usr/lib/libstdc++.a" ]; then
     cd ../..
 fi
 
-if [ ! -f "${OUTDIR}/bin/sh" ]; then
+if [ "$BUILD_TARGET" -ne "0" -o ! -f "${OUTDIR}/bin/sh" ]; then
     echo "*** Building dash (target)"
     cd userland/dash-0.5.10.2
     make clean || true
@@ -164,7 +179,7 @@ if [ ! -f "${OUTDIR}/bin/sh" ]; then
     cd ../..
 fi
 
-if [ ! -f "${OUTDIR}/bin/ls" ]; then
+if [ "$BUILD_TARGET" -ne "0" -o ! -f "${OUTDIR}/bin/ls" ]; then
     echo "*** Building coreutils (target)"
     cd userland/coreutils-8.31
     make clean || true
@@ -174,7 +189,7 @@ if [ ! -f "${OUTDIR}/bin/ls" ]; then
     cd ../..
 fi
 
-if [ ! -f "${OUTDIR}/sbin/init" ]; then
+if [ "$BUILD_TARGET" -ne "0" -o ! -f "${OUTDIR}/sbin/init" ]; then
     echo "*** Building init (target)"
     rm -rf build/init
     mkdir -p build/init
@@ -184,7 +199,7 @@ if [ ! -f "${OUTDIR}/sbin/init" ]; then
     cd ../..
 fi
 
-if [ ! -f "${OUTDIR}/bin/ld" ]; then
+if [ "$BUILD_TARGET" -ne "0" -o ! -f "${OUTDIR}/usr/bin/ld" ]; then
     echo "*** Building binutils (target)"
     rm -rf build/binutils-target
     mkdir -p build/binutils-target
@@ -195,7 +210,7 @@ if [ ! -f "${OUTDIR}/bin/ld" ]; then
     cd ../..
 fi
 
-if [ ! -f "${OUTDIR}/bin/gcc" ]; then
+if [ "$BUILD_TARGET" -ne "0" -o ! -f "${OUTDIR}/usr/bin/gcc" ]; then
     echo "*** Building gcc (target)"
     rm -rf build/gcc-target
     mkdir -p build/gcc-target
@@ -211,7 +226,7 @@ if [ ! -f "${OUTDIR}/bin/gcc" ]; then
     cd ../..
 fi
 
-if [ ! -f "${TARGET}/lib/libc.a" ]; then
+if [ "$BUILD_TARGET" -ne "0" -o ! -f "${OUTDIR}/usr/lib/libc.a" ]; then
     echo "*** Building newlib (target)"
     rm -rf build/newlib-target
     mkdir build/newlib-target
@@ -221,7 +236,7 @@ if [ ! -f "${TARGET}/lib/libc.a" ]; then
     cd ../..
 fi
 
-if [ ! -f "${TARGET}/include/dogfood/types.h" ]; then
+if [ "$BUILD_TARGET" -ne "0" -o ! -f "${OUTDIR}/usr/include/dogfood/types.h" ]; then
     echo "*** Installing kernel headers (target)"
     rm -rf build/headers-target
     mkdir build/headers-target
