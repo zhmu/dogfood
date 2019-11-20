@@ -4,65 +4,29 @@ TARGET=x86_64-elf-dogfood
 TOOLCHAIN_FILE=/tmp/dogfood-toolchain.txt
 TOOLCHAIN=toolchain # where toolchain items get written
 OUTDIR=target # cross-compiled binaries end up here
-MAKE_ARGS=-j8
+SYSROOT=/tmp/dogfood-sysroot
+MAKE_ARGS=
 
 # parse options
-CLEAN=0
-TOOLCHAIN_HOST=0
-LIBS=0
-DASH=0
-COREUTILS=0
-INIT=0
-TOOLCHAIN_TARGET=0
+CLEAN_TOOLCHAIN=0
+CLEAN_TARGET=0
 while [ "$1" != "" ]; do
 	P="$1"
 	case "$P" in
 		-h)
-			echo "usage: build.sh [-hca] [-t] [-l] [-duiT]"
+			echo "usage: build.sh [-hCc] [-k]"
             echo ""
             echo " -h    this help"
-            echo " -c    clean (forces a rebuild of toolchain)"
-            echo " -a    build everything"
-            echo ""
-            echo " -t    build: binutils/gcc/libstdc++ for host"
-            echo ""
-            echo " -l    build: libraries for host"
-            echo ""
-            echo " -d    build: dash"
-            echo " -u    build: coreutils"
-            echo " -i    build: init"
-            echo ""
-            echo " -T    build: binutils+gcc for target"
+            echo " -C    clean everything (forces a rebuild of toolchain)"
+            echo " -c    clean target"
 			exit 1
 			;;
-        -a)
-            TOOLCHAIN_HOST=1
-            LIBS=1
-            DASH=1
-            COREUTILS=1
-            INIT=1
-            TOOLCHAIN_TARGET=1
+        -C)
+            CLEAN_TOOLCHAIN=1
+            CLEAN_TARGET=1
             ;;
         -c)
-            CLEAN=1
-			;;
-        -t)
-            TOOLCHAIN_HOST=1
-            ;;
-        -l)
-            LIBS=1
-            ;;
-        -d)
-            DASH=1
-            ;;
-        -u)
-            COREUTILS=1
-            ;;
-        -i)
-            INIT=1
-            ;;
-        -T)
-            TOOLCHAIN_TARGET=1
+            CLEAN_TARGET=1
             ;;
         *)
             echo "unexpected parameter '$P'; use '-h' for help"
@@ -71,9 +35,17 @@ while [ "$1" != "" ]; do
     shift
 done
 
+# try to auto-detect the number of cpus in this system
+if [ -f /proc/cpuinfo ]; then
+    NCPUS=`grep processor /proc/cpuinfo|wc -l`
+    MAKE_ARGS="${MAKE_ARGS} -j${NCPUS}"
+fi
+
 # clean
-if [ "$CLEAN" -ne 0 ]; then
+if [ "$CLEAN_TOOLCHAIN" -ne 0 ]; then
     rm -rf ${TOOLCHAIN}
+fi
+if [ "$CLEAN_TARGET" -ne 0 ]; then
     rm -rf ${OUTDIR}
 fi
 mkdir -p ${TOOLCHAIN}
@@ -81,8 +53,7 @@ mkdir -p ${OUTDIR}
 TOOLCHAIN=`realpath ${TOOLCHAIN}`
 OUTDIR=`realpath ${OUTDIR}`
 
-SYSROOT=/tmp/dogfood-sysroot
-mkdir -p ${SYSROOT}/usr/include
+export PATH=${TOOLCHAIN}/bin:${PATH}
 
 if [ ! -f "${TOOLCHAIN}/bin/${TARGET}-ld" ]; then
     echo "*** Building binutils (toolchain)"
@@ -94,8 +65,6 @@ if [ ! -f "${TOOLCHAIN}/bin/${TARGET}-ld" ]; then
     make ${MAKE_ARGS} install
     cd ../..
 fi
-
-export PATH=${TOOLCHAIN}/bin:${PATH}
 
 # gcc
 if [ ! -f "${TOOLCHAIN}/bin/${TARGET}-gcc" ]; then
@@ -116,10 +85,11 @@ if [ ! -f ${TOOLCHAIN_FILE} ]; then
 set(CMAKE_SYSROOT ${SYSROOT})
 set(CMAKE_WARN_DEPRECATED OFF)
 include(CMakeForceCompiler)
-CMAKE_FORCE_C_COMPILER(x86_64-elf-dogfood-gcc GNU)
-CMAKE_FORCE_CXX_COMPILER(x86_64-elf-dogfood-g++ GNU)
+CMAKE_FORCE_C_COMPILER(${TARGET}-gcc GNU)
+CMAKE_FORCE_CXX_COMPILER(${TARGET}-g++ GNU)
 
 set(CMAKE_ASM_COMPILER \${CMAKE_C_COMPILER})
+set(CMAKE_ASM_LINKER \${CMAKE_C_COMPILER})
 " >> ${TOOLCHAIN_FILE}
 fi
 
@@ -152,11 +122,6 @@ if [ ! -f "${TOOLCHAIN}/lib/gcc/${TARGET}/9.2.0/libgcc.a" ]; then
     cd ../..
 fi
 
-#if [ ! -d ${OUTDIR}/${TARGET}/include ]; then
-#    ln -sf ${TOOLCHAIN}/usr/include ${TOOLCHAIN}/${TARGET}/include
-#fi
-
-# libstdc++
 if [ ! -f "${SYSROOT}/usr/lib/libstdc++.a" ]; then
     echo "*** Building libstdcxx (toolchain)"
     rm -rf build/libstdcxx
@@ -168,7 +133,6 @@ if [ ! -f "${SYSROOT}/usr/lib/libstdc++.a" ]; then
     cd ../..
 fi
 
-# Dash
 if [ ! -f "${OUTDIR}/bin/sh" ]; then
     echo "*** Building dash (target)"
     cd userland/dash-0.5.10.2
@@ -180,7 +144,6 @@ if [ ! -f "${OUTDIR}/bin/sh" ]; then
     cd ../..
 fi
 
-# coreutils
 if [ ! -f "${OUTDIR}/bin/ls" ]; then
     echo "*** Building coreutils (target)"
     cd userland/coreutils-8.31
@@ -191,7 +154,6 @@ if [ ! -f "${OUTDIR}/bin/ls" ]; then
     cd ../..
 fi
 
-# init
 if [ ! -f "${OUTDIR}/sbin/init" ]; then
     echo "*** Building init (target)"
     rm -rf build/init
@@ -236,7 +198,6 @@ if [ ! -f "${TARGET}/lib/libc.a" ]; then
     cd build/newlib-target
     cmake -GNinja -DCMAKE_TOOLCHAIN_FILE=${TOOLCHAIN_FILE} -DCMAKE_INSTALL_PREFIX=${OUTDIR} ../../lib/newlib-3.1.0
     ninja install
-    #mv ${OUTDIR}/usr/include ${OUTDIR}/${TARGET}/include
     cd ../..
 fi
 
@@ -247,6 +208,5 @@ if [ ! -f "${TARGET}/include/dogfood/types.h" ]; then
     cd build/headers-target
     cmake -GNinja -DCMAKE_TOOLCHAIN_FILE=${TOOLCHAIN_FILE} -DCMAKE_INSTALL_PREFIX=${OUTDIR} ../../kernel-headers
     ninja install
-    #mv ${OUTDIR}/usr/include/dogfood ${OUTDIR}/${TARGET}/include
     cd ../..
 fi
