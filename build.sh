@@ -4,12 +4,14 @@ TARGET=x86_64-elf-dogfood
 TOOLCHAIN_FILE=/tmp/dogfood-toolchain.txt
 TOOLCHAIN=toolchain # where toolchain items get written
 OUTDIR=target # cross-compiled binaries end up here
+OUTDIR_KERNEL=target-kernel # kernel ends up here
 SYSROOT=/tmp/dogfood-sysroot
 MAKE_ARGS=
 
 # parse options
 CLEAN_TOOLCHAIN=0
 CLEAN_TARGET=0
+KERNEL=0
 while [ "$1" != "" ]; do
 	P="$1"
 	case "$P" in
@@ -19,7 +21,9 @@ while [ "$1" != "" ]; do
             echo " -h    this help"
             echo " -C    clean everything (forces a rebuild of toolchain)"
             echo " -c    clean target"
-			exit 1
+            echo ""
+            echo " -k     (re)build kernel"
+            exit 1
 			;;
         -C)
             CLEAN_TOOLCHAIN=1
@@ -27,6 +31,9 @@ while [ "$1" != "" ]; do
             ;;
         -c)
             CLEAN_TARGET=1
+            ;;
+        -k)
+            KERNEL=1
             ;;
         *)
             echo "unexpected parameter '$P'; use '-h' for help"
@@ -47,11 +54,14 @@ if [ "$CLEAN_TOOLCHAIN" -ne 0 ]; then
 fi
 if [ "$CLEAN_TARGET" -ne 0 ]; then
     rm -rf ${OUTDIR}
+    rm -rf ${OUTDIR_KERNEL}
 fi
 mkdir -p ${TOOLCHAIN}
 mkdir -p ${OUTDIR}
+mkdir -p ${OUTDIR_KERNEL}
 TOOLCHAIN=`realpath ${TOOLCHAIN}`
 OUTDIR=`realpath ${OUTDIR}`
+OUTDIR_KERNEL=`realpath ${OUTDIR_KERNEL}`
 
 export PATH=${TOOLCHAIN}/bin:${PATH}
 
@@ -91,6 +101,16 @@ CMAKE_FORCE_CXX_COMPILER(${TARGET}-g++ GNU)
 set(CMAKE_ASM_COMPILER \${CMAKE_C_COMPILER})
 set(CMAKE_ASM_LINKER \${CMAKE_C_COMPILER})
 " >> ${TOOLCHAIN_FILE}
+fi
+
+if [ "$KERNEL" -ne "0" -o ! -f "${OUTDIR_KERNEL}/kernel.mb" ]; then
+    echo "*** Building kernel"
+    rm -rf build/kernel
+    mkdir -p build/kernel
+    cd build/kernel
+    cmake -GNinja -DCMAKE_TOOLCHAIN_FILE=${TOOLCHAIN_FILE} -DCMAKE_INSTALL_PREFIX=${OUTDIR_KERNEL} ../..
+    ninja kernel_mb install
+    cd ../..
 fi
 
 if [ ! -f "${SYSROOT}/usr/include/dogfood/types.h" ]; then
