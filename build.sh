@@ -9,6 +9,9 @@ OUTDIR_IMAGES=images # images end up here
 SYSROOT=/tmp/dogfood-sysroot
 MAKE_ARGS=
 
+BINUTILS_VERSION=2.32
+GCC_VERSION=9.2.0
+
 # parse options
 CLEAN_TOOLCHAIN=0
 CLEAN_TARGET=0
@@ -90,7 +93,7 @@ if [ "$BUILD_TOOLCHAIN" -ne "0" -o ! -f "${TOOLCHAIN}/bin/${TARGET}-ld" ]; then
     rm -rf build/binutils
     mkdir -p build/binutils
     cd build/binutils
-    ../../userland/binutils-2.32/configure --target=${TARGET} --disable-nls --disable-werror --prefix=${TOOLCHAIN} --with-sysroot=${SYSROOT}
+    ../../userland/binutils-${BINUTILS_VERSION}/configure --target=${TARGET} --disable-nls --disable-werror --prefix=${TOOLCHAIN} --with-sysroot=${SYSROOT}
     make ${MAKE_ARGS}
     make ${MAKE_ARGS} install
     cd ../..
@@ -102,7 +105,7 @@ if [ "$BUILD_TOOLCHAIN" -ne "0" -o ! -f "${TOOLCHAIN}/bin/${TARGET}-gcc" ]; then
     rm -rf build/gcc
     mkdir -p build/gcc
     cd build/gcc
-    ../../userland/gcc-9.2.0/configure --target=${TARGET} --disable-nls --without-headers --enable-languages='c,c++' --prefix=${TOOLCHAIN} --disable-libstdcxx --disable-build-with-cxx --disable-libssp --disable-libquadmath --with-sysroot=${SYSROOT} --with-gxx-include-dir=${SYSROOT}/usr/include/c++/9.2.0
+    ../../userland/gcc-${GCC_VERSION}/configure --target=${TARGET} --disable-nls --without-headers --enable-languages='c,c++' --prefix=${TOOLCHAIN} --disable-libstdcxx --disable-build-with-cxx --disable-libssp --disable-libquadmath --with-sysroot=${SYSROOT} --with-gxx-include-dir=${SYSROOT}/usr/include/c++/${GCC_VERSION}
     # we can't build everything yet as libgcc requires header files from libc;
     # settle for just gcc now
     make ${MAKE_ARGS} all-gcc
@@ -128,9 +131,7 @@ if [ "$BUILD_KERNEL" -ne "0" -o ! -f "${OUTDIR_KERNEL}/kernel.mb" ]; then
     rm -rf build/kernel
     mkdir -p build/kernel
     cd build/kernel
-    #cmake -GNinja -DCMAKE_TOOLCHAIN_FILE=${TOOLCHAIN_FILE} -DCMAKE_INSTALL_PREFIX=${OUTDIR_KERNEL} ../..
-    # XXX The kernel crashes if we use our own toolchain; this needs to be figured out!
-    cmake -GNinja -DCMAKE_INSTALL_PREFIX=${OUTDIR_KERNEL} ../..
+    cmake -GNinja -DCMAKE_TOOLCHAIN_FILE=${TOOLCHAIN_FILE} -DCMAKE_INSTALL_PREFIX=${OUTDIR_KERNEL} ../..
     ninja kernel_mb install
     cd ../..
     KERNEL_DIRTY=1
@@ -157,7 +158,7 @@ if [ "$BUILD_SYSROOT" -ne "0" -o ! -f "${SYSROOT}/usr/lib/libc.a" ]; then
     cd ../..
 fi
 
-if [ "$BUILD_SYSROOT" -ne "0" -o ! -f "${TOOLCHAIN}/lib/gcc/${TARGET}/9.2.0/libgcc.a" ]; then
+if [ "$BUILD_SYSROOT" -ne "0" -o ! -f "${TOOLCHAIN}/lib/gcc/${TARGET}/${GCC_VERSION}/libgcc.a" ]; then
     echo "*** Building libgcc (sysroot)"
     cd build/gcc
     make ${MAKE_ARGS} all-target-libgcc
@@ -170,7 +171,7 @@ if [ "$BUILD_SYSROOT" -ne "0" -o ! -f "${SYSROOT}/usr/lib/libstdc++.a" ]; then
     rm -rf build/libstdcxx
     mkdir -p build/libstdcxx
     cd build/libstdcxx
-    CFLAGS="--sysroot ${SYSROOT}" ../../userland/gcc-9.2.0/libstdc++-v3/configure --host=${TARGET} --target=${TARGET} --prefix=${SYSROOT}/usr
+    CFLAGS="--sysroot ${SYSROOT}" ../../userland/gcc-${GCC_VERSION}/libstdc++-v3/configure --host=${TARGET} --target=${TARGET} --prefix=${SYSROOT}/usr
     make ${MAKE_ARGS}
     make ${MAKE_ARGS} install
     cd ../..
@@ -215,7 +216,7 @@ if [ "$BUILD_TARGET" -ne "0" -o ! -f "${OUTDIR}/usr/bin/ld" ]; then
     rm -rf build/binutils-target
     mkdir -p build/binutils-target
     cd build/binutils-target
-    CFLAGS="--sysroot ${SYSROOT}" ../../userland/binutils-2.32/configure --host=${TARGET} --target=${TARGET} --disable-nls --disable-werror --prefix=/usr
+    CFLAGS="--sysroot ${SYSROOT}" ../../userland/binutils-${BINUTILS_VERSION}/configure --host=${TARGET} --target=${TARGET} --disable-nls --disable-werror --prefix=/usr
     make ${MAKE_ARGS}
     make ${MAKE_ARGS} install DESTDIR=${OUTDIR}
     cd ../..
@@ -227,8 +228,7 @@ if [ "$BUILD_TARGET" -ne "0" -o ! -f "${OUTDIR}/usr/bin/gcc" ]; then
     rm -rf build/gcc-target
     mkdir -p build/gcc-target
     cd build/gcc-target
-    CFLAGS="--sysroot ${SYSROOT}" CXXFLAGS="--sysroot ${SYSROOT}" ../../userland/gcc-9.2.0/configure --host=${TARGET} --target=${TARGET} --disable-nls --disable-werror --enable-languages='c,c++' --prefix=/usr
-    #--with-gxx-include-dir=${OUTDIR}/usr/include/c++/9.2.0
+    CFLAGS="--sysroot ${SYSROOT}" CXXFLAGS="--sysroot ${SYSROOT}" ../../userland/gcc-${GCC_VERSION}/configure --host=${TARGET} --target=${TARGET} --disable-nls --disable-werror --enable-languages='c,c++' --prefix=/usr
     # XXX for some reason, we need to explicitely configure/build the host
     # libcpp; otherwise it inherits our sysroot which messes things up...
     make ${MAKE_ARGS} configure-build-libcpp
