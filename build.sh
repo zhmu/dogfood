@@ -5,6 +5,7 @@ TOOLCHAIN_FILE=/tmp/dogfood-toolchain.txt
 TOOLCHAIN=toolchain # where toolchain items get written
 OUTDIR=target # cross-compiled binaries end up here
 OUTDIR_KERNEL=target-kernel # kernel ends up here
+OUTDIR_IMAGES=images # images end up here
 SYSROOT=/tmp/dogfood-sysroot
 MAKE_ARGS=
 
@@ -74,11 +75,15 @@ fi
 mkdir -p ${TOOLCHAIN}
 mkdir -p ${OUTDIR}
 mkdir -p ${OUTDIR_KERNEL}
+mkdir -p ${OUTDIR_IMAGES}
 TOOLCHAIN=`realpath ${TOOLCHAIN}`
 OUTDIR=`realpath ${OUTDIR}`
 OUTDIR_KERNEL=`realpath ${OUTDIR_KERNEL}`
 
 export PATH=${TOOLCHAIN}/bin:${PATH}
+
+KERNEL_DIRTY=0
+TARGET_DIRTY=0
 
 if [ "$BUILD_TOOLCHAIN" -ne "0" -o ! -f "${TOOLCHAIN}/bin/${TARGET}-ld" ]; then
     echo "*** Building binutils (toolchain)"
@@ -123,9 +128,12 @@ if [ "$BUILD_KERNEL" -ne "0" -o ! -f "${OUTDIR_KERNEL}/kernel.mb" ]; then
     rm -rf build/kernel
     mkdir -p build/kernel
     cd build/kernel
-    cmake -GNinja -DCMAKE_TOOLCHAIN_FILE=${TOOLCHAIN_FILE} -DCMAKE_INSTALL_PREFIX=${OUTDIR_KERNEL} ../..
+    #cmake -GNinja -DCMAKE_TOOLCHAIN_FILE=${TOOLCHAIN_FILE} -DCMAKE_INSTALL_PREFIX=${OUTDIR_KERNEL} ../..
+    # XXX The kernel crashes if we use our own toolchain; this needs to be figured out!
+    cmake -GNinja -DCMAKE_INSTALL_PREFIX=${OUTDIR_KERNEL} ../..
     ninja kernel_mb install
     cd ../..
+    KERNEL_DIRTY=1
 fi
 
 if [ "$BUILD_SYSROOT" -ne "0" -o ! -f "${SYSROOT}/usr/include/dogfood/types.h" ]; then
@@ -177,6 +185,7 @@ if [ "$BUILD_TARGET" -ne "0" -o ! -f "${OUTDIR}/bin/sh" ]; then
     make install
     mv ${OUTDIR}/bin/dash ${OUTDIR}/bin/sh
     cd ../..
+    TARGET_DIRTY=1
 fi
 
 if [ "$BUILD_TARGET" -ne "0" -o ! -f "${OUTDIR}/bin/ls" ]; then
@@ -187,6 +196,7 @@ if [ "$BUILD_TARGET" -ne "0" -o ! -f "${OUTDIR}/bin/ls" ]; then
     make ${MAKE_ARGS}
     make install
     cd ../..
+    TARGET_DIRTY=1
 fi
 
 if [ "$BUILD_TARGET" -ne "0" -o ! -f "${OUTDIR}/sbin/init" ]; then
@@ -197,6 +207,7 @@ if [ "$BUILD_TARGET" -ne "0" -o ! -f "${OUTDIR}/sbin/init" ]; then
     cmake -GNinja -DCMAKE_TOOLCHAIN_FILE=${TOOLCHAIN_FILE} -DCMAKE_INSTALL_PREFIX=${OUTDIR} ../../userland/init
     ninja install
     cd ../..
+    TARGET_DIRTY=1
 fi
 
 if [ "$BUILD_TARGET" -ne "0" -o ! -f "${OUTDIR}/usr/bin/ld" ]; then
@@ -208,6 +219,7 @@ if [ "$BUILD_TARGET" -ne "0" -o ! -f "${OUTDIR}/usr/bin/ld" ]; then
     make ${MAKE_ARGS}
     make ${MAKE_ARGS} install DESTDIR=${OUTDIR}
     cd ../..
+    TARGET_DIRTY=1
 fi
 
 if [ "$BUILD_TARGET" -ne "0" -o ! -f "${OUTDIR}/usr/bin/gcc" ]; then
@@ -224,6 +236,7 @@ if [ "$BUILD_TARGET" -ne "0" -o ! -f "${OUTDIR}/usr/bin/gcc" ]; then
     make ${MAKE_ARGS}
     make ${MAKE_ARGS} install DESTDIR=${OUTDIR}
     cd ../..
+    TARGET_DIRTY=1
 fi
 
 if [ "$BUILD_TARGET" -ne "0" -o ! -f "${OUTDIR}/usr/lib/libc.a" ]; then
@@ -234,6 +247,7 @@ if [ "$BUILD_TARGET" -ne "0" -o ! -f "${OUTDIR}/usr/lib/libc.a" ]; then
     cmake -GNinja -DCMAKE_TOOLCHAIN_FILE=${TOOLCHAIN_FILE} -DCMAKE_INSTALL_PREFIX=${OUTDIR} ../../lib/newlib-3.1.0
     ninja install
     cd ../..
+    TARGET_DIRTY=1
 fi
 
 if [ "$BUILD_TARGET" -ne "0" -o ! -f "${OUTDIR}/usr/include/dogfood/types.h" ]; then
@@ -244,4 +258,32 @@ if [ "$BUILD_TARGET" -ne "0" -o ! -f "${OUTDIR}/usr/include/dogfood/types.h" ]; 
     cmake -GNinja -DCMAKE_TOOLCHAIN_FILE=${TOOLCHAIN_FILE} -DCMAKE_INSTALL_PREFIX=${OUTDIR} ../../kernel-headers
     ninja install
     cd ../..
+    TARGET_DIRTY=1
+fi
+
+if [ "$TARGET_DIRTY" -ne "0" -o ! -f "${OUTDIR_IMAGES}/ext2.img" ]; then
+    echo "*** Creating ext2 image..."
+    rm -f ${OUTDIR_IMAGES}/ext2.img
+    mkfs.ext2 -d ${OUTDIR} ${OUTDIR_IMAGES}/ext2.img 1g
+fi
+
+if [ "$KERNEL_DIRTY" -ne "0" -o ! -f "${OUTDIR_IMAGES}/kernel.iso" ]; then
+    echo "*** Creating kernel ISO image..."
+    mkdir -p build/kernel-iso
+    mkdir -p build/kernel-iso/boot/grub
+    cp build/kernel/kernel/kernel.mb build/kernel-iso
+    echo "set timeout=0
+set default=0
+
+menuentry "Dogfood" {
+    multiboot /kernel.mb
+    boot
+}
+" > build/kernel-iso/boot/grub/grub.cfg
+    grub-mkrescue -o ${OUTDIR_IMAGES}/kernel.iso build/kernel-iso
+fi
+
+if [ ! -f "${OUTDIR_IMAGES}/run.sh" ]; then
+    echo "qemu-system-x86_64 -serial stdio -hda ext2.img -cdrom kernel.iso -boot d \$@" > ${OUTDIR_IMAGES}/run.sh
+    chmod 755 ${OUTDIR_IMAGES}/run.sh
 fi
