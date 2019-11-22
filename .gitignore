@@ -8,9 +8,8 @@ config.log
 config.status
 # output files
 build/
-boot/dogfood.iso
-boot/iso/kernel.mb
 target/
+target-kernel/
 toolchain/
 # coreutils: generated files
 userland/coreutils-8.31/.Tpo
