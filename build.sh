@@ -1,49 +1,38 @@
 #!/bin/sh -e
 
-TARGET=x86_64-elf-dogfood
-TOOLCHAIN_FILE=/tmp/dogfood-toolchain.txt
-TOOLCHAIN=toolchain # where toolchain items get written
+. ./settings.sh
+
 OUTDIR=target # cross-compiled binaries end up here
 OUTDIR_KERNEL=target-kernel # kernel ends up here
 OUTDIR_IMAGES=images # images end up here
-SYSROOT=/tmp/dogfood-sysroot
 MAKE_ARGS=
 
-BINUTILS_VERSION=2.32
-GCC_VERSION=9.2.0
-
 # parse options
-CLEAN_TOOLCHAIN=0
 CLEAN_TARGET=0
-BUILD_TOOLCHAIN=0
 BUILD_SYSROOT=0
 BUILD_KERNEL=0
 BUILD_TARGET=0
+ONLY_REQUESTED_TARGETS=0
 while [ "$1" != "" ]; do
 	P="$1"
 	case "$P" in
 		-h)
-			echo "usage: build.sh [-hCc] [-Tskt]"
+			echo "usage: build.sh [-hco] [-skt]"
             echo ""
             echo " -h    this help"
-            echo " -C    clean everything (forces a rebuild of toolchain)"
             echo " -c    clean target"
+            echo " -o    only build requested targets"
             echo ""
-            echo " -T     (re)build toolchain"
-            echo " -s     (re)build sysroot"
-            echo " -k     (re)build kernel"
-            echo " -t     (re)build target"
+            echo " -s    (re)build sysroot"
+            echo " -k    (re)build kernel"
+            echo " -t    (re)build target"
             exit 1
 			;;
-        -C)
-            CLEAN_TOOLCHAIN=1
-            CLEAN_TARGET=1
-            ;;
         -c)
             CLEAN_TARGET=1
             ;;
-        -T)
-            BUILD_TOOLCHAIN=1
+        -o)
+            ONLY_REQUESTED_TARGETS=1
             ;;
         -s)
             BUILD_SYSROOT=1
@@ -68,9 +57,6 @@ if [ -f /proc/cpuinfo ]; then
 fi
 
 # clean
-if [ "$CLEAN_TOOLCHAIN" -ne 0 ]; then
-    rm -rf ${TOOLCHAIN}
-fi
 if [ "$CLEAN_TARGET" -ne 0 ]; then
     rm -rf ${OUTDIR}
     rm -rf ${OUTDIR_KERNEL}
@@ -88,45 +74,7 @@ export PATH=${TOOLCHAIN}/bin:${PATH}
 KERNEL_DIRTY=0
 TARGET_DIRTY=0
 
-if [ "$BUILD_TOOLCHAIN" -ne "0" -o ! -f "${TOOLCHAIN}/bin/${TARGET}-ld" ]; then
-    echo "*** Building binutils (toolchain)"
-    rm -rf build/binutils
-    mkdir -p build/binutils
-    cd build/binutils
-    ../../userland/binutils-${BINUTILS_VERSION}/configure --target=${TARGET} --disable-nls --disable-werror --prefix=${TOOLCHAIN} --with-sysroot=${SYSROOT}
-    make ${MAKE_ARGS}
-    make ${MAKE_ARGS} install
-    cd ../..
-fi
-
-# gcc
-if [ "$BUILD_TOOLCHAIN" -ne "0" -o ! -f "${TOOLCHAIN}/bin/${TARGET}-gcc" ]; then
-    echo "*** Building gcc (toolchain)"
-    rm -rf build/gcc
-    mkdir -p build/gcc
-    cd build/gcc
-    ../../userland/gcc-${GCC_VERSION}/configure --target=${TARGET} --disable-nls --without-headers --enable-languages='c,c++' --prefix=${TOOLCHAIN} --disable-libstdcxx --disable-build-with-cxx --disable-libssp --disable-libquadmath --with-sysroot=${SYSROOT} --with-gxx-include-dir=${SYSROOT}/usr/include/c++/${GCC_VERSION}
-    # we can't build everything yet as libgcc requires header files from libc;
-    # settle for just gcc now
-    make ${MAKE_ARGS} all-gcc
-    make ${MAKE_ARGS} install-gcc
-    cd ../..
-fi
-
-if [ "$BUILD_TOOLCHAIN" -ne "0" -o ! -f ${TOOLCHAIN_FILE} ]; then
-    echo "set(CMAKE_SYSTEM_NAME Linux)
-set(CMAKE_SYSROOT ${SYSROOT})
-set(CMAKE_WARN_DEPRECATED OFF)
-include(CMakeForceCompiler)
-CMAKE_FORCE_C_COMPILER(${TARGET}-gcc GNU)
-CMAKE_FORCE_CXX_COMPILER(${TARGET}-g++ GNU)
-
-set(CMAKE_ASM_COMPILER \${CMAKE_C_COMPILER})
-set(CMAKE_ASM_LINKER \${CMAKE_C_COMPILER})
-" >> ${TOOLCHAIN_FILE}
-fi
-
-if [ "$BUILD_KERNEL" -ne "0" -o ! -f "${OUTDIR_KERNEL}/kernel.mb" ]; then
+if [ "${BUILD_KERNEL}" -ne "0" -o \( "${ONLY_REQUESTED_TARGETS}" -eq "0" -a ! -f "${OUTDIR_KERNEL}/kernel.mb" \) ]; then
     echo "*** Building kernel"
     rm -rf build/kernel
     mkdir -p build/kernel
@@ -137,7 +85,7 @@ if [ "$BUILD_KERNEL" -ne "0" -o ! -f "${OUTDIR_KERNEL}/kernel.mb" ]; then
     KERNEL_DIRTY=1
 fi
 
-if [ "$BUILD_SYSROOT" -ne "0" -o ! -f "${SYSROOT}/usr/include/dogfood/types.h" ]; then
+if [ "$BUILD_SYSROOT" -ne "0" -o \( "${ONLY_REQUESTED_TARGETS}" -eq "0" -a ! -f "${SYSROOT}/usr/include/dogfood/types.h" \) ]; then
     echo "*** Installing kernel headers (sysroot)"
     rm -rf build/headers-target
     mkdir build/headers-target
@@ -148,7 +96,7 @@ if [ "$BUILD_SYSROOT" -ne "0" -o ! -f "${SYSROOT}/usr/include/dogfood/types.h" ]
 fi
 
 
-if [ "$BUILD_SYSROOT" -ne "0" -o ! -f "${SYSROOT}/usr/lib/libc.a" ]; then
+if [ "$BUILD_SYSROOT" -ne "0" -o \( "${ONLY_REQUESTED_TARGETS}" -eq "0" -a ! -f "${SYSROOT}/usr/lib/libc.a" \) ]; then
     echo "*** Building newlib (sysroot)"
     rm -rf build/newlib
     mkdir build/newlib
@@ -158,15 +106,18 @@ if [ "$BUILD_SYSROOT" -ne "0" -o ! -f "${SYSROOT}/usr/lib/libc.a" ]; then
     cd ../..
 fi
 
-if [ "$BUILD_SYSROOT" -ne "0" -o ! -f "${TOOLCHAIN}/lib/gcc/${TARGET}/${GCC_VERSION}/libgcc.a" ]; then
+if [ "$BUILD_SYSROOT" -ne "0" -o \( "${ONLY_REQUESTED_TARGETS}" -eq "0" -a ! -f "${TOOLCHAIN}/lib/gcc/${TARGET}/${GCC_VERSION}/libgcc.a" \) ]; then
     echo "*** Building libgcc (sysroot)"
-    cd build/gcc
+    rm -rf build/gcc-libgcc
+    mkdir -p build/gcc-libgcc
+    cd build/gcc-libgcc
+    ../../userland/gcc-${GCC_VERSION}/configure --target=${TARGET} --disable-nls --without-headers --enable-languages='c,c++' --prefix=${TOOLCHAIN} --disable-libstdcxx --disable-build-with-cxx --disable-libssp --disable-libquadmath --with-sysroot=${SYSROOT} --with-gxx-include-dir=${SYSROOT}/usr/include/c++/${GCC_VERSION}
     make ${MAKE_ARGS} all-target-libgcc
     make ${MAKE_ARGS} install-target-libgcc
     cd ../..
 fi
 
-if [ "$BUILD_SYSROOT" -ne "0" -o ! -f "${SYSROOT}/usr/lib/libstdc++.a" ]; then
+if [ "$BUILD_SYSROOT" -ne "0" -o \( "${ONLY_REQUESTED_TARGETS}" -eq "0" -a ! -f "${SYSROOT}/usr/lib/libstdc++.a" \) ]; then
     echo "*** Building libstdcxx (sysroot)"
     rm -rf build/libstdcxx
     mkdir -p build/libstdcxx
@@ -177,7 +128,7 @@ if [ "$BUILD_SYSROOT" -ne "0" -o ! -f "${SYSROOT}/usr/lib/libstdc++.a" ]; then
     cd ../..
 fi
 
-if [ "$BUILD_TARGET" -ne "0" -o ! -f "${OUTDIR}/bin/sh" ]; then
+if [ "$BUILD_TARGET" -ne "0" -o \( "${ONLY_REQUESTED_TARGETS}" -eq "0" -a ! -f "${OUTDIR}/bin/sh" \) ]; then
     echo "*** Building dash (target)"
     cd userland/dash-0.5.10.2
     make clean || true
@@ -189,7 +140,7 @@ if [ "$BUILD_TARGET" -ne "0" -o ! -f "${OUTDIR}/bin/sh" ]; then
     TARGET_DIRTY=1
 fi
 
-if [ "$BUILD_TARGET" -ne "0" -o ! -f "${OUTDIR}/bin/ls" ]; then
+if [ "$BUILD_TARGET" -ne "0" -o \( "${ONLY_REQUESTED_TARGETS}" -eq "0" -a ! -f "${OUTDIR}/bin/ls" \) ]; then
     echo "*** Building coreutils (target)"
     cd userland/coreutils-8.31
     make clean || true
@@ -200,7 +151,7 @@ if [ "$BUILD_TARGET" -ne "0" -o ! -f "${OUTDIR}/bin/ls" ]; then
     TARGET_DIRTY=1
 fi
 
-if [ "$BUILD_TARGET" -ne "0" -o ! -f "${OUTDIR}/sbin/init" ]; then
+if [ "$BUILD_TARGET" -ne "0" -o \( "${ONLY_REQUESTED_TARGETS}" -eq "0" -a ! -f "${OUTDIR}/sbin/init" \) ]; then
     echo "*** Building init (target)"
     rm -rf build/init
     mkdir -p build/init
@@ -211,7 +162,7 @@ if [ "$BUILD_TARGET" -ne "0" -o ! -f "${OUTDIR}/sbin/init" ]; then
     TARGET_DIRTY=1
 fi
 
-if [ "$BUILD_TARGET" -ne "0" -o ! -f "${OUTDIR}/usr/bin/ld" ]; then
+if [ "$BUILD_TARGET" -ne "0" -o \( "${ONLY_REQUESTED_TARGETS}" -eq "0" -a ! -f "${OUTDIR}/usr/bin/ld" \) ]; then
     echo "*** Building binutils (target)"
     rm -rf build/binutils-target
     mkdir -p build/binutils-target
@@ -223,7 +174,7 @@ if [ "$BUILD_TARGET" -ne "0" -o ! -f "${OUTDIR}/usr/bin/ld" ]; then
     TARGET_DIRTY=1
 fi
 
-if [ "$BUILD_TARGET" -ne "0" -o ! -f "${OUTDIR}/usr/bin/gcc" ]; then
+if [ "$BUILD_TARGET" -ne "0" -o \( "${ONLY_REQUESTED_TARGETS}" -eq "0" -a ! -f "${OUTDIR}/usr/bin/gcc" \) ]; then
     echo "*** Building gcc (target)"
     rm -rf build/gcc-target
     mkdir -p build/gcc-target
@@ -239,7 +190,7 @@ if [ "$BUILD_TARGET" -ne "0" -o ! -f "${OUTDIR}/usr/bin/gcc" ]; then
     TARGET_DIRTY=1
 fi
 
-if [ "$BUILD_TARGET" -ne "0" -o ! -f "${OUTDIR}/usr/lib/libc.a" ]; then
+if [ "$BUILD_TARGET" -ne "0" -o \( "${ONLY_REQUESTED_TARGETS}" -eq "0" -a ! -f "${OUTDIR}/usr/lib/libc.a" \) ]; then
     echo "*** Building newlib (target)"
     rm -rf build/newlib-target
     mkdir build/newlib-target
@@ -250,7 +201,7 @@ if [ "$BUILD_TARGET" -ne "0" -o ! -f "${OUTDIR}/usr/lib/libc.a" ]; then
     TARGET_DIRTY=1
 fi
 
-if [ "$BUILD_TARGET" -ne "0" -o ! -f "${OUTDIR}/usr/include/dogfood/types.h" ]; then
+if [ "$BUILD_TARGET" -ne "0" -o \( "${ONLY_REQUESTED_TARGETS}" -eq "0" -a ! -f "${OUTDIR}/usr/include/dogfood/types.h" \) ]; then
     echo "*** Installing kernel headers (target)"
     rm -rf build/headers-target
     mkdir build/headers-target
@@ -261,13 +212,13 @@ if [ "$BUILD_TARGET" -ne "0" -o ! -f "${OUTDIR}/usr/include/dogfood/types.h" ]; 
     TARGET_DIRTY=1
 fi
 
-if [ "$TARGET_DIRTY" -ne "0" -o ! -f "${OUTDIR_IMAGES}/ext2.img" ]; then
+if [ "$TARGET_DIRTY" -ne "0" -o \( "${ONLY_REQUESTED_TARGETS}" -eq "0" -a ! -f "${OUTDIR_IMAGES}/ext2.img" \) ]; then
     echo "*** Creating ext2 image..."
     rm -f ${OUTDIR_IMAGES}/ext2.img
     mkfs.ext2 -d ${OUTDIR} ${OUTDIR_IMAGES}/ext2.img 1g
 fi
 
-if [ "$KERNEL_DIRTY" -ne "0" -o ! -f "${OUTDIR_IMAGES}/kernel.iso" ]; then
+if [ "$KERNEL_DIRTY" -ne "0" -o \( "${ONLY_REQUESTED_TARGETS}" -eq "0" -a ! -f "${OUTDIR_IMAGES}/kernel.iso" \) ]; then
     echo "*** Creating kernel ISO image..."
     mkdir -p build/kernel-iso
     mkdir -p build/kernel-iso/boot/grub
@@ -283,7 +234,7 @@ menuentry "Dogfood" {
     grub-mkrescue -o ${OUTDIR_IMAGES}/kernel.iso build/kernel-iso
 fi
 
-if [ ! -f "${OUTDIR_IMAGES}/run.sh" ]; then
+if [ "${ONLY_REQUESTED_TARGETS}" -eq "0" -a ! -f "${OUTDIR_IMAGES}/run.sh" ]; then
     echo "qemu-system-x86_64 -serial stdio -hda ext2.img -cdrom kernel.iso -boot d \$@" > ${OUTDIR_IMAGES}/run.sh
     chmod 755 ${OUTDIR_IMAGES}/run.sh
 fi
