@@ -10,7 +10,6 @@ config.status
 build/
 target/
 target-kernel/
-toolchain/
 # coreutils: generated files
 userland/coreutils-8.31/.Tpo
 userland/coreutils-8.31/Makefile

@@ -1,0 +1,32 @@
+FROM debian:10 as builder
+LABEL maintainer "Rink Springer <rink@rink.nu>"
+
+# Create an unprivileged build user; we expect that the uid/gid matches the
+# work directory on the host system (inspired by
+# https://gist.github.com/alkrauss48/2dd9f9d84ed6ebff9240ccfa49a80662)
+RUN groupadd -g 1000 -r build && \
+    useradd -r -u 1000 -g build -d /home/build -s /sbin/nologin -c "Build user" build
+ENV home=/home/build
+
+# step 1: install gcc/binutils/etc
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends build-essential ninja-build cmake texinfo bison flex && \
+    rm -rf /var/lib/apt/lists/*
+
+ADD --chown=build:build work /work
+
+# update permissions so we can build as non-root
+RUN mkdir -p /opt/dogfood-toolchain && chown build:build /opt/dogfood-toolchain
+
+# step 2: build the toolchain
+USER build
+RUN (cd /work && ./build-toolchain.sh)
+
+# step 2: collect build results
+FROM debian:10
+LABEL maintainer "Rink Springer <rink@rink.nu>"
+
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends ninja-build cmake && \
+    rm -rf /var/lib/apt/lists/*
+COPY --from=builder /opt/dogfood-toolchain/ /opt/dogfood-toolchain/
