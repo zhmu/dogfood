@@ -1,0 +1,1 @@
+.. |dogfood| replace:: *Dogfood*
