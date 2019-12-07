@@ -12,7 +12,7 @@ RUN apt-get update && apt-get upgrade -y && \
     apt-get install --no-install-recommends -y ninja-build \
     gettext autopoint texinfo autoconf automake make \
     gcc build-essential bison flex wget ca-certificates \
-    xorriso e2fsprogs python3 && \
+    xorriso e2fsprogs python3 qemu-system-x86 && \
     rm -rf /var/lib/apt/lists/*
 
 # Install GRUB2 ourselves; trying to install it in a Docker image causes all kinds
