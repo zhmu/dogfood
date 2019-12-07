@@ -1,5 +1,5 @@
 #include "pic.h"
-#include "amd64.h"
+#include "../x86_64/amd64.h"
 
 using namespace amd64::io;
 

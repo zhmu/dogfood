@@ -1,4 +1,3 @@
-#include "console.h"
 #include "lib.h"
 #include "multiboot.h"
 #include "page_allocator.h"
@@ -6,10 +5,12 @@
 #include "bio.h"
 #include "ext2.h"
 #include "fs.h"
-#include "ide.h"
-#include "pic.h"
 #include "process.h"
 #include "vm.h"
+
+#include "hw/console.h"
+#include "hw/ide.h"
+#include "hw/pic.h"
 
 using namespace amd64;
 
@@ -313,6 +314,7 @@ namespace
         // they are properly mapped.  Note that next_page is the kernel end +
         // the pages we used to store the memory mappings, so we'll need to
         // adjust the region to avoid re-using that memory.
+        page_allocator::Initialize();
         for (unsigned int n = 0; n < currentRegion; ++n) {
             auto region = regions[n];
             if (region.base == kernel_phys_end) {

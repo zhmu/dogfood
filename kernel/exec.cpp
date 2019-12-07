@@ -1,5 +1,5 @@
 #include "exec.h"
-#include "amd64.h"
+#include "x86_64/amd64.h"
 #include "elf.h"
 #include "fs.h"
 #include "lib.h"

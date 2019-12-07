@@ -6,15 +6,26 @@ set(COMMON_FLAGS "${COMMON_FLAGS} -fno-builtin -nostdlib -nostdinc")
 set(COMMON_FLAGS "${COMMON_FLAGS} -m64 -march=athlon64 -mcmodel=large")
 set(COMMON_FLAGS "${COMMON_FLAGS} -mno-red-zone -mno-sse -fno-stack-protector")
 set(COMMON_FLAGS "${COMMON_FLAGS} -O2 -g")
+set(COMMON_FLAGS "${COMMON_FLAGS} -I${CMAKE_CURRENT_SOURCE_DIR}")
 set(COMMON_FLAGS "${COMMON_FLAGS} -I${CMAKE_CURRENT_SOURCE_DIR}/../kernel-headers/include")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++17 ${COMMON_FLAGS}")
 set(CMAKE_ASM_FLAGS "${CMAKE_ASM_FLAGS} ${COMMON_FLAGS}")
 
 set(CMAKE_CXX_LINK_EXECUTABLE "ld <CMAKE_CXX_LINK_FLAGS> <LINK_FLAGS> <OBJECTS>  -o <TARGET> <LINK_LIBRARIES>")
-set(CMAKE_CXX_LINK_FLAGS "-b elf64-x86-64 -T ${CMAKE_CURRENT_SOURCE_DIR}/ldscript -nostdlib -nodefaultlibs")
+set(CMAKE_CXX_LINK_FLAGS "-b elf64-x86-64 -T ${CMAKE_CURRENT_SOURCE_DIR}/x86_64/ldscript -nostdlib -nodefaultlibs")
 
-set(SOURCES entry.S startup.cpp exception.S console.cpp lib.cpp page_allocator.cpp pic.cpp process.cpp vm.cpp initcode.S bio.cpp ide.cpp ext2.cpp fs.cpp syscall.cpp exec.cpp file.cpp)
-add_executable(kernel_elf ${SOURCES})
+add_subdirectory(hw)
+add_subdirectory(x86_64)
+
+set(SOURCES lib.cpp page_allocator.cpp process.cpp vm.cpp bio.cpp ext2.cpp fs.cpp syscall.cpp exec.cpp file.cpp)
+add_library(kernel_common ${SOURCES})
+
+# kernel_elf glues all libraries together; due to the CMake being used, we need
+# at least one source file which must be empty (we rely on x86_64's starting
+# with the entry point as this ensures we don't need any specific knowledge in
+# the multiboot stub)
+add_executable(kernel_elf dummy.cpp)
+target_link_libraries(kernel_elf --start-group kernel_x86_64 kernel_common kernel_hw --end-group)
 set_target_properties(kernel_elf PROPERTIES OUTPUT_NAME "kernel.elf")
 
 add_custom_command(

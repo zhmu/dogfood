@@ -1,6 +1,7 @@
 #ifdef __cplusplus
+
 #include "types.h"
-#include "amd64.h"
+#include "x86_64/amd64.h"
 
 namespace syscall
 {

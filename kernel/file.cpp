@@ -1,9 +1,10 @@
 #include "file.h"
-#include "console.h"
 #include "process.h"
 #include "fs.h"
 #include "lib.h"
 #include <dogfood/errno.h>
+
+#include "hw/console.h"
 
 namespace file
 {

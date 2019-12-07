@@ -1,6 +1,6 @@
 #include "bio.h"
 #include "lib.h"
-#include "ide.h"
+#include "hw/ide.h"
 
 namespace bio
 {

@@ -1,5 +1,5 @@
 #include "vm.h"
-#include "amd64.h"
+#include "x86_64/amd64.h"
 #include "lib.h"
 #include "page_allocator.h"
 #include "process.h"

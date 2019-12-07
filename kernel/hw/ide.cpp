@@ -1,7 +1,7 @@
 #include "ide.h"
-#include "amd64.h"
-#include "bio.h"
-#include "lib.h"
+#include "../x86_64/amd64.h"
+#include "../bio.h"
+#include "../lib.h"
 #include "pic.h"
 
 using namespace amd64::io;

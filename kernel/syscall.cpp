@@ -1,7 +1,5 @@
 #include "types.h"
 #include "syscall.h"
-#include "amd64.h"
-#include "console.h"
 #include "exec.h"
 #include "file.h"
 #include "ext2.h"
@@ -12,6 +10,9 @@
 #include <dogfood/fcntl.h>
 #include <dogfood/stat.h>
 #include <dogfood/syscall.h>
+
+#include "x86_64/amd64.h"
+#include "hw/console.h"
 
 #define DEBUG_SYSCALL 0
 

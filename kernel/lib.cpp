@@ -1,6 +1,7 @@
 #include "lib.h"
-#include "console.h"
 #include "types.h"
+
+#include "hw/console.h"
 
 namespace
 {

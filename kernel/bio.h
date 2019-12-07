@@ -23,7 +23,6 @@ namespace bio
     };
 
     void Initialize();
-    Buffer& bget(int dev, BlockNumber blockNumber);
     Buffer& bread(int dev, BlockNumber blockNumber);
     void bwrite(Buffer& buf);
     void brelse(Buffer& buf);
