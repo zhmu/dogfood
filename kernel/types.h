@@ -34,11 +34,13 @@ typedef __builtin_va_list va_list;
 
 #include "dogfood/types.h"
 
+#ifndef BUILDING_TESTS
 using dev_t = __dev_t;
 using uid_t = __uid_t;
-using ino_t = __uid_t;
+using ino_t = __ino_t;
 using mode_t = __mode_t;
 using nlink_t = __nlink_t;
 using blksize_t = __blksize_t;
 using blkcnt_t = __blkcnt_t;
 using time_t = __time_t;
+#endif

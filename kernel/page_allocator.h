@@ -2,6 +2,7 @@
 
 namespace page_allocator
 {
+    void Initialize();
     void RegisterMemory(const uint64_t base, const unsigned int length_in_pages);
 
     void* Allocate();

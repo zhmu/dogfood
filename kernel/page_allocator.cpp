@@ -11,8 +11,13 @@ namespace page_allocator
             FreeList* next;
         };
 
-        FreeList* freelist = nullptr;
+        FreeList* freelist;
     } // namespace
+
+    void Initialize()
+    {
+        freelist = nullptr;
+    }
 
     void RegisterMemory(const uint64_t base, const unsigned int length_in_pages)
     {
