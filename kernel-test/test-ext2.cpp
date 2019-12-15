@@ -5,6 +5,8 @@
 #include <unistd.h>
 #include "stub.h"
 
+#include "../test-ext2-img/ext2-image.cpp"
+
 #define stat dfstat
 #undef st_atime
 #undef st_mtime
@@ -79,30 +81,27 @@ namespace {
     struct IOProvider
     {
         IOProvider()
+            : image(GenerateImage())
         {
             test_stubs::SetPerformIOFunction([this](auto& buffer) { PerformIO(buffer); });
-
-            fd = open("/work/test-ext2-img/ext2.img", O_RDONLY);
-            if (fd < 0)
-                fd = open("/home/rink/github/dogfood/test-ext2-img/ext2.img", O_RDONLY);
-            if (fd < 0) throw std::runtime_error("cannot open disk image");
         }
 
         ~IOProvider()
         {
-            close(fd);
             test_stubs::SetPerformIOFunction(nullptr);
         }
 
         void PerformIO(bio::Buffer& buffer)
         {
             if ((buffer.flags & bio::flag::Valid) == 0) {
-                const auto bytesRead = pread(fd, buffer.data, bio::BlockSize, buffer.blockNumber * bio::BlockSize);
-                EXPECT_EQ(bio::BlockSize, bytesRead);
+                const size_t offset = buffer.blockNumber * bio::BlockSize;
+                ASSERT_LE(offset + bio::BlockSize, image.size());
+                std::copy(image.begin() + offset, image.begin() + offset + bio::BlockSize, buffer.data);
+                buffer.flags |= bio::flag::Valid;
             }
         }
 
-        int fd;
+        std::vector<uint8_t> image;
     };
 
     struct Ext2 : ::testing::Test

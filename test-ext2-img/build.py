@@ -7,8 +7,55 @@ import subprocess
 
 OUTPUT_DIR = 'data'
 OUTPUT_IMAGE = 'ext2.img'
+OUTPUT_SOURCE = 'ext2-image.cpp'
 BLOCK_SIZE = 2048
 IMAGE_SIZE = '2m'
+
+def generate_updates(buf):
+    updates = [ ]
+    cur_update = None
+    for n, c in enumerate(buf):
+        if cur_update is not None:
+            if cur_update['byte'] == c:
+                cur_update['end'] = n
+                continue
+
+            updates.append(cur_update)
+            cur_update = None
+
+        if c == 0:
+            continue
+        cur_update = { 'start': n, 'end': n, 'byte': c }
+
+    if cur_update is not None:
+        updates.append(cur_update)
+    return updates
+
+def apply_updates(buf, updates):
+    for u in updates:
+        for m in range(u['start'], u['end'] + 1):
+            buf[m] = u['byte']
+
+def test_updates():
+    buffer = bytearray([ 0x00, 0x00, 0x12, 0x12, 0x34, 0x00, 0x00, 0x00, 0x11])
+    updates = generate_updates(buffer)
+
+    b = bytearray(len(buffer))
+    apply_updates(b, updates)
+
+    if buffer != b:
+        raise Exception('test_updates: failed')
+
+def generate_update_code(updates):
+    s = [ ]
+    for u in updates:
+        if u['start'] == u['end']:
+            s.append('    buffer[0x%x] = 0x%02x;' % (u['start'], u['byte']))
+        else:
+            s.append('    std::fill(buffer.begin() + 0x%x, buffer.begin() + 0x%x, 0x%02x);' % (u['start'], u['end'] + 1, u['byte']))
+    return s
+
+test_updates()
 
 if os.path.exists(OUTPUT_DIR):
     shutil.rmtree(OUTPUT_DIR)
@@ -35,3 +82,25 @@ with open(os.sep.join([ OUTPUT_DIR, 'file2.bin' ]), 'wb') as f:
             f.write(struct.pack('B', b))
 
 subprocess.run([ '/sbin/mkfs.ext2', '-b', str(BLOCK_SIZE), '-d', OUTPUT_DIR, OUTPUT_IMAGE, IMAGE_SIZE ])
+
+with open(OUTPUT_IMAGE, 'rb') as f:
+    buf = f.read()
+    updates = generate_updates(buf)
+
+    test = bytearray(len(buf))
+    apply_updates(test, updates)
+    if bytearray(buf) != test:
+        raise Exception('update error')
+
+    lines = []
+    lines.append('std::vector<uint8_t> GenerateImage()')
+    lines.append('{')
+    lines.append('    std::vector<uint8_t> buffer;')
+    lines.append('    buffer.resize(0x%x);' % len(buf))
+    lines += generate_update_code(updates)
+    lines.append('    return buffer;')
+    lines.append('}')
+    lines.append('')
+
+with open(OUTPUT_SOURCE, 'wt') as f:
+    f.write('\n'.join(lines))
