@@ -77,6 +77,26 @@ namespace {
         return dirEntries;
     }
 
+    template<typename T>
+    unsigned int CountNumberOfSetBits(const T value)
+    {
+        unsigned int result = 0;
+        for(unsigned int n = 0; n < std::numeric_limits<T>::digits; ++n) {
+            if (value & (1ULL << n)) ++result;
+        }
+        return result;
+    }
+
+    struct Update { size_t offset; uint8_t oldValue; uint8_t newValue; };
+
+    template<typename C, typename T>
+    bool IsFieldUpdated(const Update& u, T C::* field)
+    {
+        const auto start = reinterpret_cast<size_t>(&(reinterpret_cast<C*>(0)->*field));
+        const auto end = start + sizeof(T);
+        const auto offset = u.offset % sizeof(C);
+        return offset >= start && offset < end;
+    }
 
     struct IOProvider
     {
@@ -93,15 +113,26 @@ namespace {
 
         void PerformIO(bio::Buffer& buffer)
         {
+            const size_t offset = buffer.blockNumber * bio::BlockSize;
+            ASSERT_LE(offset + bio::BlockSize, image.size());
+
             if ((buffer.flags & bio::flag::Valid) == 0) {
-                const size_t offset = buffer.blockNumber * bio::BlockSize;
-                ASSERT_LE(offset + bio::BlockSize, image.size());
                 std::copy(image.begin() + offset, image.begin() + offset + bio::BlockSize, buffer.data);
                 buffer.flags |= bio::flag::Valid;
+            }
+
+            if ((buffer.flags & bio::flag::Dirty) != 0) {
+                for(int n = 0; n < bio::BlockSize; ++n) {
+                    if(buffer.data[n] == image[offset + n]) continue;
+                    updates.push_back({ offset + n, image[offset + n], buffer.data[n] });
+                    image[offset + n] = buffer.data[n];
+                }
+                buffer.flags &= ~bio::flag::Dirty;
             }
         }
 
         std::vector<uint8_t> image;
+        std::vector<Update> updates;
     };
 
     struct Ext2 : ::testing::Test
@@ -116,6 +147,34 @@ namespace {
 
         IOProvider io;
     };
+}
+
+TEST(Ext2Test, CountNumberOfSetBits)
+{
+    EXPECT_EQ(0, CountNumberOfSetBits(static_cast<uint8_t>(0)));
+    EXPECT_EQ(4, CountNumberOfSetBits(static_cast<uint8_t>(0x55)));
+    EXPECT_EQ(4, CountNumberOfSetBits(static_cast<uint8_t>(0xaa)));
+    EXPECT_EQ(8, CountNumberOfSetBits(static_cast<uint8_t>(-1)));
+
+    EXPECT_EQ(0, CountNumberOfSetBits(static_cast<uint32_t>(0)));
+    EXPECT_EQ(16, CountNumberOfSetBits(static_cast<uint32_t>(0x5555aaaa)));
+    EXPECT_EQ(32, CountNumberOfSetBits(static_cast<uint32_t>(-1)));
+}
+
+TEST(Ext2Test, IsFieldUpdated)
+{
+    struct Test { uint8_t a; uint16_t b; uint32_t c; } __attribute__((packed));
+
+    EXPECT_TRUE(IsFieldUpdated({ 0, 0, 0 }, &Test::a));
+    EXPECT_FALSE(IsFieldUpdated({ 1, 0, 0 }, &Test::a));
+    EXPECT_TRUE(IsFieldUpdated({ 1, 0, 0 }, &Test::b));
+    EXPECT_TRUE(IsFieldUpdated({ 2, 0, 0 }, &Test::b));
+    EXPECT_FALSE(IsFieldUpdated({ 3, 0, 0 }, &Test::b));
+    EXPECT_TRUE(IsFieldUpdated({ 3, 0, 0 }, &Test::c));
+    EXPECT_TRUE(IsFieldUpdated({ 4, 0, 0 }, &Test::c));
+    EXPECT_TRUE(IsFieldUpdated({ 5, 0, 0 }, &Test::c));
+    EXPECT_TRUE(IsFieldUpdated({ 6, 0, 0 }, &Test::c));
+    EXPECT_FALSE(IsFieldUpdated({ 7, 0, 0 }, &Test::c));
 }
 
 TEST_F(Ext2, Initialize)
@@ -227,4 +286,57 @@ TEST_F(Ext2, ReadDirectory_Root)
         EXPECT_EQ(expectedEntries[n].inum, dirEntries[n].d_ino);
         EXPECT_EQ(0, strcmp(expectedEntries[n].name, dirEntries[n].d_name));
     }
+}
+
+TEST_F(Ext2, WriteInode_File1_NoChange)
+{
+    (void)ext2::Mount(deviceNumber);
+
+    ext2::Inode ext2Inode;
+    ext2::ReadInode(deviceNumber, file1InodeNumber, ext2Inode);
+    auto fsInode = MakeFSInode(file1InodeNumber, ext2Inode);
+    ext2::WriteInode(fsInode);
+
+    EXPECT_TRUE(io.updates.empty());
+}
+
+TEST_F(Ext2, WriteInode_File1_Change)
+{
+    (void)ext2::Mount(deviceNumber);
+
+    ext2::Inode ext2Inode;
+    ext2::ReadInode(deviceNumber, file1InodeNumber, ext2Inode);
+    auto fsInode = MakeFSInode(file1InodeNumber, ext2Inode);
+    ext2Inode.i_size = 1339;
+    ext2::WriteInode(fsInode);
+
+    // Only one byte changed (1337 -> 1339)
+    ASSERT_EQ(static_cast<size_t>(1), io.updates.size());
+    EXPECT_TRUE(IsFieldUpdated(io.updates[0], &ext2::Inode::i_size));
+    EXPECT_EQ(1337 & 255, io.updates[0].oldValue);
+    EXPECT_EQ(1339 & 255, io.updates[0].newValue);
+}
+
+TEST_F(Ext2, AllocateInode_Single)
+{
+    {
+        auto rootInode = ext2::Mount(deviceNumber);
+        const auto newInodeNumber = ext2::AllocateInode(*rootInode);
+        EXPECT_GT(newInodeNumber, rootInodeNumber);
+    }
+
+    ASSERT_EQ(static_cast<size_t>(3), io.updates.size());
+    {
+        // Inode bitmap: one additional bit is to be set
+        const auto oldNumberOfBits = CountNumberOfSetBits(io.updates[0].oldValue);
+        const auto newNumberOfBits = CountNumberOfSetBits(io.updates[0].newValue);
+        EXPECT_EQ(1, newNumberOfBits - oldNumberOfBits);
+    }
+
+    // Block group: one less inode is available
+    EXPECT_TRUE(IsFieldUpdated(io.updates[1], &ext2::BlockGroup::bg_free_inodes_count));
+    EXPECT_EQ(1, io.updates[1].oldValue - io.updates[1].newValue);
+    // Superblock: one less inode is available
+    EXPECT_TRUE(IsFieldUpdated(io.updates[2], &ext2::Superblock::s_free_inodes_count));
+    EXPECT_EQ(1, io.updates[2].oldValue - io.updates[2].newValue);
 }
