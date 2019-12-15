@@ -5,7 +5,7 @@
 #include <unistd.h>
 #include "stub.h"
 
-#include "../test-ext2-img/ext2-image.cpp"
+#include "ext2-image.cpp"
 
 #define stat dfstat
 #undef st_atime
