@@ -1,40 +1,30 @@
-project(kernel-tests CXX)
+project(kernel-tests CXX ASM)
 cmake_minimum_required(VERSION 3.9)
 
 include(ExternalProject)
 
 set(COMMON_FLAGS "${COMMON_FLAGS} -I${CMAKE_CURRENT_SOURCE_DIR}/../kernel")
 set(COMMON_FLAGS "${COMMON_FLAGS} -I${CMAKE_CURRENT_SOURCE_DIR}/../kernel-headers/include")
+set(COMMON_FLAGS "${COMMON_FLAGS} -no-pie")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++17 ${COMMON_FLAGS}")
+set(CMAKE_ASM_FLAGS "${CMAKE_ASM_FLAGS} ${COMMON_FLAGS}")
 
 if(BUILD_KERNEL_TESTS)
     message("building kernel test ${COMMON_LIB}")
     add_subdirectory(googletest)
     add_definitions(-DBUILDING_TESTS)
-    add_executable(kernel-test test-bio.cpp test-page.cpp stub.cpp)
+    set(KERNEL_SOURCES
+        ../kernel/x86_64/exception.S
+        ../kernel/x86_64/initcode.S
+        ../kernel/x86_64/startup.cpp
+    )
+    set(SOURCES
+        test-bio.cpp test-page.cpp test-ext2.cpp stub.cpp
+    )
+    add_executable(kernel-test ${KERNEL_SOURCES} ${SOURCES})
     target_link_libraries(kernel-test ${COMMON_LIB} gtest_main)
 else()
     message("configuring kernel test")
-if(0)
-    set(KERNELTEST_DIR ${PROJECT_BINARY_DIR}/kernel-test)
-    file(MAKE_DIRECTORY ${KERNELTEST_DIR})
-    execute_process(
-        WORKING_DIRECTORY ${KERNELTEST_DIR}
-        COMMAND ${CMAKE_COMMAND}
-        -GNinja
-        -DCMAKE_BUILD_TYPE=Release
-        -DBUILD_KERNEL_TESTS=1
-        ${CMAKE_CURRENT_SOURCE}
-    )
-
-    add_custom_target(kernel-test
-        COMMAND ${CMAKE_COMMAND}
-        --build ${KERNELTEST_DIR}
-        --config Release
-        COMMAND "Building kernel tests using native compiler"
-        VERBATIM
-    )
-endif()
 
     ExternalProject_Add(kernel-tests
         SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}

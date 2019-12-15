@@ -26,6 +26,11 @@ namespace {
             test_stubs::SetPerformIOFunction([this](auto& buffer) { PerformIO(buffer); });
         }
 
+        ~IOWrapper()
+        {
+            test_stubs::SetPerformIOFunction(nullptr);
+        }
+
         void PerformIO(bio::Buffer& buffer)
         {
             operations.push_back(Operation{buffer.dev, buffer.blockNumber, buffer.flags});

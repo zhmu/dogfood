@@ -12,7 +12,7 @@ namespace test_stubs {
         ioFunction = std::move(fn);
     }
 
-    void SetPutCharFunction(std::function<void(int)> fn) {
+    void SetPutCharFunction(std::function<void(int)>&& fn) {
         putCharFunction = fn;
     }
 
@@ -29,6 +29,10 @@ namespace ide
     {
         test_stubs::ioFunction(buffer);
     }
+
+    void OnIRQ()
+    {
+    }
 }
 
 namespace console
@@ -36,5 +40,26 @@ namespace console
     void put_char(int ch)
     {
         test_stubs::putCharFunction(ch);
+    }
+
+    int Read(void* buf, int len)
+    {
+        return 0;
+    }
+
+    int Write(const void* buf, int len)
+    {
+        return 0;
+    }
+
+    void OnIRQ()
+    {
+    }
+}
+
+namespace pic
+{
+    void Acknowledge()
+    {
     }
 }

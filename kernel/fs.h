@@ -35,6 +35,7 @@ namespace fs
     };
 
     void Initialize();
+    void MountRootFileSystem();
     int Read(Inode& inode, void* dst, off_t offset, unsigned int count);
     int Write(fs::Inode& inode, const void* dst, off_t offset, unsigned int count);
 

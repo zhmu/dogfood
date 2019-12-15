@@ -72,6 +72,7 @@ extern "C" void* __end;
 
 namespace
 {
+#ifndef BUILDING_TESTS
     void SetupDescriptors()
     {
         using namespace amd64;
@@ -338,6 +339,7 @@ namespace
         wrmsr(msr::SFMASK, 0x200); // IF
         wrmsr(msr::EFER, rdmsr(msr::EFER) | msr::EFER_SCE);
     }
+#endif // BUILDING_TESTS
 } // namespace
 
 extern "C" void exception(struct TrapFrame* tf)
@@ -384,6 +386,7 @@ extern "C" void irq_handler(const struct TrapFrame* tf)
     pic::Acknowledge();
 }
 
+#ifndef BUILDING_TESTS
 extern "C" void startup(const MULTIBOOT* mb)
 {
     SetupDescriptors();
@@ -402,7 +405,9 @@ extern "C" void startup(const MULTIBOOT* mb)
     pic::Enable(pic::irq::COM1);
     __asm __volatile("sti");
     fs::Initialize();
+    fs::MountRootFileSystem();
     process::Initialize();
 
     process::Scheduler();
 }
+#endif

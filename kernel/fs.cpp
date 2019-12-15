@@ -29,7 +29,10 @@ namespace fs
         for (size_t n = 0; n < cache::NumberOfInodes; ++n) {
             cache::inode[n].ext2inode = &cache::ext2inode[n];
         }
+    }
 
+    void MountRootFileSystem()
+    {
         rootInode = ext2::Mount(rootDeviceNumber);
         if (rootInode == nullptr)
             panic("cannot mount root filesystem");
