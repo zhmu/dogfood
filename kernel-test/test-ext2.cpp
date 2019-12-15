@@ -203,8 +203,6 @@ TEST_F(Ext2, Bmap_Read_File2)
         51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 0
     });
     for(unsigned int n = 0; n < static_cast<int>(blocks.size()); ++n) {
-        printf("block %d: exp %d got %d\n",
-        n, blocks[n], ext2::bmap(fsInode, n, false));
         EXPECT_EQ(blocks[n], ext2::bmap(fsInode, n, false));
     }
 }

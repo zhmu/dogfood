@@ -412,7 +412,7 @@ namespace ext2
             bio::brelse(buf);
         } while (--level >= 0);
 
-        return indirect * biosPerBlock + bioBlockOffset;
+        return indirect > 0 ? indirect * biosPerBlock + bioBlockOffset : 0;
     }
 
     bool ReadDirectory(fs::Inode& dirInode, off_t& offset, fs::DEntry& dentry)
