@@ -16,6 +16,7 @@ namespace process
 
     constexpr int maxFiles = 20;
 
+    using WaitChannel = void*;
     struct Process {
         State state = State::Unused;
         int pid = -1;
@@ -23,6 +24,7 @@ namespace process
         int signal = 0;
         Process* parent = nullptr;
         uint64_t nextMmapAddress = 0;
+        WaitChannel waitChannel{};
         //
         uint64_t pageDirectory = 0;  // physical address
         void* kernelStack = nullptr; // start of kernel stack
@@ -38,6 +40,10 @@ namespace process
     char* CreateAndMapUserStack(Process& proc);
     void Initialize();
     void Scheduler();
+
+    void Sleep(WaitChannel, int);
+    void Wakeup(WaitChannel);
+
     int Exit(amd64::TrapFrame& context);
     int Fork(amd64::TrapFrame& context);
     int WaitPID(amd64::TrapFrame& context);

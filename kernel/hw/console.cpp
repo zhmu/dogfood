@@ -1,5 +1,6 @@
 #include "console.h"
 #include "../x86_64/amd64.h"
+#include "../process.h"
 
 using namespace amd64::io;
 
@@ -65,13 +66,16 @@ namespace console
         auto ptr = reinterpret_cast<char*>(buf);
         while (len > 0) {
             using namespace input_buffer;
+            auto state = interrupts::SaveAndDisable();
             while (read_offset == write_offset) {
-                // Not enough data; wait for more TODO mechanism
-                __asm __volatile("pause");
+                // Not enough data; wait for more
+                process::Sleep(&data[0], state);
             }
 
             auto ch = data[read_offset];
             read_offset = (read_offset + 1) % size;
+            interrupts::Restore(state);
+
             if (ch == '\r')
                 ch = '\n';
 
@@ -91,8 +95,13 @@ namespace console
                 break;
             {
                 using namespace input_buffer;
-                data[write_offset] = ch;
-                write_offset = (write_offset + 1) % size;
+                {
+                    auto state = interrupts::SaveAndDisable();
+                    data[write_offset] = ch;
+                    write_offset = (write_offset + 1) % size;
+                    interrupts::Restore(state);
+                    process::Wakeup(&data[0]);
+                }
 
                 put_char(ch);
                 if (ch == '\r')

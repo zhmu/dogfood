@@ -1,6 +1,7 @@
 #include "ide.h"
 #include "../x86_64/amd64.h"
 #include "../bio.h"
+#include "../process.h"
 #include "../lib.h"
 #include "pic.h"
 
@@ -106,6 +107,7 @@ namespace ide
             buffer->flags |= bio::flag::Valid;
         }
         buffer->flags &= ~bio::flag::Dirty;
+        process::Wakeup(buffer);
 
         if (queue != nullptr)
             ExecuteIO(*queue);
@@ -113,6 +115,8 @@ namespace ide
 
     void PerformIO(bio::Buffer& buffer)
     {
+        auto state = interrupts::SaveAndDisable();
+
         // Append buffer to queue
         {
             buffer.qnext = nullptr;
@@ -129,9 +133,9 @@ namespace ide
             ExecuteIO(buffer);
 
         while ((buffer.flags & (bio::flag::Valid | bio::flag::Dirty)) != bio::flag::Valid) {
-            // TODO We should use a proper sleep/wakeup instead of this
-            amd64::MemoryBarrier();
+            process::Sleep(&buffer, state);
         }
+        interrupts::Restore(state);
     }
 
 } // namespace ide

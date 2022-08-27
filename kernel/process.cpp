@@ -62,7 +62,7 @@ namespace process
                     auto tf = reinterpret_cast<amd64::TrapFrame*>(sp);
                     memset(tf, 0, sizeof(amd64::TrapFrame));
                     tf->cs = static_cast<uint64_t>(amd64::Selector::UserCode) + 3;
-                    tf->rflags = 0; // TODO IF
+                    tf->rflags = amd64::rflags::IF;
                     tf->ss = static_cast<uint64_t>(amd64::Selector::UserData) + 3;
                     proc.trapFrame = tf;
                 }
@@ -114,6 +114,11 @@ namespace process
             proc.state = State::Unused;
         }
 
+        void Yield()
+        {
+            amd64::fpu::SaveContext(&current->fpu[0]);
+            switch_to(&current->context, cpu_context);
+        }
     } // namespace
 
     Process& GetCurrent() { return *current; }
@@ -129,6 +134,32 @@ namespace process
             pd, vm::userland::stackBase, vm::PageSize, vm::VirtualToPhysical(ustack),
             vm::Page_P | vm::Page_RW | vm::Page_US);
         return ustack;
+    }
+
+    void Sleep(WaitChannel waitChannel, int state)
+    {
+        assert(interrupts::Save() == 0); // interrupts must be disabled
+        if (current == nullptr) {
+            interrupts::Enable();
+            interrupts::Wait();
+            interrupts::Restore(state);
+            return;
+        }
+
+        current->waitChannel = waitChannel;
+        current->state = State::Sleeping;
+        interrupts::Restore(state);
+        Yield();
+    }
+
+    void Wakeup(WaitChannel waitChannel)
+    {
+        auto state = interrupts::SaveAndDisable();
+        for (auto& proc : process) {
+            if (proc.state == State::Sleeping && proc.waitChannel == waitChannel)
+                proc.state = State::Runnable;
+        }
+        interrupts::Restore(state);
     }
 
     int Fork(amd64::TrapFrame& tf)
@@ -151,9 +182,11 @@ namespace process
         // frame
         new_process->trapFrame->cs = static_cast<uint64_t>(amd64::Selector::UserCode) + 3;
         new_process->trapFrame->ss = static_cast<uint64_t>(amd64::Selector::UserData) + 3;
-        new_process->trapFrame->rflags = 0x202; // XXX
+        new_process->trapFrame->rflags = tf.rflags;
         new_process->trapFrame->rip = tf.rip;
         new_process->trapFrame->rsp = tf.rsp;
+        // Interrupts must be enabled in both parent and child
+        assert(new_process->trapFrame->rflags & amd64::rflags::IF);
 
         // Restore these registers from the trapframe; the is needed by the ABI
         new_process->trapFrame->rbx = tf.rbx;
@@ -172,6 +205,7 @@ namespace process
         auto options = static_cast<int>(syscall::GetArgument<3>(tf));
 
         while (true) {
+            auto state = interrupts::SaveAndDisable();
             bool have_children = false;
             for (auto& proc : process) {
                 if (proc.state == State::Unused || proc.ppid != current->pid)
@@ -182,16 +216,16 @@ namespace process
                     int pid = proc.pid;
                     *stat_loc = 0; // TODO
                     DestroyZombieProcess(proc);
+                    interrupts::Restore(state);
                     return pid;
                 }
             }
-            if (!have_children)
+            if (!have_children) {
+                interrupts::Restore(state);
                 return -ECHILD;
+            }
 
-            // TODO implement proper sleep/wakeup mechanism
-            current->state = State::Runnable; // XXX
-            __asm __volatile("fxsave (%0)" : : "r"(&current->fpu[0]));
-            switch_to(&current->context, cpu_context);
+            Sleep(&process, state);
         }
         // NOTREACHED
     }
@@ -211,6 +245,7 @@ namespace process
 
         printf("kill: pid %d sig %d (own %d)\n", pid, signal, current->pid);
         proc->signal = signal;
+        // TODO unblock child if needed
         if (proc == current) {
             Exit(tf);
         }
@@ -223,16 +258,20 @@ namespace process
         if (current->pid == 1)
             panic("init exiting?");
 
-        current->state = State::Zombie;
         for (auto& file : current->files) {
             if (file.f_refcount == 0)
                 continue;
             file::Free(file);
         }
-        // Not saving FPU context for zombie thread
-        switch_to(&current->context, cpu_context);
-        for (;;)
-            ;
+
+        auto state = interrupts::SaveAndDisable();
+        current->state = State::Zombie;
+        interrupts::Restore(state);
+
+        Wakeup(&process);
+
+        Yield();
+        panic("Exit() returned");
         // NOTREACHED
     }
 
@@ -260,6 +299,7 @@ namespace process
     void Scheduler()
     {
         while (1) {
+            bool did_switch = false;
             for (auto& proc : process) {
                 if (proc.state != State::Runnable)
                     continue;
@@ -273,8 +313,17 @@ namespace process
                     reinterpret_cast<char*>(proc.kernelStack) + vm::PageSize);
                 syscall_kernel_rsp = reinterpret_cast<uint64_t>(
                     reinterpret_cast<char*>(proc.kernelStack) + vm::PageSize);
-                __asm __volatile("frstor (%0)" : : "r"(&current->fpu[0]));
+
+                if (prev && prev != current) {
+                    amd64::fpu::SaveContext(&prev->fpu[0]);
+                    amd64::fpu::RestoreContext(&current->fpu[0]);
+                }
+                did_switch = true;
                 switch_to(&cpu_context, proc.context);
+            }
+
+            if (!did_switch) {
+                interrupts::Wait();
             }
         }
     }
