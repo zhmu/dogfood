@@ -28,6 +28,10 @@ namespace amd64
         inline constexpr int PF = 14;
     }
 
+    namespace rflags {
+            inline constexpr uint32_t IF = 0x200; // Interrupt Flag
+    }
+
     enum class Selector {
         KernelCode = 0x08,
         KernelData = 0x10,
@@ -272,5 +276,74 @@ namespace amd64
         }
     } // namespace io
 
+    namespace fpu
+    {
+        inline void SaveContext(void* context)
+        {
+            __asm __volatile("fxsave (%0)" : : "r" (context));
+        }
+
+        inline void RestoreContext(void* context)
+        {
+            __asm __volatile("frstor (%0)" : : "r" (context));
+        }
+    }
+
+    namespace interrupts
+    {
+        inline void Wait()
+        {
+            __asm __volatile("hlt");
+        }
+
+        inline void Disable()
+        {
+            __asm __volatile("cli");
+        }
+
+        inline void Enable()
+        {
+            __asm __volatile("sti");
+        }
+
+        inline int Save()
+        {
+            static_assert(rflags::IF == 0x200);
+            int r;
+            __asm __volatile(
+                "pushfq\n"
+                "popq %%rdx\n"
+                // Mask out IF
+                "andq $0x200, %%rdx\n"
+                "movl %%edx, %0\n"
+            : "=r" (r) : : "%rdx");
+            return r;
+        }
+
+        inline int SaveAndDisable()
+        {
+            const auto r = Save();
+            Disable();
+            return r;
+        }
+
+        inline void Restore(int flags)
+        {
+            static_assert(rflags::IF == 0x200);
+            __asm __volatile(
+                "pushfq\n"
+                "popq %%rdx\n"
+                // Mask out IF...
+                "andq $~0x200, %%rdx\n"
+                // ...and re-enable if set
+                "orq %0, %%rdx\n"
+                "pushq %%rdx\n"
+                "popfq\n"
+            : : "r" (static_cast<uint64_t>(flags)) : "%rdx");
+        }
+    } // namespace interrupts
+
     inline void MemoryBarrier() { __asm __volatile("" : : : "memory"); }
 } // namespace amd64
+
+namespace interrupts = amd64::interrupts;

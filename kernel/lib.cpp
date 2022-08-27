@@ -1,5 +1,6 @@
 #include "lib.h"
 #include "types.h"
+#include "x86_64/amd64.h"
 
 #include "hw/console.h"
 
@@ -160,7 +161,7 @@ void* memcpy(void* dst, const void* src, size_t len)
 
 void panic(const char* s)
 {
-    __asm __volatile("cli");
+    amd64::interrupts::Disable();
     printf("panic: %s\n", s);
     while (1)
         ;

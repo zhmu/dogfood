@@ -403,7 +403,7 @@ extern "C" void startup(const MULTIBOOT* mb)
     ide::Initialize();
     pic::Enable(pic::irq::Timer);
     pic::Enable(pic::irq::COM1);
-    __asm __volatile("sti");
+    interrupts::Enable();
     fs::Initialize();
     fs::MountRootFileSystem();
     process::Initialize();
