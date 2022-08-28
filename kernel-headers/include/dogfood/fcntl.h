@@ -16,3 +16,4 @@
 #define F_SETFL 4
 
 #define FD_CLOEXEC 1
+#define AT_FDCWD (-1)

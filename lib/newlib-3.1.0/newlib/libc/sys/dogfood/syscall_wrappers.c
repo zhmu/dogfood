@@ -1,7 +1,13 @@
 #include <sys/types.h>
-#include <sys/resource.h>
-#include <sys/mman.h>
 #include <sys/select.h>
+#include <sys/resource.h>
+#include <sys/stat.h>
+#include <sys/mount.h>
+#include <sys/mman.h>
+#include <sys/socket.h>
+#include <sys/signal.h>
+#include <sys/times.h>
+#include <sys/utime.h>
 #include <errno.h>
 #include <stdlib.h>
 #include <string.h>
@@ -66,29 +72,29 @@ void _exit(int n)
         __asm __volatile("ud2");
 }
 
-#define SYSCALL0(name)         \
+#define SYSCALL0(name, rt)     \
     extern long _SYS_##name(); \
-    int name(long a) { return set_errno_or_extract_value(_SYS_##name()); }
+    rt name(long a) { return (rt)set_errno_or_extract_value(_SYS_##name()); }
 
-#define SYSCALL1(name)                                     \
-    int name(long a)                                       \
+#define SYSCALL1(name, rt, t1)                          \
+    rt name(t1 a)                                       \
     {                                                      \
         extern long _SYS_##name(long a);                   \
-        return set_errno_or_extract_value(_SYS_##name(a)); \
+        return (rt)set_errno_or_extract_value(_SYS_##name((long)a)); \
     }
 
-#define SYSCALL2(name)                                        \
-    int name(long a, long b)                                  \
+#define SYSCALL2(name, rt, t1, t2)                                        \
+    rt name(t1 a, t2 b)                                  \
     {                                                         \
         extern long _SYS_##name(long a, long b);              \
-        return set_errno_or_extract_value(_SYS_##name(a, b)); \
+        return (rt)set_errno_or_extract_value(_SYS_##name((long)a, (long)b)); \
     }
 
-#define SYSCALL3(name)                                           \
-    int name(long a, long b, long c)                             \
+#define SYSCALL3(name, rt, t1, t2, t3)                           \
+    rt name(t1 a, t2 b, t3 c)                             \
     {                                                            \
         extern long _SYS_##name(long a, long b, long c);         \
-        return set_errno_or_extract_value(_SYS_##name(a, b, c)); \
+        return (rt)set_errno_or_extract_value(_SYS_##name((long)a, (long)b, (long)c)); \
     }
 
 #define SYSCALL4(name)                                              \
@@ -124,9 +130,9 @@ off_t lseek(int fd, off_t offset, int whence)
     return l;
 }
 
-static SYSCALL1(clone)
+SYSCALL1(clone, int, int)
 
-    int fork()
+int fork()
 {
     return clone(0);
 }
@@ -201,52 +207,52 @@ SYSCALL4(fcntl)
 SYSCALL5(ioctl)
 SYSCALL4(mount)
 SYSCALL4(unmount)
-SYSCALL2(statfs)
-SYSCALL2(fstatfs)
-SYSCALL2(nanosleep)
+SYSCALL2(statfs, int, const char*, struct statfs*)
+SYSCALL2(fstatfs, int, int, struct statfs*)
+SYSCALL2(nanosleep, int, const struct timespec*, struct timespec*)
 
-SYSCALL3(open)
-SYSCALL1(close)
-SYSCALL3(read)
-SYSCALL3(write)
-SYSCALL1(unlink)
-SYSCALL3(execve)
-SYSCALL1(dup)
-SYSCALL2(stat)
-SYSCALL1(chdir)
-SYSCALL2(fstat)
-SYSCALL1(fchdir)
-SYSCALL2(link)
-SYSCALL2(utime)
-SYSCALL2(clock_settime)
-SYSCALL2(clock_gettime)
-SYSCALL2(clock_getres)
-SYSCALL3(readlink)
-SYSCALL2(lstat)
-SYSCALL3(sigaction)
-SYSCALL3(sigprocmask)
-SYSCALL1(sigsuspend)
-SYSCALL2(kill)
-SYSCALL0(getpgrp)
-SYSCALL0(setsid)
-SYSCALL2(dup2)
-SYSCALL1(getsid)
-SYSCALL0(getuid)
-SYSCALL0(geteuid)
-SYSCALL0(getgid)
-SYSCALL0(getegid)
-SYSCALL0(getpid)
-SYSCALL0(getppid)
-SYSCALL2(symlink)
-SYSCALL1(reboot)
-SYSCALL3(waitpid)
-SYSCALL3(chown)
-SYSCALL3(fchown)
-SYSCALL1(umask)
-SYSCALL2(chmod)
-SYSCALL1(mkdir)
-SYSCALL1(rmdir)
-SYSCALL2(fchmod)
+SYSCALL3(open, int, const char*, int, mode_t)
+SYSCALL1(close, int, int)
+SYSCALL3(read, ssize_t, int, void*, size_t)
+SYSCALL3(write, ssize_t, int, void*, size_t)
+SYSCALL1(unlink, int, int)
+SYSCALL3(execve, int, const char*, const char**, const char**)
+SYSCALL1(dup, int, int)
+SYSCALL2(stat, int, const char*, struct stat*)
+SYSCALL1(chdir, int, const char*)
+SYSCALL2(fstat, int, int, struct stat*)
+SYSCALL1(fchdir,int,  int)
+SYSCALL2(link, int, const char*, const char*)
+SYSCALL2(utime, int, const char*, const struct utimbuf*)
+SYSCALL2(clock_settime, int, clockid_t, struct timespec*)
+SYSCALL2(clock_gettime, int, clockid_t, const struct timespec*)
+SYSCALL2(clock_getres, int, clockid_t, struct timespec*)
+SYSCALL3(readlink, ssize_t, const char*, char*, size_t)
+SYSCALL2(lstat, int, const char*, struct stat*)
+SYSCALL3(sigaction, int, int, const struct sigaction*, struct sigaction*)
+SYSCALL3(sigprocmask, int, int, const sigset_t*, sigset_t*)
+SYSCALL1(sigsuspend, int, const sigset_t*)
+SYSCALL2(kill, int, pid_t, int)
+SYSCALL0(getpgrp, int)
+SYSCALL0(setsid, pid_t)
+SYSCALL2(dup2, int, int, int)
+SYSCALL1(getsid, pid_t, pid_t)
+SYSCALL0(getuid, uid_t)
+SYSCALL0(geteuid, uid_t)
+SYSCALL0(getgid, gid_t)
+SYSCALL0(getegid, gid_t)
+SYSCALL0(getpid, pid_t)
+SYSCALL0(getppid, pid_t)
+SYSCALL2(symlink, int, const char*, const char*)
+SYSCALL1(reboot, int, int)
+SYSCALL3(waitpid, pid_t, pid_t, int*, int)
+SYSCALL3(chown, int, const char*, uid_t, gid_t)
+SYSCALL3(fchown, int, int, uid_t, gid_t)
+SYSCALL1(umask, mode_t, mode_t)
+SYSCALL2(chmod, int, const char*, mode_t)
+SYSCALL2(mkdir, int, const char*, mode_t)
+SYSCALL1(rmdir, int, const char*)
+SYSCALL2(fchmod, int, int, mode_t)
 
 int pipe(int* fd)
 {
@@ -271,7 +277,7 @@ int wait3(int* status, int options, struct rusage* rusage)
 {
     if (rusage != NULL)
         memset(rusage, 0, sizeof(*rusage));
-    return waitpid(0, (long*)status, options);
+    return waitpid(0, status, options);
 }
 
 int getmntinfo(struct statfs** mntbufp, int mode)
@@ -364,6 +370,13 @@ int select(int nfds, fd_set* readfds, fd_set* writefds, fd_set* exceptfds, struc
     return -1;
 }
 
+int pselect(int nfds, fd_set* readfds, fd_set* writefds, fd_set* exceptfds, const struct timespec* timeout, const sigset_t* set)
+{
+    errno = ENOSYS;
+    return -1;
+}
+
+
 int getrlimit(int resource, struct rlimit* rlim)
 {
     errno = ENOSYS;
@@ -390,6 +403,48 @@ int setrlimit(int resource, const struct rlimit* rlim)
     return -1;
 }
 
+int accept(int socket, struct sockaddr* address, socklen_t* address_len)
+{
+    errno = ENOSYS;
+    return -1;
+}
+
+int bind(int socket, const struct sockaddr* address, socklen_t address_len)
+{
+    errno = ENOSYS;
+    return -1;
+}
+
+int connect(int socket, const struct sockaddr* address, socklen_t address_len)
+{
+    errno = ENOSYS;
+    return -1;
+}
+
+int listen(int socket, int backlog)
+{
+    errno = ENOSYS;
+    return -1;
+}
+
+int socket(int domain, int type, int protocol)
+{
+    errno = ENOSYS;
+    return -1;
+}
+
+ssize_t send(int socket, const void* buffer, size_t length, int flags)
+{
+    errno = ENOSYS;
+    return -1;
+}
+
+int fstatat(int fd, const char *__restrict path, struct stat *__restrict buf, int flag)
+{
+    errno = ENOSYS;
+    return -1;
+}
+
 unsigned int sleep(unsigned int seconds) { return 0; }
 
-int wait(int* wstatus) { return waitpid(-1, &wstatus, 0); }
+int wait(int* wstatus) { return waitpid(-1, wstatus, 0); }

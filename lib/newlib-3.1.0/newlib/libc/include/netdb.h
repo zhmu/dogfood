@@ -70,6 +70,21 @@ extern "C" {
 struct servent* getservbyname(const char* name, const char* proto);
 struct hostent* gethostbyname(const char* name);
 
+#define EAI_AGAIN 1
+#define EAI_BADFLAGS 2
+#define EAI_FAIL 3
+#define EAI_FAMILY 4
+#define EAI_MEMORY 5
+#define EAI_NONAME 6
+#define EAI_SERVICE 7
+#define EAI_SOCKTYPE 8
+#define EAI_SYSTEM 9
+
+int getaddrinfo(const char* nodename, const char* servname, const struct addrinfo* hints, struct addrinfo** res);
+void freeaddrinfo(struct addrinfo* ai);
+
+const char* gai_strerror(int ecode);
+
 #ifdef __cplusplus
 }
 #endif

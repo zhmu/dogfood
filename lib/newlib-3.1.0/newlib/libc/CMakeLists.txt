@@ -617,6 +617,7 @@ set(SOURCES
     sys/dogfood/readdir.c
     sys/dogfood/closedir.c
     sys/dogfood/rewinddir.c
+    sys/dogfood/unimplemented.c
 )
 
 set(SOURCES_notyet
@@ -840,6 +841,7 @@ set(HEADERS_SYS
     sys/dogfood/sys/mman.h
     sys/dogfood/sys/mount.h
     sys/dogfood/sys/socket.h
+    sys/dogfood/sys/un.h
 )
 set(HEADERS_RPC
     ${HEADERS_RPC}
