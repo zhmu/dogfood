@@ -15,7 +15,7 @@ echo "Preparing build directory; ${BUILD_DIR}"
 cp ci/toolchain/Dockerfile ${BUILD_DIR}
 mkdir -p ${BUILD_DIR}/work/userland
 cp -r "userland/binutils-${BINUTILS_VERSION}" ${BUILD_DIR}/work/userland
-cp -r "userland/gcc-9.2.0" ${BUILD_DIR}/work/userland
+cp -r "userland/gcc-${GCC_VERSION}" ${BUILD_DIR}/work/userland
 cp -r settings.sh ${BUILD_DIR}/work
 cp -r build-toolchain.sh ${BUILD_DIR}/work
 
