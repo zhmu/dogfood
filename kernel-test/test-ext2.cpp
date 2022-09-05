@@ -5,7 +5,7 @@
 #include <unistd.h>
 #include "stub.h"
 
-#include "ext2-image.cpp"
+std::vector<uint8_t> GenerateImage();
 
 #define stat dfstat
 #undef st_atime

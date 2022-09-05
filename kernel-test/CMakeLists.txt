@@ -20,9 +20,20 @@ if(BUILD_KERNEL_TESTS)
     )
     set(SOURCES
         test-bio.cpp test-page.cpp test-ext2.cpp stub.cpp
+        ${CMAKE_CURRENT_BINARY_DIR}/ext2-image.cpp
     )
     add_executable(kernel-test ${KERNEL_SOURCES} ${SOURCES})
     target_link_libraries(kernel-test ${COMMON_LIB} gtest_main)
+
+    add_custom_command(
+        OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/ext2-image.cpp
+        COMMAND python3 ${CMAKE_CURRENT_SOURCE_DIR}/generate-ext2-image.py
+        DEPENDS generate-ext2-image.py
+    )
+    target_include_directories(kernel-test
+        INTERFACE ${CMAKE_CURRENT_BINARY_DIR}
+        PRIVATE ${CMAKE_CURRENT_BINARY_DIR}
+    )
 else()
     message("configuring kernel test")
 

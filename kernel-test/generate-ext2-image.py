@@ -93,6 +93,9 @@ with open(OUTPUT_IMAGE, 'rb') as f:
         raise Exception('update error')
 
     lines = []
+    lines.append('#include <vector>')
+    lines.append('#include <cstdint>')
+    lines.append('')
     lines.append('std::vector<uint8_t> GenerateImage()')
     lines.append('{')
     lines.append('    std::vector<uint8_t> buffer;')
