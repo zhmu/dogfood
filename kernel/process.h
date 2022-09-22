@@ -49,4 +49,6 @@ namespace process
     int WaitPID(amd64::TrapFrame& context);
     int Kill(amd64::TrapFrame& context);
 
+    bool MapInode(Process& proc, uint64_t va, uint64_t pteFlags, uint64_t mappingSize, fs::Inode& inode, uint64_t inodeOffset, uint64_t inodeSize);
+
 } // namespace process

@@ -9,10 +9,10 @@
 #include "vm.h"
 #include <dogfood/errno.h>
 
-#define EXEC_DEBUG 0
-
 namespace
 {
+    inline constexpr auto DEBUG_EXEC = false;
+
     bool VerifyHeader(const Elf64_Ehdr& ehdr)
     {
         if (ehdr.e_ident[EI_MAG0] != ELFMAG0 || ehdr.e_ident[EI_MAG1] != ELFMAG1 ||
@@ -58,37 +58,19 @@ namespace
             if (phdr.p_type != PT_LOAD)
                 continue;
 
-#if EXEC_DEBUG
-            printf(
-                "phdr %d: type %d offset %lx vaddr %p memsz %d filesz %d flags %x\n", ph,
-                phdr.p_type, phdr.p_offset, phdr.p_vaddr, phdr.p_memsz, phdr.p_filesz,
-                phdr.p_flags);
-#endif
+            if constexpr (DEBUG_EXEC) {
+                printf(
+                    "phdr %d: type %d offset %lx vaddr %p memsz %d filesz %d flags %x\n", ph,
+                    phdr.p_type, phdr.p_offset, phdr.p_vaddr, phdr.p_memsz, phdr.p_filesz,
+                    phdr.p_flags);
+            }
             const auto pteFlags = MapElfFlagsToVM(phdr.p_flags);
-
             const auto va = vm::RoundDownToPage(phdr.p_vaddr);
             const auto fileOffset = vm::RoundDownToPage(phdr.p_offset);
-            auto fileSz = phdr.p_filesz + (phdr.p_offset - fileOffset);
-            for (uint64_t offset = 0; offset < phdr.p_memsz; offset += vm::PageSize) {
-                void* page = page_allocator::Allocate();
-                if (page == nullptr)
-                    return false;
-                memset(page, 0, vm::PageSize);
-                vm::Map(pml4, va + offset, vm::PageSize, vm::VirtualToPhysical(page), pteFlags);
+            const auto fileSz = phdr.p_filesz + (phdr.p_offset - fileOffset);
+            if (!MapInode(current, va, pteFlags, phdr.p_memsz, inode, fileOffset, fileSz))
+                return false;
 
-                const auto readOffset = offset;
-                int bytesToRead = vm::PageSize;
-                if (readOffset + bytesToRead > fileSz)
-                    bytesToRead = fileSz - readOffset;
-#if EXEC_DEBUG
-                printf(
-                    "reading: offset %x, %d bytes -> %p\n", fileOffset + readOffset, bytesToRead,
-                    va + offset);
-#endif
-                if (bytesToRead > 0 &&
-                    fs::Read(inode, page, fileOffset + readOffset, bytesToRead) != bytesToRead)
-                    return false;
-            }
         }
 
         return true;

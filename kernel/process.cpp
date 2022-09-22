@@ -275,6 +275,32 @@ namespace process
         // NOTREACHED
     }
 
+    bool MapInode(Process& proc, uint64_t va, uint64_t pteFlags, uint64_t mappingSize, fs::Inode& inode, uint64_t inodeOffset, uint64_t inodeSize)
+    {
+        auto pml4 = reinterpret_cast<uint64_t*>(vm::PhysicalToVirtual(proc.pageDirectory));
+        for (uint64_t offset = 0; offset < mappingSize; offset += vm::PageSize) {
+            void* page = page_allocator::Allocate();
+            if (page == nullptr)
+                return false;
+            memset(page, 0, vm::PageSize);
+            vm::Map(pml4, va + offset, vm::PageSize, vm::VirtualToPhysical(page), pteFlags);
+
+            const auto readOffset = offset;
+            int bytesToRead = vm::PageSize;
+            if (readOffset + bytesToRead > inodeSize)
+                bytesToRead = inodeSize - readOffset;
+#if EXEC_DEBUG
+            printf(
+                "reading: offset %x, %d bytes -> %p\n", inodeOffset + readOffset, bytesToRead,
+                va + offset);
+#endif
+            if (bytesToRead > 0 &&
+                fs::Read(inode, page, inodeOffset + readOffset, bytesToRead) != bytesToRead)
+                return false;
+        }
+        return true;
+    }
+
     void Initialize()
     {
         {
