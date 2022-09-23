@@ -15,7 +15,7 @@
 using namespace amd64;
 
 TSS kernel_tss;
-uint64_t* kernel_pagedir = nullptr;
+amd64::PageDirectory kernel_pagedir;
 
 inline constexpr int gdtSize = static_cast<int>(Selector::Task) + 16;
 uint8_t gdt[gdtSize];
@@ -210,6 +210,7 @@ namespace
         uint64_t* pml4, uint64_t& next_page, uint64_t phys_base, uint64_t va_start, uint64_t va_end,
         uint64_t pteFlags)
     {
+        // TODO This is identical to vm::Map() with a custom CreateOrGetPage()
         for (uint64_t addr = va_start; addr < va_end; addr += vm::PageSize) {
             const auto pml4Offset = (addr >> 39) & 0x1ff;
             const auto pdpeOffset = (addr >> 30) & 0x1ff;
@@ -309,7 +310,7 @@ namespace
         write_cr4(read_cr4() | cr4::OSXMMEXCPT | cr4::OSFXSR); // FPU support
         write_cr3(reinterpret_cast<uint64_t>(pml4));
         kernel_pagedir =
-            reinterpret_cast<uint64_t*>(vm::PhysicalToVirtual(reinterpret_cast<uint64_t>(pml4)));
+            reinterpret_cast<amd64::PageDirectory>(vm::PhysicalToVirtual(reinterpret_cast<uint64_t>(pml4)));
 
         // Register all available regions with our memory allocation now that
         // they are properly mapped.  Note that next_page is the kernel end +
@@ -347,9 +348,15 @@ extern "C" void exception(struct TrapFrame* tf)
     const bool isUserMode = (tf->cs & 3) == static_cast<int>(DescriptorPrivilege::User);
     const bool isPageFault = tf->trapno == exception::PF;
 
-    const auto faultAddress = read_cr2();
-    if (isPageFault && vm::HandlePageFault(faultAddress, tf->errnum))
-        return;
+    // Read fault address while keeping interrupts disabled to ensure it will
+    // not be overwritten in between
+    uint64_t faultAddress{};
+    if (isPageFault) {
+        faultAddress = read_cr2();
+        interrupts::Enable();
+        if (vm::HandlePageFault(faultAddress, tf->errnum))
+            return;
+    }
 
     printf("exception #%d @ cs:rip = %lx:%lx\n", tf->trapno, tf->cs, tf->rip);
     printf("rax %lx rbx %lx rcx %lx rdx %lx\n", tf->rax, tf->rbx, tf->rcx, tf->rdx);

@@ -89,6 +89,38 @@ namespace vm
                 onIndirectionPage(va, pml4[pml4eOffset]);
             }
         }
+
+        bool HandleMappingPageFault(process::Process& proc, const uint64_t virt)
+        {
+            auto va = RoundDownToPage(virt);
+            for(auto& mapping: proc.mappings) {
+                if (va < mapping.va_start || va >= mapping.va_end) continue;
+
+                void* page = page_allocator::Allocate();
+                if (page == nullptr)
+                    return false;
+                memset(page, 0, vm::PageSize);
+
+                const auto readOffset = va - mapping.va_start;
+                int bytesToRead = vm::PageSize;
+                if (readOffset + bytesToRead > mapping.inode_length)
+                    bytesToRead = mapping.inode_length - readOffset;
+#if 0
+                printf(
+                    "HandleMappingPageFault: proc %d va %p inum %d offset %x, %d bytes\n",
+                    proc.pid, virt, mapping.inode->inum,
+                    mapping.inode_offset + readOffset, bytesToRead);
+#endif
+                if (bytesToRead > 0 &&
+                    fs::Read(*mapping.inode, page, mapping.inode_offset + readOffset, bytesToRead) != bytesToRead)
+                    return false;
+
+                auto pml4 = reinterpret_cast<uint64_t*>(vm::PhysicalToVirtual(proc.pageDirectory));
+                vm::Map(pml4, va, vm::PageSize, vm::VirtualToPhysical(page), mapping.pte_flags);
+                return true;
+            }
+            return false;
+        }
     } // namespace
 
     void
@@ -202,6 +234,9 @@ namespace vm
     bool HandlePageFault(uint64_t va, int errnum)
     {
         auto& current = process::GetCurrent();
+        if (HandleMappingPageFault(current, va))
+            return true;
+
         auto pml4 = reinterpret_cast<uint64_t*>(vm::PhysicalToVirtual(current.pageDirectory));
         auto pte = FindPTE(pml4, vm::RoundDownToPage(va), false);
         if (pte == nullptr)

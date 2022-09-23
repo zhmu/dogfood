@@ -119,7 +119,39 @@ namespace process
             amd64::fpu::SaveContext(&current->fpu[0]);
             switch_to(&current->context, cpu_context);
         }
+
+        Mapping* AllocateMapping(Process& proc)
+        {
+            for(auto& mapping: proc.mappings) {
+                if (mapping.pte_flags != 0) continue;
+                return &mapping;
+            }
+            return nullptr;
+        }
+
+        void CloneMappings(const Process& current, Process& proc)
+        {
+            // This expects proc to have no active mappings
+            for(int n = 0; n < maxMappings; ++n) {
+                auto& source = current.mappings[n];
+                auto& dest = proc.mappings[n];
+                assert(dest.pte_flags == 0);
+                dest = source;
+                if (dest.inode)
+                    fs::iref(*dest.inode);
+            }
+        }
     } // namespace
+
+    void FreeMappings(Process& proc)
+    {
+        for (auto& mapping: proc.mappings) {
+            if (mapping.inode != nullptr)
+                fs::iput(*mapping.inode);
+            mapping.inode = nullptr;
+            mapping = {};
+        }
+    }
 
     Process& GetCurrent() { return *current; }
 
@@ -169,6 +201,7 @@ namespace process
             return -ENOMEM;
         new_process->ppid = current->pid;
         file::CloneTable(*current, *new_process);
+        CloneMappings(*current, *new_process);
         new_process->cwd = current->cwd;
         fs::iref(*new_process->cwd);
 
@@ -243,7 +276,6 @@ namespace process
         if (proc == nullptr)
             return -ESRCH;
 
-        printf("kill: pid %d sig %d (own %d)\n", pid, signal, current->pid);
         proc->signal = signal;
         // TODO unblock child if needed
         if (proc == current) {
@@ -264,6 +296,8 @@ namespace process
             file::Free(file);
         }
 
+        FreeMappings(*current);
+
         auto state = interrupts::SaveAndDisable();
         current->state = State::Zombie;
         interrupts::Restore(state);
@@ -277,27 +311,15 @@ namespace process
 
     bool MapInode(Process& proc, uint64_t va, uint64_t pteFlags, uint64_t mappingSize, fs::Inode& inode, uint64_t inodeOffset, uint64_t inodeSize)
     {
-        auto pml4 = reinterpret_cast<uint64_t*>(vm::PhysicalToVirtual(proc.pageDirectory));
-        for (uint64_t offset = 0; offset < mappingSize; offset += vm::PageSize) {
-            void* page = page_allocator::Allocate();
-            if (page == nullptr)
-                return false;
-            memset(page, 0, vm::PageSize);
-            vm::Map(pml4, va + offset, vm::PageSize, vm::VirtualToPhysical(page), pteFlags);
-
-            const auto readOffset = offset;
-            int bytesToRead = vm::PageSize;
-            if (readOffset + bytesToRead > inodeSize)
-                bytesToRead = inodeSize - readOffset;
-#if EXEC_DEBUG
-            printf(
-                "reading: offset %x, %d bytes -> %p\n", inodeOffset + readOffset, bytesToRead,
-                va + offset);
-#endif
-            if (bytesToRead > 0 &&
-                fs::Read(inode, page, inodeOffset + readOffset, bytesToRead) != bytesToRead)
-                return false;
-        }
+        auto mapping = AllocateMapping(proc);
+        if (!mapping) return false;
+        mapping->va_start = va;
+        mapping->va_end = va + mappingSize;
+        mapping->pte_flags = pteFlags;
+        mapping->inode = &inode;
+        mapping->inode_offset = inodeOffset;
+        mapping->inode_length = inodeSize;
+        fs::iref(*mapping->inode);
         return true;
     }
 

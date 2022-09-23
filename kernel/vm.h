@@ -4,10 +4,13 @@
 
 namespace amd64
 {
+    using PageDirectory = uint64_t*;
+
     struct TrapFrame;
 }
 
-extern uint64_t* kernel_pagedir;
+
+extern amd64::PageDirectory kernel_pagedir;
 
 namespace vm
 {

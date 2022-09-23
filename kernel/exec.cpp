@@ -45,6 +45,7 @@ namespace
             auto pml4 = reinterpret_cast<uint64_t*>(vm::PhysicalToVirtual(current.pageDirectory));
             vm::FreeUserlandPageDirectory(pml4);
         }
+        process::FreeMappings(current);
 
         auto pml4 = vm::CreateUserlandPageDirectory();
         current.pageDirectory = vm::VirtualToPhysical(pml4);

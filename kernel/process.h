@@ -16,6 +16,16 @@ namespace process
 
     constexpr int maxFiles = 20;
 
+    constexpr int maxMappings = 10;
+    struct Mapping {
+        uint64_t pte_flags{};
+        uint64_t va_start{};
+        uint64_t va_end{};
+        fs::Inode* inode = nullptr;
+        uint64_t inode_offset{};
+        uint64_t inode_length{};
+    };
+
     using WaitChannel = void*;
     struct Process {
         State state = State::Unused;
@@ -33,10 +43,12 @@ namespace process
         uint8_t fpu[512] __attribute__((aligned(16)));
         file::File files[maxFiles];
         fs::Inode* cwd = nullptr;
+        Mapping mappings[maxMappings];
     };
 
     Process& GetCurrent();
 
+    void FreeMappings(Process& proc);
     char* CreateAndMapUserStack(Process& proc);
     void Initialize();
     void Scheduler();
