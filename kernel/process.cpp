@@ -233,9 +233,9 @@ namespace process
 
     int WaitPID(amd64::TrapFrame& tf)
     {
-        auto pid = static_cast<int>(syscall::GetArgument<1>(tf));
-        auto stat_loc = reinterpret_cast<int*>(syscall::GetArgument<2>(tf));
-        auto options = static_cast<int>(syscall::GetArgument<3>(tf));
+        const auto pid = syscall::GetArgument<1, int>(tf);
+        const auto stat_loc = syscall::GetArgument<2, int*>(tf);
+        const auto options = syscall::GetArgument<3, int>(tf);
 
         while (true) {
             auto state = interrupts::SaveAndDisable();
@@ -265,8 +265,8 @@ namespace process
 
     int Kill(amd64::TrapFrame& tf)
     {
-        auto pid = static_cast<int>(syscall::GetArgument<1>(tf));
-        auto signal = static_cast<int>(syscall::GetArgument<2>(tf));
+        const auto pid = syscall::GetArgument<1, int>(tf);
+        const auto signal = syscall::GetArgument<2, int>(tf);
         if (pid < 0)
             return -EPERM;
         if (signal < 1 || signal > 15)

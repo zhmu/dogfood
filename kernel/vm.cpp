@@ -184,7 +184,7 @@ namespace vm
 
     long VmOp(amd64::TrapFrame& tf)
     {
-        auto vmop = reinterpret_cast<VMOP_OPTIONS*>(syscall::GetArgument<1>(tf));
+        const auto vmop = syscall::GetArgument<1, VMOP_OPTIONS*>(tf);
 
         auto& current = process::GetCurrent();
         switch (vmop->vo_op) {

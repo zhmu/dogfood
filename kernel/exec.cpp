@@ -129,9 +129,9 @@ namespace
 
 int exec(amd64::TrapFrame& tf)
 {
-    const auto path = reinterpret_cast<const char*>(syscall::GetArgument<1>(tf));
-    const auto argv = reinterpret_cast<const char**>(syscall::GetArgument<2>(tf));
-    const auto envp = reinterpret_cast<const char**>(syscall::GetArgument<3>(tf));
+    const auto path = syscall::GetArgument<1, const char*>(tf);
+    const auto argv = syscall::GetArgument<2, const char**>(tf);
+    const auto envp = syscall::GetArgument<3, const char**>(tf);
     auto inode = fs::namei(path, true);
     if (inode == nullptr)
         return -ENOENT;

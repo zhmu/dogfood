@@ -16,6 +16,10 @@
 
 #define DEBUG_SYSCALL 0
 
+namespace {
+    constexpr inline auto modeMask = 0777;
+}
+
 #if DEBUG_SYSCALL
 enum class ArgumentType {
     Int,
@@ -316,25 +320,25 @@ namespace
             case SYS_exit:
                 return process::Exit(*tf);
             case SYS_write: {
-                auto file = file::FindByIndex(process::GetCurrent(), syscall::GetArgument<1>(*tf));
+                const auto file = file::FindByIndex(process::GetCurrent(), syscall::GetArgument<1>(*tf));
                 if (file == nullptr)
                     return -EBADF;
-                auto buf = reinterpret_cast<const void*>(syscall::GetArgument<2>(*tf));
-                auto len = syscall::GetArgument<3>(*tf);
+                const auto buf = syscall::GetArgument<2, const void*>(*tf);
+                const auto len = syscall::GetArgument<3>(*tf);
                 return file::Write(*file, buf, len);
             }
             case SYS_read: {
-                auto file = file::FindByIndex(process::GetCurrent(), syscall::GetArgument<1>(*tf));
+                const auto file = file::FindByIndex(process::GetCurrent(), syscall::GetArgument<1>(*tf));
                 if (file == nullptr)
                     return -EBADF;
-                auto buf = reinterpret_cast<void*>(syscall::GetArgument<2>(*tf));
-                auto len = syscall::GetArgument<3>(*tf);
+                const auto buf = syscall::GetArgument<2, void*>(*tf);
+                const auto len = syscall::GetArgument<3>(*tf);
                 return file::Read(*file, buf, len);
             }
             case SYS_open: {
-                auto path = reinterpret_cast<const char*>(syscall::GetArgument<1>(*tf));
-                auto flags = static_cast<int>(syscall::GetArgument<2>(*tf));
-                auto mode = static_cast<int>(syscall::GetArgument<3>(*tf));
+                const auto path = syscall::GetArgument<1, const char*>(*tf);
+                const auto flags = syscall::GetArgument<2, int>(*tf);
+                const auto mode = syscall::GetArgument<3, int>(*tf);
 
                 auto& current = process::GetCurrent();
                 auto file = file::Allocate(current);
@@ -342,7 +346,7 @@ namespace
                     return -ENFILE;
 
                 fs::Inode* inode;
-                if (int errno = fs::Open(path, flags, mode & 0777, inode); errno != 0) {
+                if (int errno = fs::Open(path, flags, mode & modeMask, inode); errno != 0) {
                     file::Free(*file);
                     return -errno;
                 }
@@ -351,7 +355,7 @@ namespace
                 return file - &current.files[0];
             }
             case SYS_close: {
-                auto file = file::FindByIndex(process::GetCurrent(), syscall::GetArgument<1>(*tf));
+                const auto file = file::FindByIndex(process::GetCurrent(), syscall::GetArgument<1>(*tf));
                 if (file == nullptr)
                     return -EBADF;
                 file::Free(*file);
@@ -359,8 +363,8 @@ namespace
             }
             case SYS_stat:
             case SYS_lstat: {
-                auto path = reinterpret_cast<const char*>(syscall::GetArgument<1>(*tf));
-                auto buf = reinterpret_cast<stat*>(syscall::GetArgument<2>(*tf));
+                const auto path = syscall::GetArgument<1, const char*>(*tf);
+                const auto buf = syscall::GetArgument<2, stat*>(*tf);
 
                 auto inode = fs::namei(path, num != SYS_lstat);
                 if (inode == nullptr)
@@ -370,8 +374,8 @@ namespace
                 return ret ? 0 : -EIO;
             }
             case SYS_fstat: {
-                auto file = file::FindByIndex(process::GetCurrent(), syscall::GetArgument<1>(*tf));
-                auto buf = reinterpret_cast<stat*>(syscall::GetArgument<2>(*tf));
+                const auto file = file::FindByIndex(process::GetCurrent(), syscall::GetArgument<1>(*tf));
+                const auto buf = syscall::GetArgument<2, stat*>(*tf);
                 if (file == nullptr)
                     return -EBADF;
                 if (file->f_inode == nullptr) {
@@ -383,9 +387,9 @@ namespace
                 return fs::Stat(*file->f_inode, *buf) ? 0 : -EIO;
             }
             case SYS_seek: {
-                auto file = file::FindByIndex(process::GetCurrent(), syscall::GetArgument<1>(*tf));
-                auto offset = reinterpret_cast<long*>(syscall::GetArgument<2>(*tf));
-                auto whence = syscall::GetArgument<3>(*tf);
+                const auto file = file::FindByIndex(process::GetCurrent(), syscall::GetArgument<1>(*tf));
+                const auto offset = syscall::GetArgument<2, long*>(*tf);
+                const auto whence = syscall::GetArgument<3>(*tf);
                 if (file == nullptr)
                     return -EBADF;
                 if (file->f_inode == nullptr || file->f_inode->ext2inode == nullptr)
@@ -414,16 +418,16 @@ namespace
                 return 0;
             }
             case SYS_dup: {
-                auto file = file::FindByIndex(process::GetCurrent(), syscall::GetArgument<1>(*tf));
+                const auto file = file::FindByIndex(process::GetCurrent(), syscall::GetArgument<1>(*tf));
                 if (file == nullptr)
                     return -EBADF;
                 return DupFD(*file);
             }
             case SYS_dup2: {
-                auto file = file::FindByIndex(process::GetCurrent(), syscall::GetArgument<1>(*tf));
+                const auto file = file::FindByIndex(process::GetCurrent(), syscall::GetArgument<1>(*tf));
                 if (file == nullptr)
                     return -EBADF;
-                auto newfd = syscall::GetArgument<2>(*tf);
+                const auto newfd = syscall::GetArgument<2>(*tf);
                 auto& current = process::GetCurrent();
                 auto file2 = file::AllocateByIndex(current, newfd);
                 if (file2 == nullptr)
@@ -434,10 +438,10 @@ namespace
                 return file2 - &current.files[0];
             }
             case SYS_fcntl: {
-                auto file = file::FindByIndex(process::GetCurrent(), syscall::GetArgument<1>(*tf));
+                const auto file = file::FindByIndex(process::GetCurrent(), syscall::GetArgument<1>(*tf));
                 if (file == nullptr)
                     return -EBADF;
-                auto op = syscall::GetArgument<2>(*tf);
+                const auto op = syscall::GetArgument<2>(*tf);
                 switch (op) {
                     case F_DUPFD:
                         return DupFD(*file);
@@ -452,14 +456,14 @@ namespace
                 return 0;
             }
             case SYS_getcwd: {
-                auto buf = reinterpret_cast<char*>(syscall::GetArgument<1>(*tf));
-                auto len = syscall::GetArgument<2>(*tf);
+                const auto buf = syscall::GetArgument<1, char*>(*tf);
+                const auto len = syscall::GetArgument<2>(*tf);
                 auto& current = process::GetCurrent();
                 // TODO do this in userspace instead
                 return -fs::ResolveDirectoryName(*current.cwd, buf, len);
             }
             case SYS_chdir: {
-                auto buf = reinterpret_cast<char*>(syscall::GetArgument<1>(*tf));
+                const auto buf = syscall::GetArgument<1, char*>(*tf);
                 auto& current = process::GetCurrent();
                 auto inode = fs::namei(buf, true);
                 if (inode == nullptr)
@@ -474,7 +478,7 @@ namespace
                 return 0;
             }
             case SYS_fchdir: {
-                auto file = file::FindByIndex(process::GetCurrent(), syscall::GetArgument<1>(*tf));
+                const auto file = file::FindByIndex(process::GetCurrent(), syscall::GetArgument<1>(*tf));
                 if (file == nullptr)
                     return -EBADF;
                 if ((file->f_inode->ext2inode->i_mode & EXT2_S_IFDIR) == 0)
@@ -511,10 +515,10 @@ namespace
             case SYS_clock_gettime:
                 return -ENOSYS;
             case SYS_chown: {
-                auto path = reinterpret_cast<const char*>(syscall::GetArgument<1>(*tf));
-                auto uid = static_cast<int>(syscall::GetArgument<2>(*tf));
-                auto gid = static_cast<int>(syscall::GetArgument<3>(*tf));
-                auto inode = fs::namei(path, true);
+                const auto path = syscall::GetArgument<1, const char*>(*tf);
+                const auto uid = syscall::GetArgument<2, int>(*tf);
+                const auto gid = syscall::GetArgument<3, int>(*tf);
+                const auto inode = fs::namei(path, true);
                 if (inode == nullptr)
                     return -ENOENT;
 
@@ -527,66 +531,66 @@ namespace
             case SYS_umask:
                 break;
             case SYS_chmod: {
-                auto path = reinterpret_cast<const char*>(syscall::GetArgument<1>(*tf));
-                auto mode = static_cast<int>(syscall::GetArgument<2>(*tf));
+                const auto path = syscall::GetArgument<1, const char*>(*tf);
+                auto mode = syscall::GetArgument<2, int>(*tf);
                 auto inode = fs::namei(path, true);
                 if (inode == nullptr)
                     return -ENOENT;
-                mode &= 0777;
-                inode->ext2inode->i_mode = (inode->ext2inode->i_mode & ~0777) | mode;
+                mode &= modeMask;
+                inode->ext2inode->i_mode = (inode->ext2inode->i_mode & ~modeMask) | mode;
                 fs::idirty(*inode);
                 fs::iput(*inode);
                 return 0;
             }
             case SYS_unlink: {
-                auto path = reinterpret_cast<const char*>(syscall::GetArgument<1>(*tf));
+                const auto path = syscall::GetArgument<1, const char*>(*tf);
                 return -fs::Unlink(path);
             }
             case SYS_mkdir: {
-                auto path = reinterpret_cast<const char*>(syscall::GetArgument<1>(*tf));
-                auto mode = static_cast<int>(syscall::GetArgument<2>(*tf));
-                return -fs::MakeDirectory(path, mode & 0777);
+                const auto path = syscall::GetArgument<1, const char*>(*tf);
+                const auto mode = syscall::GetArgument<2, int>(*tf);
+                return -fs::MakeDirectory(path, mode & modeMask);
             }
             case SYS_rmdir: {
-                auto path = reinterpret_cast<const char*>(syscall::GetArgument<1>(*tf));
+                const auto path = syscall::GetArgument<1, const char*>(*tf);
                 return -fs::RemoveDirectory(path);
             }
             case SYS_fchown: {
-                auto file = file::FindByIndex(process::GetCurrent(), syscall::GetArgument<1>(*tf));
+                const auto file = file::FindByIndex(process::GetCurrent(), syscall::GetArgument<1>(*tf));
                 if (file == nullptr)
                     return -EBADF;
                 if (file->f_inode == nullptr || file->f_inode->ext2inode == nullptr)
                     return -ENOENT;
-                auto uid = static_cast<int>(syscall::GetArgument<2>(*tf));
-                auto gid = static_cast<int>(syscall::GetArgument<3>(*tf));
+                const auto uid = syscall::GetArgument<2, int>(*tf);
+                const auto gid = syscall::GetArgument<3, int>(*tf);
                 file->f_inode->ext2inode->i_uid = uid;
                 file->f_inode->ext2inode->i_gid = gid;
                 fs::idirty(*file->f_inode);
                 return 0;
             }
             case SYS_fchmod: {
-                auto file = file::FindByIndex(process::GetCurrent(), syscall::GetArgument<1>(*tf));
+                const auto file = file::FindByIndex(process::GetCurrent(), syscall::GetArgument<1>(*tf));
                 if (file == nullptr)
                     return -EBADF;
                 if (file->f_inode == nullptr || file->f_inode->ext2inode == nullptr)
                     return -ENOENT;
-                auto mode = static_cast<int>(syscall::GetArgument<2>(*tf));
-                mode &= 0777;
+                auto mode = syscall::GetArgument<2, int>(*tf);
+                mode &= modeMask;
                 file->f_inode->ext2inode->i_mode =
-                    (file->f_inode->ext2inode->i_mode & ~0777) | mode;
+                    (file->f_inode->ext2inode->i_mode & ~modeMask) | mode;
                 fs::idirty(*file->f_inode);
                 fs::iput(*file->f_inode);
                 return 0;
             }
             case SYS_link: {
-                auto oldPath = reinterpret_cast<const char*>(syscall::GetArgument<1>(*tf));
-                auto newPath = reinterpret_cast<const char*>(syscall::GetArgument<2>(*tf));
+                const auto oldPath = syscall::GetArgument<1, const char*>(*tf);
+                const auto newPath = syscall::GetArgument<2, const char*>(*tf);
                 return -fs::Link(oldPath, newPath);
             }
             case SYS_readlink: {
-                auto path = reinterpret_cast<const char*>(syscall::GetArgument<1>(*tf));
-                auto buf = reinterpret_cast<char*>(syscall::GetArgument<2>(*tf));
-                auto size = reinterpret_cast<size_t>(syscall::GetArgument<2>(*tf));
+                const auto path = syscall::GetArgument<1, const char*>(*tf);
+                const auto buf = syscall::GetArgument<2, char*>(*tf);
+                const auto size = syscall::GetArgument<3, size_t>(*tf);
                 auto inode = fs::namei(path, false);
                 if (inode == nullptr)
                     return -ENOENT;
@@ -599,8 +603,8 @@ namespace
                 return numBytesRead;
             }
             case SYS_symlink: {
-                auto oldPath = reinterpret_cast<const char*>(syscall::GetArgument<1>(*tf));
-                auto newPath = reinterpret_cast<const char*>(syscall::GetArgument<2>(*tf));
+                const auto oldPath = syscall::GetArgument<1, const char*>(*tf);
+                const auto newPath = syscall::GetArgument<2, const char*>(*tf);
                 return -fs::SymLink(oldPath, newPath);
             }
         }

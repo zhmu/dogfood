@@ -2,7 +2,7 @@ project(kernel ASM CXX)
 cmake_minimum_required(VERSION 3.9)
 
 set(COMMON_FLAGS "${COMMON_FLAGS} -fno-rtti -fno-exceptions -fno-pie")
-set(COMMON_FLAGS "${COMMON_FLAGS} -fno-builtin -nostdlib -nostdinc")
+set(COMMON_FLAGS "${COMMON_FLAGS} -fno-builtin -nostdlib")
 set(COMMON_FLAGS "${COMMON_FLAGS} -m64 -march=athlon64 -mcmodel=large")
 set(COMMON_FLAGS "${COMMON_FLAGS} -mno-red-zone -mno-sse -fno-stack-protector")
 set(COMMON_FLAGS "${COMMON_FLAGS} -O2 -g")
