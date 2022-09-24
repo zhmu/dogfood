@@ -121,15 +121,6 @@ namespace
 
 } // namespace
 
-int printf(const char* fmt, ...)
-{
-    va_list va;
-    va_start(va, fmt);
-    format(fmt, [](int ch) { console::put_char(ch); }, va);
-    va_end(va);
-    return 0;
-}
-
 void* memset(void* p, int c, size_t len)
 {
     // Optimised by aligning to a 32-bit address and doing 32-bit operations
@@ -162,7 +153,7 @@ void* memcpy(void* dst, const void* src, size_t len)
 void panic(const char* s)
 {
     amd64::interrupts::Disable();
-    printf("panic: %s\n", s);
+    Print("panic: ", s, "\n");
     while (1)
         ;
 }
@@ -206,4 +197,21 @@ int memcmp(const char* a, const char* b, size_t len)
         if (a[n] != b[n])
             return a[n] - b[n];
     return 0;
+}
+
+namespace print::detail {
+    void Print(const char* s)
+    {
+        for(; *s != '\0'; ++s) console::put_char(*s);
+    }
+
+    void Print(uintmax_t n)
+    {
+        putint(10, n, [](const auto ch) { console::put_char(ch); });
+    }
+
+    void Print(Hex n)
+    {
+        putint(16, n.v, [](const auto ch) { console::put_char(ch); });
+    }
 }

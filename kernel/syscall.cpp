@@ -264,26 +264,26 @@ void PrintArguments(amd64::TrapFrame* tf, bool in, const SyscallArgument args[])
                 continue;
         }
         if (m++ > 0)
-            printf(", ");
+            Print(", ");
         switch (arg->type) {
             case ArgumentType::Int:
             case ArgumentType::FD:
             case ArgumentType::Size:
             case ArgumentType::PID: {
                 auto p = reinterpret_cast<unsigned long>(getArgument(n));
-                printf("%s: %ld", arg->name, p);
+                Print(arg->name, ": ", p);
                 break;
             }
             case ArgumentType::PathString:
             case ArgumentType::CharPtr: {
                 auto p = reinterpret_cast<const void*>(getArgument(n));
-                printf("%s: '%s'", arg->name, p);
+                Print(arg->name, ": ", p);
                 break;
             }
             case ArgumentType::OffsetPtr:
             case ArgumentType::SizePtr: {
                 auto p = reinterpret_cast<const long*>(getArgument(n));
-                printf("*%s: %ld", arg->name, *p);
+                Print(arg->name, ": ", p);
                 break;
             }
             case ArgumentType::IntPtr:
@@ -291,7 +291,7 @@ void PrintArguments(amd64::TrapFrame* tf, bool in, const SyscallArgument args[])
             case ArgumentType::CharPtrArray:
             default: {
                 auto p = reinterpret_cast<const void*>(getArgument(n));
-                printf("%s: %p", arg->name, p);
+                Print(arg->name, ": ", p);
                 break;
             }
         }
@@ -450,7 +450,7 @@ namespace
                     case F_SETFL:
                         return 0;
                     default:
-                        printf("fcntl(): op %d not supported\n", op);
+                        Print("fcntl(): op ", op, " not supported\n");
                         return -EINVAL;
                 }
                 return 0;
@@ -608,11 +608,11 @@ namespace
                 return -fs::SymLink(oldPath, newPath);
             }
         }
-        printf(
-            "[%d] unsupported syscall %d %lx [%x %x %x %x %x %x]\n", process::GetCurrent().pid,
-            syscall::GetNumber(*tf), syscall::GetArgument<1>(*tf), syscall::GetArgument<2>(*tf),
-            syscall::GetArgument<3>(*tf), syscall::GetArgument<4>(*tf),
-            syscall::GetArgument<5>(*tf), syscall::GetArgument<6>(*tf));
+        Print("[", process::GetCurrent().pid, "] unsupported syscall ",
+            syscall::GetNumber(*tf), " " , syscall::GetArgument<1>(*tf),
+            " [ ", syscall::GetArgument<2>(*tf), " ", syscall::GetArgument<3>(*tf),
+            " ", syscall::GetArgument<4>(*tf), " ", syscall::GetArgument<5>(*tf),
+            " ", syscall::GetArgument<6>(*tf), "]\n");
         return -1;
     }
 } // namespace
@@ -625,15 +625,14 @@ extern "C" uint64_t perform_syscall(amd64::TrapFrame* tf)
     const Syscall* syscall = GetSyscallByNumber(syscall::GetNumber(*tf));
     if (!quiet) {
         if (syscall == nullptr) {
-            printf(
-                "[%d] ??? (%d) %lx [%x %x %x %x %x %x] ->", process::GetCurrent().pid,
-                syscall::GetNumber(*tf), syscall::GetArgument<1>(*tf), syscall::GetArgument<2>(*tf),
-                syscall::GetArgument<3>(*tf), syscall::GetArgument<4>(*tf),
-                syscall::GetArgument<5>(*tf), syscall::GetArgument<6>(*tf));
+            Print("[", process::GetCurrent().pid, "] ??? (", syscall::GetNumber(*tf), ") ",
+                syscall::GetArgument<1>(*tf), " [", syscall::GetArgument<2>(*tf), " ",
+                syscall::GetArgument<3>(*tf), " ", syscall::GetArgument<4>(*tf), " ",
+                syscall::GetArgument<5>(*tf), " ", syscall::GetArgument<6>(*tf), "] -> ");
         } else {
-            printf("[%d] %s (", process::GetCurrent().pid, syscall->name);
+            Print("[", process::GetCurrent().pid, "] ", syscall->name, "(");
             PrintArguments(tf, true, syscall->args);
-            printf(") ->");
+            Print(") ->");
         }
     }
 #endif
@@ -641,15 +640,15 @@ extern "C" uint64_t perform_syscall(amd64::TrapFrame* tf)
 #if DEBUG_SYSCALL
     if (!quiet) {
         if (auto r = static_cast<int64_t>(result); r < 0)
-            printf(" -%s", ErrnoToString(-r));
+            Print(" -", ErrnoToString(-r));
         else
-            printf(" %ld", result);
+            Print(" ", result);
         if (syscall != nullptr) {
-            printf(" (");
+            Print(" (");
             PrintArguments(tf, false, syscall->args);
-            printf(")");
+            Print(")");
         }
-        printf("\n");
+        Print("\n");
     }
 #endif
     return result;

@@ -7,6 +7,8 @@
 #include <dogfood/vmop.h>
 #include <dogfood/errno.h>
 
+static constexpr inline auto DEBUG_VM = false;
+
 namespace vm
 {
     namespace
@@ -105,12 +107,14 @@ namespace vm
                 int bytesToRead = vm::PageSize;
                 if (readOffset + bytesToRead > mapping.inode_length)
                     bytesToRead = mapping.inode_length - readOffset;
-#if 0
-                printf(
-                    "HandleMappingPageFault: proc %d va %p inum %d offset %x, %d bytes\n",
-                    proc.pid, virt, mapping.inode->inum,
-                    mapping.inode_offset + readOffset, bytesToRead);
-#endif
+
+                if constexpr (DEBUG_VM) {
+                    Print(
+                        "HandleMappingPageFault: proc ", proc.pid, " va ", print::Hex{virt},
+                        " inum ", mapping.inode->inum,
+                        " offset ", print::Hex{mapping.inode_offset + readOffset}, ", ",
+                        bytesToRead, " bytes\n");
+                }
                 if (bytesToRead > 0 &&
                     fs::Read(*mapping.inode, page, mapping.inode_offset + readOffset, bytesToRead) != bytesToRead)
                     return false;
@@ -223,9 +227,9 @@ namespace vm
                 return 0;
             }
             default:
-                printf(
-                    "vmop: unimplemented op %d addr %p len %p\n", vmop->vo_op, vmop->vo_addr,
-                    vmop->vo_len);
+                Print(
+                    "vmop: unimplemented op ", vmop->vo_op, " addr ", vmop->vo_addr,
+                    " len ", print::Hex{vmop->vo_len}, "\n");
                 return -ENODEV;
         }
         return -1;

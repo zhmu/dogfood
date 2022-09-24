@@ -74,7 +74,7 @@ namespace ide
                 uint8_t status = ReadStatus();
                 if (status & status::Error) {
                     /* Got an error - this means the request cannot be completed */
-                    printf("IDE: error on write\n");
+                    Print("IDE: error on write\n");
                     return;
                 }
                 if (status & status::DataRequest)

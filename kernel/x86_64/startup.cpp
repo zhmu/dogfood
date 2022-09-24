@@ -230,7 +230,7 @@ namespace
         // exclude this range from our memory map
         const uint64_t kernel_phys_start = vm::RoundDownToPage(&__entry) - KernelBase;
         const uint64_t kernel_phys_end = vm::RoundUpToPage(&__end) - KernelBase;
-        printf("kernel physical memory: %lx .. %lx\n", kernel_phys_start, kernel_phys_end);
+        Print("kernel physical memory: ", print::Hex{kernel_phys_start}, " .. ", print::Hex{kernel_phys_end}, "\n");
 
         // Convert the memory into regions
         struct Region {
@@ -273,10 +273,10 @@ namespace
             }
         }
 
-        printf("physical memory regions:\n");
+        Print("physical memory regions:\n");
         for (unsigned int n = 0; n < currentRegion; ++n) {
             const auto& region = regions[n];
-            printf("  base %lx, %ld KB\n", region.base, region.length / 1024);
+            Print("  base ", print::Hex{region.base}, ", ", region.length / 1024, " KB\n");
         }
 
         // Create mappings so that we can identity map all physical memory
@@ -358,16 +358,20 @@ extern "C" void exception(struct TrapFrame* tf)
             return;
     }
 
-    printf("exception #%d @ cs:rip = %lx:%lx\n", tf->trapno, tf->cs, tf->rip);
-    printf("rax %lx rbx %lx rcx %lx rdx %lx\n", tf->rax, tf->rbx, tf->rcx, tf->rdx);
-    printf("rsi %lx rdi %lx rbp %lx rsp %lx\n", tf->rsi, tf->rdi, tf->rbp, tf->rsp);
-    printf("r8 %lx r9 %lx r10 %lx r11 %lx\n", tf->r8, tf->r9, tf->r10, tf->r11);
-    printf("r12 %lx r13 %lx r14 %lx r15 %lx\n", tf->r12, tf->r13, tf->r14, tf->r15);
-    printf(
-        "errnum %lx cs %lx rflags %lx ss:esp %lx:%lx\n", tf->errnum, tf->cs, tf->rflags, tf->ss,
-        tf->rsp);
-    if (isPageFault)
-        printf("fault address %lx\n", faultAddress);
+    using namespace print;
+
+    Print("exception #", tf->trapno, " @ cs:rip = ", Hex{tf->cs}, ":", Hex{tf->rip}, "\n");
+    Print("rax ", Hex{tf->rax}, " rbx ", Hex{tf->rbx}, " rcx ", Hex{tf->rcx}, " rdx ", Hex{tf->rdx}, "\n");
+    Print("rsi ", Hex{tf->rsi}, " rdi ", Hex{tf->rdi}, " rbp ", Hex{tf->rbp}, " rsp ", Hex{tf->rsp}, "\n");
+
+    Print("r8 ", Hex{tf->r8}, " r9 ", Hex{tf->r9}, " r10 ", Hex{tf->r10}, " r11 ", Hex{tf->r11}, "\n");
+    Print("r12 ", Hex{tf->r12}, " r13 ", Hex{tf->r13}, " r14 ", Hex{tf->r14}, " r15 ", Hex{tf->r15}, "\n");
+
+    Print("errnum ", Hex{tf->errnum}, " cs ", Hex{tf->cs}, " rflags ", Hex{tf->rflags}, " ss:esp ", Hex{tf->ss}, ":", Hex{tf->rsp}, "\n");
+
+    if (isPageFault) {
+        Print("fault address ", Hex{faultAddress}, "\n");
+    }
 
     if (isUserMode && isUserMode)
         process::Exit(*tf);
@@ -388,7 +392,7 @@ extern "C" void irq_handler(const struct TrapFrame* tf)
             ide::OnIRQ();
             break;
         default:
-            printf("stray irq %d\n", tf->trapno);
+            Print("stray irq ", tf->trapno, "\n");
     }
     pic::Acknowledge();
 }
@@ -403,9 +407,10 @@ extern "C" void startup(const MULTIBOOT* mb)
     InitializeSyscall();
     bio::Initialize();
 
-    printf(
-        "Dogfood/amd64 - %ld MB memory available\n",
-        (page_allocator::GetNumberOfAvailablePages() * (vm::PageSize / 1024UL)) / 1024UL);
+    Print(
+        "Dogfood/amd64 - ",
+        (page_allocator::GetNumberOfAvailablePages() * (vm::PageSize / 1024UL)) / 1024UL,
+        " MB memory available\n");
 
     ide::Initialize();
     pic::Enable(pic::irq::Timer);

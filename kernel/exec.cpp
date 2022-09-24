@@ -60,10 +60,10 @@ namespace
                 continue;
 
             if constexpr (DEBUG_EXEC) {
-                printf(
-                    "phdr %d: type %d offset %lx vaddr %p memsz %d filesz %d flags %x\n", ph,
-                    phdr.p_type, phdr.p_offset, phdr.p_vaddr, phdr.p_memsz, phdr.p_filesz,
-                    phdr.p_flags);
+                Print("phdr ", ph, ": type ", phdr.p_type, " offset ",
+                    print::Hex{phdr.p_offset}, " vaddr ", print::Hex{phdr.p_vaddr},
+                    " memsz ", phdr.p_memsz, " filesz ", phdr.p_filesz,
+                    " flags ", print::Hex{phdr.p_flags}, "\n");
             }
             const auto pteFlags = MapElfFlagsToVM(phdr.p_flags);
             const auto va = vm::RoundDownToPage(phdr.p_vaddr);
