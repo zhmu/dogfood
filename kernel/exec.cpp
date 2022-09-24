@@ -78,7 +78,7 @@ namespace
     }
 
     template<typename Func>
-    void ApplyToArgumentArray(const char** p, Func apply)
+    void ApplyToArgumentArray(const char* const* p, Func apply)
     {
         while (true) {
             apply(*p);
@@ -89,7 +89,7 @@ namespace
     }
 
     void CopyArgumentContentsToStack(
-        const char** args, const char* ustack, uint64_t*& sp, char*& data_sp)
+        const char* const* args, const char* ustack, uint64_t*& sp, char*& data_sp)
     {
         ApplyToArgumentArray(args, [&](auto p) {
             size_t len;
@@ -108,7 +108,7 @@ namespace
         });
     }
 
-    void* PrepareNewUserlandStack(process::Process& proc, const char** argv, const char** envp)
+    void* PrepareNewUserlandStack(process::Process& proc, const char* const* argv, const char* const* envp)
     {
         auto ustack = reinterpret_cast<char*>(page_allocator::Allocate());
         assert(ustack != nullptr);
@@ -132,7 +132,7 @@ int exec(amd64::TrapFrame& tf)
     const auto path = syscall::GetArgument<1, const char*>(tf);
     const auto argv = syscall::GetArgument<2, const char**>(tf);
     const auto envp = syscall::GetArgument<3, const char**>(tf);
-    auto inode = fs::namei(path, true);
+    auto inode = fs::namei(path.get(), true);
     if (inode == nullptr)
         return -ENOENT;
 
@@ -148,7 +148,7 @@ int exec(amd64::TrapFrame& tf)
 
     // We prepare the new userland stack before loading the ELF as that will
     // free out mappings
-    auto ustack = PrepareNewUserlandStack(process::GetCurrent(), argv, envp);
+    auto ustack = PrepareNewUserlandStack(process::GetCurrent(), argv.get(), envp.get());
     if (ustack == nullptr) {
         fs::iput(*inode);
         return -EFAULT; // XXX

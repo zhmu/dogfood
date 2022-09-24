@@ -188,7 +188,9 @@ namespace vm
 
     long VmOp(amd64::TrapFrame& tf)
     {
-        const auto vmop = syscall::GetArgument<1, VMOP_OPTIONS*>(tf);
+        auto vmopArg = syscall::GetArgument<1, VMOP_OPTIONS*>(tf);
+        auto vmop = *vmopArg;
+        if (!vmop) { return -EFAULT; }
 
         auto& current = process::GetCurrent();
         switch (vmop->vo_op) {
@@ -205,6 +207,7 @@ namespace vm
                         pd, current.nextMmapAddress, vm::PageSize, 0, vm::Page_RW | vm::Page_US);
                     current.nextMmapAddress += vm::PageSize;
                 }
+                if (!vmopArg.Set(*vmop)) return -EFAULT;
                 return 0;
             }
             case OP_UNMAP: {

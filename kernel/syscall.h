@@ -2,7 +2,31 @@
 
 #include "types.h"
 #include "x86_64/amd64.h"
+#include <optional>
 #include <type_traits>
+
+namespace userspace {
+    template<typename T>
+    struct Pointer {
+        T* p{};
+
+        operator bool() const { return p; }
+
+        std::optional<T> operator*() const {
+            T value;
+            value = *p; // TODO check if this fails
+            return value;
+        }
+
+        bool Set(const T& value) {
+            *p = value; // TODO check if this fails
+            return true;
+        }
+
+        T* get() { return p; }
+        const T* get() const { return p; }
+    };
+}
 
 namespace syscall
 {
@@ -27,11 +51,14 @@ namespace syscall
     }
 
     template<size_t N, typename T = uint64_t>
-    T GetArgument(amd64::TrapFrame& tf)
+    auto GetArgument(amd64::TrapFrame& tf)
     {
+        using BaseType = std::remove_pointer_t<T>;
+
         const auto value = detail::GetArgumentValue<N>(tf);
         if constexpr (std::is_pointer_v<T>) {
-            return reinterpret_cast<T>(value);
+            const auto p = reinterpret_cast<T>(value);
+            return userspace::Pointer<BaseType>{ p };
         } else {
             return static_cast<T>(value);
         }

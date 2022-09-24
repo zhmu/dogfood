@@ -234,7 +234,7 @@ namespace process
     int WaitPID(amd64::TrapFrame& tf)
     {
         const auto pid = syscall::GetArgument<1, int>(tf);
-        const auto stat_loc = syscall::GetArgument<2, int*>(tf);
+        auto statLocPtr = syscall::GetArgument<2, int*>(tf);
         const auto options = syscall::GetArgument<3, int>(tf);
 
         while (true) {
@@ -246,11 +246,11 @@ namespace process
 
                 have_children = true;
                 if (proc.state == State::Zombie) {
-                    int pid = proc.pid;
-                    *stat_loc = 0; // TODO
+                    const auto pid = proc.pid;
+                    const auto setOkay = statLocPtr.Set(0);
                     DestroyZombieProcess(proc);
                     interrupts::Restore(state);
-                    return pid;
+                    return setOkay ? pid : -EFAULT;
                 }
             }
             if (!have_children) {

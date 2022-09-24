@@ -323,17 +323,17 @@ namespace
                 const auto file = file::FindByIndex(process::GetCurrent(), syscall::GetArgument<1>(*tf));
                 if (file == nullptr)
                     return -EBADF;
-                const auto buf = syscall::GetArgument<2, const void*>(*tf);
+                const auto buf = syscall::GetArgument<2, const char*>(*tf);
                 const auto len = syscall::GetArgument<3>(*tf);
-                return file::Write(*file, buf, len);
+                return file::Write(*file, buf.get(), len);
             }
             case SYS_read: {
                 const auto file = file::FindByIndex(process::GetCurrent(), syscall::GetArgument<1>(*tf));
                 if (file == nullptr)
                     return -EBADF;
-                const auto buf = syscall::GetArgument<2, void*>(*tf);
+                auto buf = syscall::GetArgument<2, char*>(*tf);
                 const auto len = syscall::GetArgument<3>(*tf);
-                return file::Read(*file, buf, len);
+                return file::Read(*file, buf.get(), len);
             }
             case SYS_open: {
                 const auto path = syscall::GetArgument<1, const char*>(*tf);
@@ -346,7 +346,7 @@ namespace
                     return -ENFILE;
 
                 fs::Inode* inode;
-                if (int errno = fs::Open(path, flags, mode & modeMask, inode); errno != 0) {
+                if (int errno = fs::Open(path.get(), flags, mode & modeMask, inode); errno != 0) {
                     file::Free(*file);
                     return -errno;
                 }
@@ -364,57 +364,70 @@ namespace
             case SYS_stat:
             case SYS_lstat: {
                 const auto path = syscall::GetArgument<1, const char*>(*tf);
-                const auto buf = syscall::GetArgument<2, stat*>(*tf);
+                auto statBuf = syscall::GetArgument<2, stat*>(*tf);
 
-                auto inode = fs::namei(path, num != SYS_lstat);
+                auto inode = fs::namei(path.get(), num != SYS_lstat);
                 if (inode == nullptr)
                     return -ENOENT;
-                auto ret = fs::Stat(*inode, *buf);
+
+                int ret = 0;
+                stat st{};
+                if (fs::Stat(*inode, st)) {
+                    if (!statBuf.Set(st)) ret = -EFAULT;
+                } else {
+                    ret = -EIO;
+                }
                 fs::iput(*inode);
-                return ret ? 0 : -EIO;
+                return ret;
             }
             case SYS_fstat: {
                 const auto file = file::FindByIndex(process::GetCurrent(), syscall::GetArgument<1>(*tf));
-                const auto buf = syscall::GetArgument<2, stat*>(*tf);
+                auto statBuf = syscall::GetArgument<2, stat*>(*tf);
                 if (file == nullptr)
                     return -EBADF;
+
+                stat st{};
                 if (file->f_inode == nullptr) {
                     // Assume this is the console
-                    memset(buf, 0, sizeof *buf);
-                    buf->st_mode = EXT2_S_IFCHR | 0666;
-                    return 0;
+                    st.st_mode = EXT2_S_IFCHR | 0666;
+                } else {
+                    if (!fs::Stat(*file->f_inode, st)) return -EIO;
                 }
-                return fs::Stat(*file->f_inode, *buf) ? 0 : -EIO;
+                return statBuf.Set(st) ? 0 : -EFAULT;
             }
             case SYS_seek: {
                 const auto file = file::FindByIndex(process::GetCurrent(), syscall::GetArgument<1>(*tf));
-                const auto offset = syscall::GetArgument<2, long*>(*tf);
+                auto offsetPtr = syscall::GetArgument<2, long*>(*tf);
                 const auto whence = syscall::GetArgument<3>(*tf);
                 if (file == nullptr)
                     return -EBADF;
                 if (file->f_inode == nullptr || file->f_inode->ext2inode == nullptr)
                     return -ESPIPE;
+                auto offsetArg = *offsetPtr;
+                if (!offsetArg)
+                    return -EFAULT;
+
                 long new_offset = file->f_offset;
                 auto file_size = file->f_inode->ext2inode->i_size;
                 switch (whence) {
                     case SEEK_SET:
-                        new_offset = *offset;
+                        new_offset = *offsetArg;
                         break;
                     case SEEK_CUR:
-                        new_offset += *offset;
+                        new_offset += *offsetArg;
                         break;
                     case SEEK_END:
-                        new_offset = file->f_inode->ext2inode->i_size - *offset;
+                        new_offset = file->f_inode->ext2inode->i_size - *offsetArg;
                         break;
                 }
                 if (new_offset < 0)
                     new_offset = 0;
+                if (!offsetPtr.Set(new_offset)) return -EFAULT;
                 // Do not limit offset here; writing past the end of the file should be okay
                 // TODO check this and make it proper
                 /*if (new_offset > file_size)
                     new_offset = file_size;*/
                 file->f_offset = new_offset;
-                *offset = new_offset;
                 return 0;
             }
             case SYS_dup: {
@@ -456,16 +469,15 @@ namespace
                 return 0;
             }
             case SYS_getcwd: {
-                const auto buf = syscall::GetArgument<1, char*>(*tf);
+                auto buf = syscall::GetArgument<1, char*>(*tf);
                 const auto len = syscall::GetArgument<2>(*tf);
                 auto& current = process::GetCurrent();
-                // TODO do this in userspace instead
-                return -fs::ResolveDirectoryName(*current.cwd, buf, len);
+                return -fs::ResolveDirectoryName(*current.cwd, buf.get(), len);
             }
             case SYS_chdir: {
                 const auto buf = syscall::GetArgument<1, char*>(*tf);
                 auto& current = process::GetCurrent();
-                auto inode = fs::namei(buf, true);
+                auto inode = fs::namei(buf.get(), true);
                 if (inode == nullptr)
                     return -ENOENT;
                 if ((inode->ext2inode->i_mode & EXT2_S_IFDIR) == 0) {
@@ -518,7 +530,7 @@ namespace
                 const auto path = syscall::GetArgument<1, const char*>(*tf);
                 const auto uid = syscall::GetArgument<2, int>(*tf);
                 const auto gid = syscall::GetArgument<3, int>(*tf);
-                const auto inode = fs::namei(path, true);
+                const auto inode = fs::namei(path.get(), true);
                 if (inode == nullptr)
                     return -ENOENT;
 
@@ -533,7 +545,7 @@ namespace
             case SYS_chmod: {
                 const auto path = syscall::GetArgument<1, const char*>(*tf);
                 auto mode = syscall::GetArgument<2, int>(*tf);
-                auto inode = fs::namei(path, true);
+                auto inode = fs::namei(path.get(), true);
                 if (inode == nullptr)
                     return -ENOENT;
                 mode &= modeMask;
@@ -544,16 +556,16 @@ namespace
             }
             case SYS_unlink: {
                 const auto path = syscall::GetArgument<1, const char*>(*tf);
-                return -fs::Unlink(path);
+                return -fs::Unlink(path.get());
             }
             case SYS_mkdir: {
                 const auto path = syscall::GetArgument<1, const char*>(*tf);
                 const auto mode = syscall::GetArgument<2, int>(*tf);
-                return -fs::MakeDirectory(path, mode & modeMask);
+                return -fs::MakeDirectory(path.get(), mode & modeMask);
             }
             case SYS_rmdir: {
                 const auto path = syscall::GetArgument<1, const char*>(*tf);
-                return -fs::RemoveDirectory(path);
+                return -fs::RemoveDirectory(path.get());
             }
             case SYS_fchown: {
                 const auto file = file::FindByIndex(process::GetCurrent(), syscall::GetArgument<1>(*tf));
@@ -585,27 +597,27 @@ namespace
             case SYS_link: {
                 const auto oldPath = syscall::GetArgument<1, const char*>(*tf);
                 const auto newPath = syscall::GetArgument<2, const char*>(*tf);
-                return -fs::Link(oldPath, newPath);
+                return -fs::Link(oldPath.get(), newPath.get());
             }
             case SYS_readlink: {
                 const auto path = syscall::GetArgument<1, const char*>(*tf);
-                const auto buf = syscall::GetArgument<2, char*>(*tf);
+                auto buf = syscall::GetArgument<2, char*>(*tf);
                 const auto size = syscall::GetArgument<3, size_t>(*tf);
-                auto inode = fs::namei(path, false);
+                auto inode = fs::namei(path.get(), false);
                 if (inode == nullptr)
                     return -ENOENT;
                 if ((inode->ext2inode->i_mode & EXT2_S_IFMASK) != EXT2_S_IFLNK) {
                     fs::iput(*inode);
                     return -EINVAL;
                 }
-                const auto numBytesRead = fs::Read(*inode, buf, 0, size);
+                const auto numBytesRead = fs::Read(*inode, buf.get(), 0, size);
                 fs::iput(*inode);
                 return numBytesRead;
             }
             case SYS_symlink: {
                 const auto oldPath = syscall::GetArgument<1, const char*>(*tf);
                 const auto newPath = syscall::GetArgument<2, const char*>(*tf);
-                return -fs::SymLink(oldPath, newPath);
+                return -fs::SymLink(oldPath.get(), newPath.get());
             }
         }
         Print("[", process::GetCurrent().pid, "] unsupported syscall ",
