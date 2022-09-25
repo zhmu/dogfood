@@ -17,7 +17,7 @@ set(CMAKE_CXX_LINK_FLAGS "-b elf64-x86-64 -T ${CMAKE_CURRENT_SOURCE_DIR}/x86_64/
 add_subdirectory(hw)
 add_subdirectory(x86_64)
 
-set(SOURCES lib.cpp page_allocator.cpp process.cpp vm.cpp bio.cpp ext2.cpp fs.cpp syscall.cpp exec.cpp file.cpp)
+set(SOURCES lib.cpp page_allocator.cpp process.cpp vm.cpp bio.cpp ext2.cpp fs.cpp syscall.cpp exec.cpp file.cpp memory.cpp)
 add_library(kernel_common ${SOURCES})
 
 # kernel_elf glues all libraries together; due to the CMake being used, we need
