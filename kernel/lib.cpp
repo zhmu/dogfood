@@ -132,6 +132,25 @@ int memcmp(const char* a, const char* b, size_t len)
     return 0;
 }
 
+extern "C" void* memmove(void* dst, const void* src, size_t len)
+{
+    auto dst_c = static_cast<char*>(dst);
+    auto src_c = static_cast<const char*>(src);
+
+    if (dst_c <= src_c) {
+        while(len--) {
+            *dst_c++ = *src_c++;
+        }
+    } else {
+        src_c += len;
+        dst_c += len;
+        while(len--) {
+            *--dst_c = *--src_c;
+        }
+    }
+    return dst;
+}
+
 namespace print::detail {
     void Print(const char* s)
     {
@@ -147,4 +166,14 @@ namespace print::detail {
     {
         putint(16, n.v, [](const auto ch) { console::put_char(ch); });
     }
+}
+
+namespace std {
+    void __throw_bad_array_new_length() { panic("__throw_bad_array_new_length"); }
+    void __throw_bad_alloc() { panic("__throw_bad_alloc"); }
+    void __throw_length_error(const char* s) { panic("__throw_length_error"); }
+}
+
+extern "C" int __cxa_atexit(void (*func)(void*), void* arg, void* dso_handle)
+{
 }
