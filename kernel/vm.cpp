@@ -1,5 +1,6 @@
 #include "vm.h"
 #include "x86_64/amd64.h"
+#include "x86_64/paging.h"
 #include "lib.h"
 #include "page_allocator.h"
 #include "process.h"
@@ -13,83 +14,11 @@ namespace vm
 {
     namespace
     {
-        uint64_t* MakePointerToEntry(const uint64_t entry)
+        uint64_t AllocateNewPage()
         {
-            return reinterpret_cast<uint64_t*>(vm::PhysicalToVirtual(entry & 0xffffffffff000));
-        }
-
-        uint64_t* CreateOrGetPage(uint64_t& entry, const bool create)
-        {
-            if ((entry & Page_P) == 0) {
-                if (!create)
-                    return nullptr;
-                auto new_page = page_allocator::Allocate();
-                memset(new_page, 0, vm::PageSize);
-                entry = vm::VirtualToPhysical(new_page) | Page_P | Page_US | Page_RW;
-            }
-            return MakePointerToEntry(entry);
-        }
-
-        uint64_t* FindPTE(uint64_t* pml4, uint64_t addr, bool create)
-        {
-            const auto pml4Offset = (addr >> 39) & 0x1ff;
-            const auto pdpeOffset = (addr >> 30) & 0x1ff;
-            const auto pdpOffset = (addr >> 21) & 0x1ff;
-            const auto pteOffset = (addr >> 12) & 0x1ff;
-
-            auto pdpe = CreateOrGetPage(pml4[pml4Offset], create);
-            if (pdpe == nullptr)
-                return nullptr;
-            auto pdp = CreateOrGetPage(pdpe[pdpeOffset], create);
-            if (pdp == nullptr)
-                return nullptr;
-            auto pte = CreateOrGetPage(pdp[pdpOffset], create);
-            if (pte == nullptr)
-                return nullptr;
-            return &pte[pteOffset];
-        }
-
-        constexpr uint64_t CombineAddressPieces(
-            uint64_t pteOffset, uint64_t pdpOffset, uint64_t pdpeOffset, uint64_t pml4eOffset)
-        {
-            auto addr =
-                (pteOffset << 12) | (pdpOffset << 21) | (pdpeOffset << 30) | (pml4eOffset << 39);
-            if (addr & (1UL << 47))
-                addr |= 0xffff000000000000; // sign-extend to canonical-address form
-            return addr;
-        }
-
-        template<typename OnIndirectionPage, typename OnMapping>
-        void WalkPTE(uint64_t* pml4, OnIndirectionPage onIndirectionPage, OnMapping onMapping)
-        {
-            for (uint64_t pml4eOffset = 0; pml4eOffset < 512; ++pml4eOffset) {
-                if ((pml4[pml4eOffset] & Page_P) == 0)
-                    continue;
-                auto pdpe = MakePointerToEntry(pml4[pml4eOffset]);
-                for (uint64_t pdpeOffset = 0; pdpeOffset < 512; ++pdpeOffset) {
-                    if ((pdpe[pdpeOffset] & Page_P) == 0)
-                        continue;
-                    auto pdp = MakePointerToEntry(pdpe[pdpeOffset]);
-                    for (uint64_t pdpOffset = 0; pdpOffset < 512; ++pdpOffset) {
-                        if ((pdp[pdpOffset] & Page_P) == 0)
-                            continue;
-                        auto pte = MakePointerToEntry(pdp[pdpOffset]);
-                        for (uint64_t pteOffset = 0; pteOffset < 512; ++pteOffset) {
-                            if ((pte[pteOffset] & Page_P) == 0)
-                                continue;
-                            const auto va =
-                                CombineAddressPieces(pteOffset, pdpOffset, pdpeOffset, pml4eOffset);
-                            onMapping(va, pte[pteOffset]);
-                        }
-                        const auto va = CombineAddressPieces(0, pdpOffset, pdpeOffset, pml4eOffset);
-                        onIndirectionPage(va, pdp[pdpOffset]);
-                    }
-                    const auto va = CombineAddressPieces(0, 0, pdpeOffset, pml4eOffset);
-                    onIndirectionPage(va, pdpe[pdpeOffset]);
-                }
-                const auto va = CombineAddressPieces(0, 0, 0, pml4eOffset);
-                onIndirectionPage(va, pml4[pml4eOffset]);
-            }
+            auto new_page = page_allocator::Allocate();
+            memset(new_page, 0, vm::PageSize);
+            return vm::VirtualToPhysical(new_page) | Page_P | Page_US | Page_RW;
         }
 
         bool HandleMappingPageFault(process::Process& proc, const uint64_t virt)
@@ -116,8 +45,10 @@ namespace vm
                         bytesToRead, " bytes\n");
                 }
                 if (bytesToRead > 0 &&
-                    fs::Read(*mapping.inode, page, mapping.inode_offset + readOffset, bytesToRead) != bytesToRead)
+                    fs::Read(*mapping.inode, page, mapping.inode_offset + readOffset, bytesToRead) != bytesToRead) {
+                    page_allocator::Free(page);
                     return false;
+                }
 
                 auto pml4 = reinterpret_cast<uint64_t*>(vm::PhysicalToVirtual(proc.pageDirectory));
                 vm::Map(pml4, va, vm::PageSize, vm::VirtualToPhysical(page), mapping.pte_flags);
@@ -135,7 +66,7 @@ namespace vm
         auto pa = phys;
         const auto va_end = RoundDownToPage(va_start + length - 1);
         do {
-            auto pte = FindPTE(pml4, va, true);
+            auto pte = amd64::paging::FindPTE(pml4, va, AllocateNewPage);
             assert(pte != nullptr);
             *pte = phys | pteFlags;
             pa += PageSize;
@@ -156,10 +87,10 @@ namespace vm
         auto freePageIfInUserLand = [](const uint64_t va, const uint64_t entry) {
             if (va >= vm::PhysicalToVirtual(static_cast<uint64_t>(0)))
                 return;
-            page_allocator::Free(MakePointerToEntry(entry));
+            page_allocator::Free(amd64::paging::MakePointerToEntry(entry));
         };
 
-        WalkPTE(pml4, freePageIfInUserLand, freePageIfInUserLand);
+        amd64::paging::WalkPTE(pml4, freePageIfInUserLand, freePageIfInUserLand);
         page_allocator::Free(pml4);
     }
 
@@ -168,7 +99,7 @@ namespace vm
         uint64_t* dst_pml4 = CreateUserlandPageDirectory();
         assert(dst_pml4 != nullptr);
 
-        WalkPTE(
+        amd64::paging::WalkPTE(
             src_pml4, [](const auto, const auto) {},
             [&](const uint64_t va, const uint64_t entry) {
                 if (va >= vm::PhysicalToVirtual(static_cast<uint64_t>(0)))
@@ -221,10 +152,10 @@ namespace vm
 
                 auto pd = reinterpret_cast<uint64_t*>(vm::PhysicalToVirtual(current.pageDirectory));
                 for (int n = 0; n < vm::RoundUpToPage(vmop->vo_size) / vm::PageSize; ++n) {
-                    auto pte = FindPTE(pd, va, false);
+                    auto pte = amd64::paging::FindPTE(pd, va, [] { return 0; });
                     if (pte == nullptr)
                         return -EINVAL;
-                    page_allocator::Free(MakePointerToEntry(*pte));
+                    page_allocator::Free(amd64::paging::MakePointerToEntry(*pte));
                     *pte = 0;
                 }
                 return 0;
@@ -245,7 +176,7 @@ namespace vm
             return true;
 
         auto pml4 = reinterpret_cast<uint64_t*>(vm::PhysicalToVirtual(current.pageDirectory));
-        auto pte = FindPTE(pml4, vm::RoundDownToPage(va), false);
+        auto pte = amd64::paging::FindPTE(pml4, vm::RoundDownToPage(va), [] { return 0; });
         if (pte == nullptr)
             return false;
         if ((*pte & Page_P) != 0)

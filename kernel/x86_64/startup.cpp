@@ -5,6 +5,7 @@
 #include "bio.h"
 #include "ext2.h"
 #include "fs.h"
+#include "paging.h"
 #include "process.h"
 #include "vm.h"
 
@@ -198,29 +199,15 @@ namespace
         return ptr;
     }
 
-    uint64_t* CreateOrGetPage(uint64_t& entry, uint64_t& next_page)
-    {
-        if ((entry & vm::Page_P) == 0) {
-            entry = reinterpret_cast<uint64_t>(GetNextPage(next_page)) | vm::Page_P | vm::Page_RW;
-        }
-        return reinterpret_cast<uint64_t*>(entry & 0xffffffffff000);
-    };
-
     void MapMemoryArea(
         uint64_t* pml4, uint64_t& next_page, uint64_t phys_base, uint64_t va_start, uint64_t va_end,
         uint64_t pteFlags)
     {
-        // TODO This is identical to vm::Map() with a custom CreateOrGetPage()
         for (uint64_t addr = va_start; addr < va_end; addr += vm::PageSize) {
-            const auto pml4Offset = (addr >> 39) & 0x1ff;
-            const auto pdpeOffset = (addr >> 30) & 0x1ff;
-            const auto pdpOffset = (addr >> 21) & 0x1ff;
-            const auto pteOffset = (addr >> 12) & 0x1ff;
-
-            auto pdpe = CreateOrGetPage(pml4[pml4Offset], next_page);
-            auto pdp = CreateOrGetPage(pdpe[pdpeOffset], next_page);
-            auto pte = CreateOrGetPage(pdp[pdpOffset], next_page);
-            pte[pteOffset] = (addr - va_start + phys_base) | pteFlags;
+            auto pte = paging::FindPTE(pml4, addr, [&]() {
+                return reinterpret_cast<uint64_t>(GetNextPage(next_page)) | vm::Page_P | vm::Page_RW;
+            });
+            *pte = (addr - va_start + phys_base) | pteFlags;
         }
     }
 
