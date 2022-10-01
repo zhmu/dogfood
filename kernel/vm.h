@@ -9,6 +9,9 @@ namespace amd64
     struct TrapFrame;
 }
 
+namespace fs { struct Inode; }
+namespace process { struct Process; struct Mapping; }
+
 
 extern amd64::PageDirectory kernel_pagedir;
 
@@ -30,14 +33,22 @@ namespace vm
     } // namespace userland
 
     void
-    Map(uint64_t* pml4, const uint64_t va_start, const size_t length, const uint64_t phys,
+    MapMemory(process::Process&, const uint64_t va_start, const size_t length, const uint64_t phys,
         const uint64_t pteFlags);
 
-    uint64_t* CreateUserlandPageDirectory();
-    void FreeUserlandPageDirectory(uint64_t* pml);
-    uint64_t* CloneMappings(uint64_t* src_pml4);
+    uint64_t* CreateUserlandPageDirectory(process::Process&);
+    void DestroyUserlandPageDirectory(process::Process& proc);
+    char* CreateAndMapUserStack(process::Process& proc);
+
+    process::Mapping& Map(process::Process& proc, uint64_t va, uint64_t pteFlags, uint64_t mappingSize);
+    process::Mapping& MapInode(process::Process& proc, uint64_t va, uint64_t pteFlags, uint64_t mappingSize, fs::Inode& inode, uint64_t inodeOffset, uint64_t inodeSize);
+    void FreeMappings(process::Process& proc);
+    void CloneMappings(process::Process&);
+
     long VmOp(amd64::TrapFrame& tf);
     bool HandlePageFault(uint64_t va, int errnum);
+
+    void Dump(process::Process&);
 
     /*
      * We use the following memory map, [G] means global mapped:
@@ -76,5 +87,4 @@ namespace vm
         addr = (addr | (PageSize - 1)) + 1;
         return addr;
     }
-
 } // namespace vm

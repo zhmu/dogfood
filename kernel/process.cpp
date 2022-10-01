@@ -25,10 +25,11 @@ namespace process
         amd64::Context* cpu_context = nullptr;
         int next_pid = 1;
 
-        char* CreateUserKernelStack(Process& proc)
+        char* CreateKernelStack(Process& proc)
         {
             auto kstack = reinterpret_cast<char*>(page_allocator::Allocate());
             assert(kstack != nullptr);
+            proc.mdPages.push_back(kstack);
             proc.kernelStack = kstack;
             return kstack + vm::PageSize;
         }
@@ -55,7 +56,7 @@ namespace process
                 AllocateConsoleFile(proc); // stdout
                 AllocateConsoleFile(proc); // stderr
 
-                auto sp = CreateUserKernelStack(proc);
+                auto sp = CreateKernelStack(proc);
                 // Allocate trap frame for trap_return()
                 {
                     sp -= sizeof(amd64::TrapFrame);
@@ -74,6 +75,8 @@ namespace process
                     context->rip = reinterpret_cast<uint64_t>(&trap_return);
                     proc.context = context;
                 }
+
+                vm::CreateUserlandPageDirectory(proc);
                 return &proc;
             }
             return nullptr;
@@ -88,29 +91,35 @@ namespace process
             return nullptr;
         }
 
-        Process* CreateProcess()
+        Process* CreateInitProcess()
         {
             auto p = AllocateProcess();
             if (p == nullptr)
                 return nullptr;
             auto& proc = *p;
 
-            auto pd = vm::CreateUserlandPageDirectory();
-            proc.pageDirectory = vm::VirtualToPhysical(pd);
             // Allocate user stack
             {
-                CreateAndMapUserStack(proc);
+                vm::CreateAndMapUserStack(proc);
                 proc.trapFrame->rsp = vm::userland::stackBase + vm::PageSize;
             }
+
+            // Create code to execute /sbin/init
+            auto code = reinterpret_cast<uint8_t*>(page_allocator::Allocate());
+            proc.mdPages.push_back(code);
+
+            memcpy(code, &initcode, (uint64_t)&initcode_end - (uint64_t)&initcode);
+            vm::MapMemory(proc,
+                initCodeBase, vm::PageSize, vm::VirtualToPhysical(code),
+                vm::Page_P | vm::Page_RW | vm::Page_US);
+            proc.trapFrame->rip = initCodeBase;
 
             return &proc;
         }
 
         void DestroyZombieProcess(Process& proc)
         {
-            auto pml4 = reinterpret_cast<uint64_t*>(vm::PhysicalToVirtual(proc.pageDirectory));
-            vm::FreeUserlandPageDirectory(pml4);
-            page_allocator::Free(proc.kernelStack);
+            vm::DestroyUserlandPageDirectory(proc);
             proc.state = State::Unused;
         }
 
@@ -119,54 +128,9 @@ namespace process
             amd64::fpu::SaveContext(&current->fpu[0]);
             switch_to(&current->context, cpu_context);
         }
-
-        Mapping* AllocateMapping(Process& proc)
-        {
-            for(auto& mapping: proc.mappings) {
-                if (mapping.pte_flags != 0) continue;
-                return &mapping;
-            }
-            return nullptr;
-        }
-
-        void CloneMappings(const Process& current, Process& proc)
-        {
-            // This expects proc to have no active mappings
-            for(int n = 0; n < maxMappings; ++n) {
-                auto& source = current.mappings[n];
-                auto& dest = proc.mappings[n];
-                assert(dest.pte_flags == 0);
-                dest = source;
-                if (dest.inode)
-                    fs::iref(*dest.inode);
-            }
-        }
     } // namespace
 
-    void FreeMappings(Process& proc)
-    {
-        for (auto& mapping: proc.mappings) {
-            if (mapping.inode != nullptr)
-                fs::iput(*mapping.inode);
-            mapping.inode = nullptr;
-            mapping = {};
-        }
-    }
-
     Process& GetCurrent() { return *current; }
-
-    char* CreateAndMapUserStack(Process& proc)
-    {
-        auto ustack = reinterpret_cast<char*>(page_allocator::Allocate());
-        assert(ustack != nullptr);
-        memset(ustack, 0, vm::PageSize);
-
-        auto pd = reinterpret_cast<uint64_t*>(vm::PhysicalToVirtual(proc.pageDirectory));
-        vm::Map(
-            pd, vm::userland::stackBase, vm::PageSize, vm::VirtualToPhysical(ustack),
-            vm::Page_P | vm::Page_RW | vm::Page_US);
-        return ustack;
-    }
 
     void Sleep(WaitChannel waitChannel, int state)
     {
@@ -201,14 +165,10 @@ namespace process
             return -ENOMEM;
         new_process->ppid = current->pid;
         file::CloneTable(*current, *new_process);
-        CloneMappings(*current, *new_process);
         new_process->cwd = current->cwd;
         fs::iref(*new_process->cwd);
 
-        auto current_pd =
-            reinterpret_cast<uint64_t*>(vm::PhysicalToVirtual(current->pageDirectory));
-        auto new_pd = vm::CloneMappings(current_pd);
-        new_process->pageDirectory = vm::VirtualToPhysical(new_pd);
+        vm::CloneMappings(*new_process);
         new_process->state = State::Runnable;
 
         // We're using trap_return() to yield control back to userland; copy values from syscall
@@ -247,7 +207,7 @@ namespace process
                 have_children = true;
                 if (proc.state == State::Zombie) {
                     const auto pid = proc.pid;
-                    const auto setOkay = statLocPtr.Set(0);
+                    const auto setOkay = !statLocPtr || statLocPtr.Set(0);
                     DestroyZombieProcess(proc);
                     interrupts::Restore(state);
                     return setOkay ? pid : -EFAULT;
@@ -296,7 +256,7 @@ namespace process
             file::Free(file);
         }
 
-        FreeMappings(*current);
+        vm::FreeMappings(*current);
 
         auto state = interrupts::SaveAndDisable();
         current->state = State::Zombie;
@@ -309,39 +269,13 @@ namespace process
         // NOTREACHED
     }
 
-    bool MapInode(Process& proc, uint64_t va, uint64_t pteFlags, uint64_t mappingSize, fs::Inode& inode, uint64_t inodeOffset, uint64_t inodeSize)
-    {
-        auto mapping = AllocateMapping(proc);
-        if (!mapping) return false;
-        mapping->va_start = va;
-        mapping->va_end = va + mappingSize;
-        mapping->pte_flags = pteFlags;
-        mapping->inode = &inode;
-        mapping->inode_offset = inodeOffset;
-        mapping->inode_length = inodeSize;
-        fs::iref(*mapping->inode);
-        return true;
-    }
-
     void Initialize()
     {
-        {
-            auto proc = CreateProcess();
-            assert(proc != nullptr);
-            assert(proc->pid == 1);
+        auto proc = CreateInitProcess();
+        assert(proc != nullptr);
+        assert(proc->pid == 1);
 
-            proc->trapFrame->rip = initCodeBase;
-
-            // XXX build some CODE
-            auto pd = reinterpret_cast<uint64_t*>(vm::PhysicalToVirtual(proc->pageDirectory));
-            auto code = reinterpret_cast<uint8_t*>(page_allocator::Allocate());
-            memcpy(code, &initcode, (uint64_t)&initcode_end - (uint64_t)&initcode);
-            vm::Map(
-                pd, initCodeBase, vm::PageSize, vm::VirtualToPhysical(code),
-                vm::Page_P | vm::Page_RW | vm::Page_US);
-
-            proc->state = State::Runnable;
-        }
+        proc->state = State::Runnable;
     }
 
     void Scheduler()

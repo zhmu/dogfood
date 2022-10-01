@@ -347,7 +347,9 @@ extern "C" void exception(struct TrapFrame* tf)
 
     using namespace print;
 
-    Print("exception #", tf->trapno, " @ cs:rip = ", Hex{tf->cs}, ":", Hex{tf->rip}, "\n");
+    Print("exception #", tf->trapno, " @ cs:rip = ", Hex{tf->cs}, ":", Hex{tf->rip});
+    if (isUserMode) Print(" pid ", process::GetCurrent().pid);
+    Print("\n");
     Print("rax ", Hex{tf->rax}, " rbx ", Hex{tf->rbx}, " rcx ", Hex{tf->rcx}, " rdx ", Hex{tf->rdx}, "\n");
     Print("rsi ", Hex{tf->rsi}, " rdi ", Hex{tf->rdi}, " rbp ", Hex{tf->rbp}, " rsp ", Hex{tf->rsp}, "\n");
 

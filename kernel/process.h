@@ -3,6 +3,7 @@
 #include "types.h"
 #include "file.h"
 #include "fs.h"
+#include <vector>
 
 namespace amd64
 {
@@ -16,6 +17,11 @@ namespace process
 
     constexpr int maxFiles = 20;
 
+    struct Page {
+        uint64_t va{};
+        void* page{};
+    };
+
     constexpr int maxMappings = 10;
     struct Mapping {
         uint64_t pte_flags{};
@@ -24,6 +30,7 @@ namespace process
         fs::Inode* inode = nullptr;
         uint64_t inode_offset{};
         uint64_t inode_length{};
+        std::vector<Page> pages{};
     };
 
     using WaitChannel = void*;
@@ -43,13 +50,12 @@ namespace process
         uint8_t fpu[512] __attribute__((aligned(16)));
         file::File files[maxFiles];
         fs::Inode* cwd = nullptr;
-        Mapping mappings[maxMappings];
+        std::vector<Mapping> mappings;
+        std::vector<void*> mdPages; // machine-dependant pages
     };
 
     Process& GetCurrent();
 
-    void FreeMappings(Process& proc);
-    char* CreateAndMapUserStack(Process& proc);
     void Initialize();
     void Scheduler();
 
@@ -60,7 +66,5 @@ namespace process
     int Fork(amd64::TrapFrame& context);
     int WaitPID(amd64::TrapFrame& context);
     int Kill(amd64::TrapFrame& context);
-
-    bool MapInode(Process& proc, uint64_t va, uint64_t pteFlags, uint64_t mappingSize, fs::Inode& inode, uint64_t inodeOffset, uint64_t inodeSize);
 
 } // namespace process

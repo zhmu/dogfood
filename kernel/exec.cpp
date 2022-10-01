@@ -38,17 +38,8 @@ namespace
         return result;
     }
 
-    bool LoadProgramHeaders(fs::Inode& inode, const Elf64_Ehdr& ehdr)
+    bool LoadProgramHeaders(process::Process& process, fs::Inode& inode, const Elf64_Ehdr& ehdr)
     {
-        auto& current = process::GetCurrent();
-        {
-            auto pml4 = reinterpret_cast<uint64_t*>(vm::PhysicalToVirtual(current.pageDirectory));
-            vm::FreeUserlandPageDirectory(pml4);
-        }
-        process::FreeMappings(current);
-
-        auto pml4 = vm::CreateUserlandPageDirectory();
-        current.pageDirectory = vm::VirtualToPhysical(pml4);
         for (int ph = 0; ph < ehdr.e_phnum; ++ph) {
             Elf64_Phdr phdr;
             if (fs::Read(
@@ -69,11 +60,8 @@ namespace
             const auto va = vm::RoundDownToPage(phdr.p_vaddr);
             const auto fileOffset = vm::RoundDownToPage(phdr.p_offset);
             const auto fileSz = phdr.p_filesz + (phdr.p_offset - fileOffset);
-            if (!MapInode(current, va, pteFlags, phdr.p_memsz, inode, fileOffset, fileSz))
-                return false;
-
+            vm::MapInode(process, va, pteFlags, phdr.p_memsz, inode, fileOffset, fileSz);
         }
-
         return true;
     }
 
@@ -125,6 +113,21 @@ namespace
         CopyArgumentContentsToStack(envp, ustack, sp, data_sp);
         return ustack;
     }
+
+    void MapUserlandStack(process::Process& proc, void* ustack, amd64::TrapFrame& tf)
+    {
+        const auto ustackFlags = vm::Page_P | vm::Page_RW | vm::Page_US;
+        auto& mapping = vm::Map(proc, vm::userland::stackBase, ustackFlags, vm::userland::stackSize);
+        const auto ustackVA = vm::userland::stackBase + vm::userland::stackSize - vm::PageSize;
+        mapping.pages.push_back(process::Page{ ustackVA, ustack });
+
+        vm::MapMemory(proc,
+            ustackVA, vm::PageSize,
+            vm::VirtualToPhysical(ustack), ustackFlags);
+
+        tf.rsp = ustackVA;
+        tf.rdi = tf.rsp;
+    }
 } // namespace
 
 int exec(amd64::TrapFrame& tf)
@@ -146,38 +149,23 @@ int exec(amd64::TrapFrame& tf)
         return -ENOEXEC;
     }
 
-    // We prepare the new userland stack before loading the ELF as that will
-    // free out mappings
-    auto ustack = PrepareNewUserlandStack(process::GetCurrent(), argv.get(), envp.get());
-    if (ustack == nullptr) {
-        fs::iput(*inode);
-        return -EFAULT; // XXX
+    // We must prepare the new userland stack with argc/argv/envp before
+    // freeing mappings, as we need to read the current memory space
+    auto& proc = process::GetCurrent();
+    auto ustack = PrepareNewUserlandStack(proc, argv.get(), envp.get());
+    vm::FreeMappings(proc);
+
+    const auto phLoaded = LoadProgramHeaders(proc, *inode, ehdr);
+    fs::iput(*inode);
+    if (!phLoaded) {
+        // TODO need to kill the process here
+        return -EFAULT;
     }
 
-    if (!LoadProgramHeaders(*inode, ehdr)) {
-        page_allocator::Free(ustack);
-        fs::iput(*inode);
-        return -EIO;
-    }
-
-    auto& current = process::GetCurrent();
-    {
-        auto pd = reinterpret_cast<uint64_t*>(vm::PhysicalToVirtual(current.pageDirectory));
-        vm::Map(
-            pd, vm::userland::stackBase + vm::userland::stackSize - vm::PageSize, vm::PageSize,
-            vm::VirtualToPhysical(ustack), vm::Page_P | vm::Page_RW | vm::Page_US);
-        for (uint64_t va = vm::userland::stackBase;
-             va < vm::userland::stackBase + vm::userland::stackSize - vm::PageSize;
-             va += vm::PageSize) {
-            vm::Map(pd, va, vm::PageSize, 0, vm::Page_RW | vm::Page_US);
-        }
-    }
-    amd64::write_cr3(current.pageDirectory);
+    MapUserlandStack(proc, ustack, tf);
+    assert(amd64::read_cr3() == proc.pageDirectory);
+    amd64::write_cr3(proc.pageDirectory);
 
     tf.rip = ehdr.e_entry;
-    tf.rsp = vm::userland::stackBase + vm::userland::stackSize - vm::PageSize;
-    tf.rdi = vm::userland::stackBase + vm::userland::stackSize - vm::PageSize;
-
-    fs::iput(*inode);
     return 0;
 }

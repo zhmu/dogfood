@@ -70,7 +70,7 @@ void* memset(void* p, int c, size_t len)
     return p;
 }
 
-void* memcpy(void* dst, const void* src, size_t len)
+extern "C" void* memcpy(void* dst, const void* src, size_t len)
 {
     auto ret = dst;
 
@@ -176,4 +176,5 @@ namespace std {
 
 extern "C" int __cxa_atexit(void (*func)(void*), void* arg, void* dso_handle)
 {
+    return 0;
 }

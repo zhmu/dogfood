@@ -232,6 +232,13 @@ namespace amd64
         return r;
     }
 
+    inline uint64_t read_cr3()
+    {
+        uint64_t r;
+        __asm __volatile("movq %%cr3, %0\n" : "=a"(r));
+        return r;
+    }
+
     inline uint64_t read_cr4()
     {
         uint64_t r;
