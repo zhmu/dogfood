@@ -38,7 +38,7 @@ namespace
         return result;
     }
 
-    bool LoadProgramHeaders(process::Process& process, fs::Inode& inode, const Elf64_Ehdr& ehdr)
+    bool LoadProgramHeaders(vm::VMSpace& vs, fs::Inode& inode, const Elf64_Ehdr& ehdr)
     {
         for (int ph = 0; ph < ehdr.e_phnum; ++ph) {
             Elf64_Phdr phdr;
@@ -60,7 +60,7 @@ namespace
             const auto va = vm::RoundDownToPage(phdr.p_vaddr);
             const auto fileOffset = vm::RoundDownToPage(phdr.p_offset);
             const auto fileSz = phdr.p_filesz + (phdr.p_offset - fileOffset);
-            vm::MapInode(process, va, pteFlags, phdr.p_memsz, inode, fileOffset, fileSz);
+            vm::MapInode(vs, va, pteFlags, phdr.p_memsz, inode, fileOffset, fileSz);
         }
         return true;
     }
@@ -96,7 +96,7 @@ namespace
         });
     }
 
-    void* PrepareNewUserlandStack(process::Process& proc, const char* const* argv, const char* const* envp)
+    void* PrepareNewUserlandStack(const char* const* argv, const char* const* envp)
     {
         auto ustack = reinterpret_cast<char*>(page_allocator::Allocate());
         assert(ustack != nullptr);
@@ -114,14 +114,14 @@ namespace
         return ustack;
     }
 
-    void MapUserlandStack(process::Process& proc, void* ustack, amd64::TrapFrame& tf)
+    void MapUserlandStack(vm::VMSpace& vs, void* ustack, amd64::TrapFrame& tf)
     {
         const auto ustackFlags = vm::Page_P | vm::Page_RW | vm::Page_US;
-        auto& mapping = vm::Map(proc, vm::userland::stackBase, ustackFlags, vm::userland::stackSize);
+        auto& mapping = vm::Map(vs, vm::userland::stackBase, ustackFlags, vm::userland::stackSize);
         const auto ustackVA = vm::userland::stackBase + vm::userland::stackSize - vm::PageSize;
-        mapping.pages.push_back(process::Page{ ustackVA, ustack });
+        mapping.pages.push_back(vm::Page{ ustackVA, ustack });
 
-        vm::MapMemory(proc,
+        vm::MapMemory(vs,
             ustackVA, vm::PageSize,
             vm::VirtualToPhysical(ustack), ustackFlags);
 
@@ -151,20 +151,19 @@ int exec(amd64::TrapFrame& tf)
 
     // We must prepare the new userland stack with argc/argv/envp before
     // freeing mappings, as we need to read the current memory space
-    auto& proc = process::GetCurrent();
-    auto ustack = PrepareNewUserlandStack(proc, argv.get(), envp.get());
-    vm::FreeMappings(proc);
+    auto& vs = process::GetCurrent().vmspace;
+    auto ustack = PrepareNewUserlandStack(argv.get(), envp.get());
+    vm::FreeMappings(vs);
 
-    const auto phLoaded = LoadProgramHeaders(proc, *inode, ehdr);
+    const auto phLoaded = LoadProgramHeaders(vs, *inode, ehdr);
     fs::iput(*inode);
     if (!phLoaded) {
         // TODO need to kill the process here
         return -EFAULT;
     }
 
-    MapUserlandStack(proc, ustack, tf);
-    assert(amd64::read_cr3() == proc.pageDirectory);
-    amd64::write_cr3(proc.pageDirectory);
+    MapUserlandStack(vs, ustack, tf);
+    amd64::FlushTLB();
 
     tf.rip = ehdr.e_entry;
     return 0;

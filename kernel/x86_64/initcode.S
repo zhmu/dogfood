@@ -16,7 +16,7 @@ initcode:
         movq $-1, %rdi
         syscall
 
-1:      jmp     1b
+        ud2
 
 init:   .ascii  "/sbin/init\0"
 argv:   .quad   0

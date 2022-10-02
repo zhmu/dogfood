@@ -10,29 +10,17 @@ extern amd64::TSS kernel_tss;
 
 extern "C" void switch_to(amd64::Context** prevContext, amd64::Context* newContext);
 extern "C" void* trap_return;
-extern "C" void* initcode;
-extern "C" void* initcode_end;
 extern "C" uint64_t syscall_kernel_rsp;
 
 namespace process
 {
     namespace
     {
-        inline constexpr uint64_t initCodeBase = 0x8000000;
         inline constexpr size_t maxProcesses = 32;
         Process process[maxProcesses];
         Process* current = nullptr;
         amd64::Context* cpu_context = nullptr;
         int next_pid = 1;
-
-        char* CreateKernelStack(Process& proc)
-        {
-            auto kstack = reinterpret_cast<char*>(page_allocator::Allocate());
-            assert(kstack != nullptr);
-            proc.mdPages.push_back(kstack);
-            proc.kernelStack = kstack;
-            return kstack + vm::PageSize;
-        }
 
         void AllocateConsoleFile(Process& proc)
         {
@@ -50,13 +38,8 @@ namespace process
                 proc = Process{};
                 proc.state = State::Construct;
                 proc.pid = next_pid++;
-                proc.cwd = fs::namei("/", true);
-                proc.nextMmapAddress = vm::userland::mmapBase;
-                AllocateConsoleFile(proc); // stdin
-                AllocateConsoleFile(proc); // stdout
-                AllocateConsoleFile(proc); // stderr
 
-                auto sp = CreateKernelStack(proc);
+                auto sp = vm::CreateKernelStack(proc.vmspace);
                 // Allocate trap frame for trap_return()
                 {
                     sp -= sizeof(amd64::TrapFrame);
@@ -75,8 +58,7 @@ namespace process
                     context->rip = reinterpret_cast<uint64_t>(&trap_return);
                     proc.context = context;
                 }
-
-                vm::CreateUserlandPageDirectory(proc);
+                InitializeVMSpace(proc.vmspace);
                 return &proc;
             }
             return nullptr;
@@ -97,29 +79,18 @@ namespace process
             if (p == nullptr)
                 return nullptr;
             auto& proc = *p;
-
-            // Allocate user stack
-            {
-                vm::CreateAndMapUserStack(proc);
-                proc.trapFrame->rsp = vm::userland::stackBase + vm::PageSize;
-            }
-
-            // Create code to execute /sbin/init
-            auto code = reinterpret_cast<uint8_t*>(page_allocator::Allocate());
-            proc.mdPages.push_back(code);
-
-            memcpy(code, &initcode, (uint64_t)&initcode_end - (uint64_t)&initcode);
-            vm::MapMemory(proc,
-                initCodeBase, vm::PageSize, vm::VirtualToPhysical(code),
-                vm::Page_P | vm::Page_RW | vm::Page_US);
-            proc.trapFrame->rip = initCodeBase;
-
+            proc.cwd = fs::namei("/", true);
+            AllocateConsoleFile(proc); // 0, stdin
+            AllocateConsoleFile(proc); // 1, stdout
+            AllocateConsoleFile(proc); // 2, stderr
+            vm::SetupForInitProcess(proc.vmspace, *proc.trapFrame);
             return &proc;
         }
 
         void DestroyZombieProcess(Process& proc)
         {
-            vm::DestroyUserlandPageDirectory(proc);
+            assert(proc.state == State::Zombie);
+            vm::DestroyVMSpace(proc.vmspace);
             proc.state = State::Unused;
         }
 
@@ -168,7 +139,7 @@ namespace process
         new_process->cwd = current->cwd;
         fs::iref(*new_process->cwd);
 
-        vm::CloneMappings(*new_process);
+        vm::CloneMappings(new_process->vmspace);
         new_process->state = State::Runnable;
 
         // We're using trap_return() to yield control back to userland; copy values from syscall
@@ -256,7 +227,7 @@ namespace process
             file::Free(file);
         }
 
-        vm::FreeMappings(*current);
+        vm::FreeMappings(current->vmspace);
 
         auto state = interrupts::SaveAndDisable();
         current->state = State::Zombie;
@@ -290,11 +261,11 @@ namespace process
                 current = &proc;
                 proc.state = State::Running;
 
-                amd64::write_cr3(proc.pageDirectory);
+                amd64::write_cr3(proc.vmspace.pageDirectory);
                 kernel_tss.rsp0 = reinterpret_cast<uint64_t>(
-                    reinterpret_cast<char*>(proc.kernelStack) + vm::PageSize);
+                    reinterpret_cast<char*>(proc.vmspace.kernelStack) + vm::PageSize);
                 syscall_kernel_rsp = reinterpret_cast<uint64_t>(
-                    reinterpret_cast<char*>(proc.kernelStack) + vm::PageSize);
+                    reinterpret_cast<char*>(proc.vmspace.kernelStack) + vm::PageSize);
 
                 if (prev && prev != current) {
                     amd64::fpu::SaveContext(&prev->fpu[0]);

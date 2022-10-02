@@ -1,5 +1,6 @@
 #pragma once
 
+#include <vector>
 #include "types.h"
 
 namespace amd64
@@ -10,10 +11,6 @@ namespace amd64
 }
 
 namespace fs { struct Inode; }
-namespace process { struct Process; struct Mapping; }
-
-
-extern amd64::PageDirectory kernel_pagedir;
 
 namespace vm
 {
@@ -32,23 +29,48 @@ namespace vm
         inline constexpr uint64_t mmapBase = 0x0000008000000000;
     } // namespace userland
 
+    struct Page {
+        uint64_t va{};
+        void* page{};
+    };
+
+    struct Mapping {
+        uint64_t pte_flags{};
+        uint64_t va_start{};
+        uint64_t va_end{};
+        fs::Inode* inode = nullptr;
+        uint64_t inode_offset{};
+        uint64_t inode_length{};
+        std::vector<Page> pages{};
+    };
+
+    struct VMSpace {
+        uint64_t pageDirectory = 0;  // physical address
+        uint64_t nextMmapAddress = 0;
+        void* kernelStack = nullptr; // start of kernel stack
+        std::vector<Mapping> mappings;
+        std::vector<void*> mdPages; // machine-dependant pages
+    };
+
     void
-    MapMemory(process::Process&, const uint64_t va_start, const size_t length, const uint64_t phys,
+    MapMemory(VMSpace&, const uint64_t va_start, const size_t length, const uint64_t phys,
         const uint64_t pteFlags);
 
-    uint64_t* CreateUserlandPageDirectory(process::Process&);
-    void DestroyUserlandPageDirectory(process::Process& proc);
-    char* CreateAndMapUserStack(process::Process& proc);
+    char* CreateKernelStack(VMSpace&);
 
-    process::Mapping& Map(process::Process& proc, uint64_t va, uint64_t pteFlags, uint64_t mappingSize);
-    process::Mapping& MapInode(process::Process& proc, uint64_t va, uint64_t pteFlags, uint64_t mappingSize, fs::Inode& inode, uint64_t inodeOffset, uint64_t inodeSize);
-    void FreeMappings(process::Process& proc);
-    void CloneMappings(process::Process&);
+    void InitializeVMSpace(VMSpace&);
+    void DestroyVMSpace(VMSpace&);
+    void SetupForInitProcess(VMSpace& vs, amd64::TrapFrame& tf);
+
+    Mapping& Map(VMSpace& vs, uint64_t va, uint64_t pteFlags, uint64_t mappingSize);
+    Mapping& MapInode(VMSpace& vs, uint64_t va, uint64_t pteFlags, uint64_t mappingSize, fs::Inode& inode, uint64_t inodeOffset, uint64_t inodeSize);
+    void FreeMappings(VMSpace&);
+    void CloneMappings(VMSpace&);
 
     long VmOp(amd64::TrapFrame& tf);
     bool HandlePageFault(uint64_t va, int errnum);
 
-    void Dump(process::Process&);
+    void Dump(VMSpace&);
 
     /*
      * We use the following memory map, [G] means global mapped:
