@@ -56,16 +56,16 @@ namespace vm
     MapMemory(VMSpace&, const uint64_t va_start, const size_t length, const uint64_t phys,
         const uint64_t pteFlags);
 
-    char* CreateKernelStack(VMSpace&);
-
     void InitializeVMSpace(VMSpace&);
     void DestroyVMSpace(VMSpace&);
+    void Activate(VMSpace&);
+
     void SetupForInitProcess(VMSpace& vs, amd64::TrapFrame& tf);
 
     Mapping& Map(VMSpace& vs, uint64_t va, uint64_t pteFlags, uint64_t mappingSize);
     Mapping& MapInode(VMSpace& vs, uint64_t va, uint64_t pteFlags, uint64_t mappingSize, fs::Inode& inode, uint64_t inodeOffset, uint64_t inodeSize);
     void FreeMappings(VMSpace&);
-    void CloneMappings(VMSpace&);
+    void Clone(VMSpace&);
 
     long VmOp(amd64::TrapFrame& tf);
     bool HandlePageFault(uint64_t va, int errnum);

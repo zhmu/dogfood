@@ -15,7 +15,9 @@ static constexpr inline uint64_t initCodeBase = 0x8000000;
 
 extern "C" void* initcode;
 extern "C" void* initcode_end;
+extern "C" uint64_t syscall_kernel_rsp;
 extern amd64::PageDirectory kernel_pagedir;
+extern amd64::TSS kernel_tss;
 
 namespace vm
 {
@@ -31,13 +33,13 @@ namespace vm
             return process::GetCurrent().vmspace;
         }
 
-        uint64_t AllocateMDPage(VMSpace& vs)
+        char* AllocateMDPage(VMSpace& vs)
         {
             auto new_page = page_allocator::Allocate();
             assert(new_page != nullptr);
             vs.mdPages.push_back(new_page);
             memset(new_page, 0, vm::PageSize);
-            return vm::VirtualToPhysical(new_page) | Page_P | Page_US | Page_RW;
+            return static_cast<char*>(new_page);
         }
 
         bool HandleMappingPageFault(VMSpace& vs, const uint64_t virt)
@@ -84,8 +86,6 @@ namespace vm
             memcpy(newP.page, p.page, vm::PageSize);
             MapMemory(vs, newP.va, vm::PageSize, vm::VirtualToPhysical(newP.page), destMapping.pte_flags);
             destMapping.pages.push_back(newP);
-
-            using namespace print;
         }
 
         int ConvertVmopFlags(int opflags)
@@ -99,20 +99,10 @@ namespace vm
         }
     } // namespace
 
-    char* CreateKernelStack(VMSpace& vs)
-    {
-        auto kstack = reinterpret_cast<char*>(page_allocator::Allocate());
-        assert(kstack != nullptr);
-        vs.mdPages.push_back(kstack);
-        vs.kernelStack = kstack;
-        return kstack + vm::PageSize;
-    }
-
     void Dump(VMSpace& vs)
     {
         using namespace print;
         for(const auto& m: vs.mappings) {
-            if (m.pte_flags == 0) continue;
             Print("  area ", Hex{m.va_start}, " .. ", Hex{m.va_end}, "\n");
             for(auto& p: m.pages) {
                 Print("    va ", Hex{p.va}, " page ", p.page, "\n");
@@ -130,7 +120,8 @@ namespace vm
         const auto va_end = RoundDownToPage(va_start + length - 1);
         do {
             auto pte = amd64::paging::FindPTE(pml4, va, [&]() {
-                return AllocateMDPage(vs);
+                const auto new_page = AllocateMDPage(vs);
+                return vm::VirtualToPhysical(new_page) | Page_P | Page_US | Page_RW;
             });
             assert(pte != nullptr);
             *pte = phys | pteFlags;
@@ -139,17 +130,29 @@ namespace vm
         } while (va < va_end);
     }
 
+    void Activate(VMSpace& vs)
+    {
+        amd64::write_cr3(vs.pageDirectory);
+        kernel_tss.rsp0 = reinterpret_cast<uint64_t>(
+            reinterpret_cast<char*>(vs.kernelStack) + vm::PageSize);
+        syscall_kernel_rsp = reinterpret_cast<uint64_t>(
+            reinterpret_cast<char*>(vs.kernelStack) + vm::PageSize);
+    }
+
     void InitializeVMSpace(VMSpace& vs)
     {
         assert(vs.pageDirectory == 0);
-        assert(vs.mdPages.size() == 1);
-        assert(vs.mdPages.front() == vs.kernelStack);
+        assert(vs.mdPages.empty());
 
-        auto pml4 = reinterpret_cast<uint64_t*>(page_allocator::Allocate());
-        assert(pml4 != nullptr);
-        memcpy(pml4, kernel_pagedir, vm::PageSize);
-        vs.pageDirectory = vm::VirtualToPhysical(pml4);
-        vs.mdPages.push_back(pml4);
+        // Allocate kernel stack
+        auto kstack = AllocateMDPage(vs);
+        vs.kernelStack = kstack;
+
+        // Create page directory
+        auto pageDirectory = AllocateMDPage(vs);
+        memcpy(pageDirectory, kernel_pagedir, vm::PageSize);
+        vs.pageDirectory = vm::VirtualToPhysical(pageDirectory);
+
         vs.nextMmapAddress = vm::userland::mmapBase;
     }
 
@@ -171,8 +174,7 @@ namespace vm
         tf.rsp = vm::userland::stackBase + vm::PageSize;
 
         // Fill a page with code to execve("/sbin/init", ...)
-        auto code = reinterpret_cast<uint8_t*>(page_allocator::Allocate());
-        vs.mdPages.push_back(code);
+        auto code = AllocateMDPage(vs);
         memcpy(code, &initcode, (uint64_t)&initcode_end - (uint64_t)&initcode);
         MapMemory(vs,
             initCodeBase, vm::PageSize, vm::VirtualToPhysical(code),
@@ -193,7 +195,7 @@ namespace vm
         vs.mappings.clear();
     }
 
-    void CloneMappings(VMSpace& destVS)
+    void Clone(VMSpace& destVS)
     {
         auto& sourceVS = GetCurrent();
         for(const auto& sourceMapping: sourceVS.mappings) {

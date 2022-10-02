@@ -6,11 +6,8 @@
 #include "vm.h"
 #include <dogfood/errno.h>
 
-extern amd64::TSS kernel_tss;
-
 extern "C" void switch_to(amd64::Context** prevContext, amd64::Context* newContext);
 extern "C" void* trap_return;
-extern "C" uint64_t syscall_kernel_rsp;
 
 namespace process
 {
@@ -39,7 +36,8 @@ namespace process
                 proc.state = State::Construct;
                 proc.pid = next_pid++;
 
-                auto sp = vm::CreateKernelStack(proc.vmspace);
+                vm::InitializeVMSpace(proc.vmspace);
+                auto sp = static_cast<char*>(proc.vmspace.kernelStack) + vm::PageSize;
                 // Allocate trap frame for trap_return()
                 {
                     sp -= sizeof(amd64::TrapFrame);
@@ -58,7 +56,6 @@ namespace process
                     context->rip = reinterpret_cast<uint64_t>(&trap_return);
                     proc.context = context;
                 }
-                InitializeVMSpace(proc.vmspace);
                 return &proc;
             }
             return nullptr;
@@ -71,20 +68,6 @@ namespace process
                     return &proc;
             }
             return nullptr;
-        }
-
-        Process* CreateInitProcess()
-        {
-            auto p = AllocateProcess();
-            if (p == nullptr)
-                return nullptr;
-            auto& proc = *p;
-            proc.cwd = fs::namei("/", true);
-            AllocateConsoleFile(proc); // 0, stdin
-            AllocateConsoleFile(proc); // 1, stdout
-            AllocateConsoleFile(proc); // 2, stderr
-            vm::SetupForInitProcess(proc.vmspace, *proc.trapFrame);
-            return &proc;
         }
 
         void DestroyZombieProcess(Process& proc)
@@ -139,7 +122,7 @@ namespace process
         new_process->cwd = current->cwd;
         fs::iref(*new_process->cwd);
 
-        vm::CloneMappings(new_process->vmspace);
+        vm::Clone(new_process->vmspace);
         new_process->state = State::Runnable;
 
         // We're using trap_return() to yield control back to userland; copy values from syscall
@@ -242,11 +225,17 @@ namespace process
 
     void Initialize()
     {
-        auto proc = CreateInitProcess();
-        assert(proc != nullptr);
-        assert(proc->pid == 1);
+        auto init = AllocateProcess();
+        assert(init != nullptr);
+        assert(init->pid == 1);
 
-        proc->state = State::Runnable;
+        init->cwd = fs::namei("/", true);
+        AllocateConsoleFile(*init); // 0, stdin
+        AllocateConsoleFile(*init); // 1, stdout
+        AllocateConsoleFile(*init); // 2, stderr
+        vm::SetupForInitProcess(init->vmspace, *init->trapFrame);
+
+        init->state = State::Runnable;
     }
 
     void Scheduler()
@@ -261,12 +250,7 @@ namespace process
                 current = &proc;
                 proc.state = State::Running;
 
-                amd64::write_cr3(proc.vmspace.pageDirectory);
-                kernel_tss.rsp0 = reinterpret_cast<uint64_t>(
-                    reinterpret_cast<char*>(proc.vmspace.kernelStack) + vm::PageSize);
-                syscall_kernel_rsp = reinterpret_cast<uint64_t>(
-                    reinterpret_cast<char*>(proc.vmspace.kernelStack) + vm::PageSize);
-
+                vm::Activate(proc.vmspace);
                 if (prev && prev != current) {
                     amd64::fpu::SaveContext(&prev->fpu[0]);
                     amd64::fpu::RestoreContext(&current->fpu[0]);
