@@ -74,17 +74,6 @@ export PATH=${TOOLCHAIN}/bin:${PATH}
 KERNEL_DIRTY=0
 TARGET_DIRTY=0
 
-if [ "${BUILD_KERNEL}" -ne "0" -o \( "${ONLY_REQUESTED_TARGETS}" -eq "0" -a ! -f "${OUTDIR_KERNEL}/kernel.mb" \) ]; then
-    echo "*** Building kernel"
-    rm -rf build/kernel
-    mkdir -p build/kernel
-    cd build/kernel
-    cmake -GNinja -DCMAKE_TOOLCHAIN_FILE=${TOOLCHAIN_FILE} -DCMAKE_INSTALL_PREFIX=${OUTDIR_KERNEL} ../..
-    ninja kernel_mb install
-    cd ../..
-    KERNEL_DIRTY=1
-fi
-
 if [ "$BUILD_SYSROOT" -ne "0" -o \( "${ONLY_REQUESTED_TARGETS}" -eq "0" -a ! -f "${SYSROOT}/usr/include/dogfood/types.h" \) ]; then
     echo "*** Installing kernel headers (sysroot)"
     rm -rf build/headers-target
@@ -126,6 +115,17 @@ if [ "$BUILD_SYSROOT" -ne "0" -o \( "${ONLY_REQUESTED_TARGETS}" -eq "0" -a ! -f 
     make ${MAKE_ARGS}
     make ${MAKE_ARGS} install
     cd ../..
+fi
+
+if [ "${BUILD_KERNEL}" -ne "0" -o \( "${ONLY_REQUESTED_TARGETS}" -eq "0" -a ! -f "${OUTDIR_KERNEL}/kernel.mb" \) ]; then
+    echo "*** Building kernel"
+    rm -rf build/kernel
+    mkdir -p build/kernel
+    cd build/kernel
+    cmake -GNinja -DCMAKE_TOOLCHAIN_FILE=${TOOLCHAIN_FILE} -DCMAKE_INSTALL_PREFIX=${OUTDIR_KERNEL} ../..
+    ninja kernel_mb install
+    cd ../..
+    KERNEL_DIRTY=1
 fi
 
 if [ "$BUILD_TARGET" -ne "0" -o \( "${ONLY_REQUESTED_TARGETS}" -eq "0" -a ! -f "${OUTDIR}/bin/sh" \) ]; then
