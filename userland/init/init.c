@@ -3,12 +3,12 @@
 #include <unistd.h>
 #include <sys/wait.h>
 
-char* const argv[] = {
+char* const child_argv[] = {
     "-sh",
     NULL
 };
 
-char* const envp[] = {
+char* const child_envp[] = {
     "USER=root",
     "PATH=/bin:/usr/bin:/usr/sbin",
     NULL
@@ -23,8 +23,7 @@ int main(int argc, char* argv[])
             fprintf(stderr, "%s: child died, will restart\n", argv[0]);
             continue;
         }
-        execve("/bin/sh", argv, envp);
-        fprintf(stderr, "%s: exec() failed, aborting\n", argv[0]);
+        execve("/bin/sh", child_argv, child_envp);
         abort();
     }
 }
