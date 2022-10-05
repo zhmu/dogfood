@@ -1,5 +1,6 @@
 #pragma once
 
+#include <atomic>
 #include <vector>
 #include "types.h"
 
@@ -30,8 +31,9 @@ namespace vm
     } // namespace userland
 
     struct Page {
-        uint64_t va{};
+        const uint64_t va{};
         void* page{};
+        std::atomic<int> refcount{1};
     };
 
     struct Mapping {
@@ -41,7 +43,7 @@ namespace vm
         fs::Inode* inode = nullptr;
         uint64_t inode_offset{};
         uint64_t inode_length{};
-        std::vector<Page> pages{};
+        std::vector<Page*> pages{};
     };
 
     struct VMSpace {
