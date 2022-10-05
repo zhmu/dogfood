@@ -46,5 +46,6 @@ namespace process
     int Fork(amd64::TrapFrame& context);
     int WaitPID(amd64::TrapFrame& context);
     int Kill(amd64::TrapFrame& context);
+    int ProcInfo(amd64::TrapFrame&);
 
 } // namespace process

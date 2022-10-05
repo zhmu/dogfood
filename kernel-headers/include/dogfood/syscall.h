@@ -112,3 +112,5 @@
 // Result rmdir(const char* pathname)
 #define SYS_fchmod 56
 // Result fchmod(int fd, mode_t mode)
+#define SYS_procinfo 57
+// Result procinfo(int pid, size_t pi_size, struct PROCINFO* pi)

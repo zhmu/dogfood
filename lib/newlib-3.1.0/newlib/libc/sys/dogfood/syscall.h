@@ -57,3 +57,4 @@
 #define SYS_mkdir 54
 #define SYS_rmdir 55
 #define SYS_fchmod 56
+#define SYS_procinfo 57

@@ -1,10 +1,12 @@
 #include "process.h"
 #include "x86_64/amd64.h"
 #include "lib.h"
+#include "exec.h"
 #include "page_allocator.h"
 #include "syscall.h"
 #include "vm.h"
 #include <dogfood/errno.h>
+#include <dogfood/procinfo.h>
 
 extern "C" void switch_to(amd64::Context** prevContext, amd64::Context* newContext);
 extern "C" void* trap_return;
@@ -69,6 +71,19 @@ namespace process
             }
             return nullptr;
         }
+
+        Process* FindNextProcess(int pid)
+        {
+            Process* next{};
+            for(auto& p: process) {
+                if (p.pid <= pid) continue;
+                if (next == nullptr || next->pid > p.pid) {
+                    next = &p;
+                }
+            }
+            return next;
+        }
+
 
         void DestroyZombieProcess(Process& proc)
         {
@@ -221,6 +236,38 @@ namespace process
         Yield();
         panic("Exit() returned");
         // NOTREACHED
+    }
+
+    int ProcInfo(amd64::TrapFrame& tf)
+    {
+        const auto pid = syscall::GetArgument<1, int>(tf);
+        const auto pi_size = syscall::GetArgument<2, size_t>(tf);
+        auto piPtr = syscall::GetArgument<3, PROCINFO*>(tf);
+
+        if (pi_size != sizeof(PROCINFO)) return -ERANGE;
+
+        auto proc = FindProcessByPID(pid);
+        if (proc == nullptr) return -ESRCH;
+
+        auto next = FindNextProcess(pid);
+        PROCINFO pi{};
+        pi.next_pid = next ? next->pid : 0;
+        pi.state = [&proc]() {
+            switch(proc->state) {
+                case State::Construct: return PROCINFO_STATE_CONSTRUCT;
+                case State::Runnable: return PROCINFO_STATE_RUNNABLE;
+                case State::Running: return PROCINFO_STATE_RUNNING;
+                case State::Zombie: return PROCINFO_STATE_ZOMBIE;
+                case State::Sleeping: return PROCINFO_STATE_SLEEPING;
+            }
+            return PROCINFO_STATE_UNKNOWN;
+        }();
+
+        if (auto argv0 = exec::ExtractArgv0(proc->vmspace, PROCINFO_MAX_NAME_LEN); argv0) {
+            memcpy(pi.name, argv0, strlen(argv0) + 1 /* terminating \0 */ );
+        }
+
+        return piPtr.Set(pi) ? 0 : -EFAULT;
     }
 
     void Initialize()

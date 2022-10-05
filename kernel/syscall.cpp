@@ -202,6 +202,10 @@ constexpr Syscall syscalls[] = {
     {"fchmod",
      SYS_fchmod,
      {{"fd", ArgumentType::FD, Direction::In}, {"mode", ArgumentType::Int, Direction::In}}},
+    {"procinfo",
+     SYS_procinfo,
+     {{"pid", Argument::Int, Direction::In}, {"size", ArgumentType::Int, Direction::In},
+      {"procinfo", ArgumentType::Void, Direction::InOut}}},
 };
 
 const char* errnoStrings[] = {
@@ -511,7 +515,7 @@ namespace
             case SYS_waitpid:
                 return process::WaitPID(*tf);
             case SYS_execve:
-                return exec(*tf);
+                return exec::Exec(*tf);
             case SYS_getsid:
             case SYS_getuid:
             case SYS_geteuid:
@@ -618,6 +622,9 @@ namespace
                 const auto oldPath = syscall::GetArgument<1, const char*>(*tf);
                 const auto newPath = syscall::GetArgument<2, const char*>(*tf);
                 return -fs::SymLink(oldPath.get(), newPath.get());
+            }
+            case SYS_procinfo: {
+                return process::ProcInfo(*tf);
             }
         }
         Print("[", process::GetCurrent().pid, "] unsupported syscall ",
