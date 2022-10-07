@@ -15,6 +15,7 @@ namespace file
 {
     struct File {
         int f_refcount = 0;
+        int f_flags = 0;
         bool f_console = false;
         fs::Inode* f_inode = nullptr;
         off_t f_offset = 0;

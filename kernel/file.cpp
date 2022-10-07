@@ -3,6 +3,7 @@
 #include "fs.h"
 #include "lib.h"
 #include <dogfood/errno.h>
+#include <dogfood/fcntl.h>
 
 #include "hw/console.h"
 
@@ -36,11 +37,14 @@ namespace file
             const auto& parentFile = parent.files[n];
             if (parentFile.f_refcount == 0)
                 continue;
+            if ((parentFile.f_flags & O_CLOEXEC) != 0)
+                continue;
 
             auto& childFile = child.files[n];
             childFile.f_refcount = 1;
             childFile.f_console = parentFile.f_console;
             childFile.f_offset = parentFile.f_offset;
+            childFile.f_flags = parentFile.f_flags;
             if (parentFile.f_inode != nullptr) {
                 fs::iref(*parentFile.f_inode);
                 childFile.f_inode = parentFile.f_inode;

@@ -1,4 +1,5 @@
 #include "types.h"
+
 #include "syscall.h"
 #include "exec.h"
 #include "file.h"
@@ -204,7 +205,7 @@ constexpr Syscall syscalls[] = {
      {{"fd", ArgumentType::FD, Direction::In}, {"mode", ArgumentType::Int, Direction::In}}},
     {"procinfo",
      SYS_procinfo,
-     {{"pid", Argument::Int, Direction::In}, {"size", ArgumentType::Int, Direction::In},
+     {{"pid", ArgumentType::Int, Direction::In}, {"size", ArgumentType::Int, Direction::In},
       {"procinfo", ArgumentType::Void, Direction::InOut}}},
 };
 
@@ -312,6 +313,7 @@ namespace
         if (file2 == nullptr)
             return -ENFILE;
         *file2 = file;
+        file2->f_flags &= ~O_CLOEXEC;
         if (file2->f_inode != nullptr)
             fs::iref(*file2->f_inode);
         return file2 - &current.files[0];
@@ -343,6 +345,7 @@ namespace
                 const auto path = syscall::GetArgument<1, const char*>(*tf);
                 const auto flags = syscall::GetArgument<2, int>(*tf);
                 const auto mode = syscall::GetArgument<3, int>(*tf);
+                if (flags & (O_RDONLY | O_WRONLY | O_RDWR) == 0) return -EINVAL;
 
                 auto& current = process::GetCurrent();
                 auto file = file::Allocate(current);
@@ -356,6 +359,7 @@ namespace
                 }
 
                 file->f_inode = inode;
+                file->f_flags = flags;
                 return file - &current.files[0];
             }
             case SYS_close: {
@@ -459,13 +463,28 @@ namespace
                 if (file == nullptr)
                     return -EBADF;
                 const auto op = syscall::GetArgument<2>(*tf);
+                const auto arg = syscall::GetArgument<3>(*tf);
                 switch (op) {
                     case F_DUPFD:
                         return DupFD(*file);
-                    case F_GETFD:
-                    case F_GETFL:
-                    case F_SETFL:
+                    case F_GETFD: {
+                        int flags = 0;
+                        if (file->f_flags & O_CLOEXEC)
+                            flags |= FD_CLOEXEC;
+                        return flags;
+                    }
+                    case F_SETFD:
+                        if (arg & FD_CLOEXEC) {
+                            file->f_flags |= O_CLOEXEC;
+                        } else {
+                            file->f_flags &= ~O_CLOEXEC;
+                        }
                         return 0;
+                    case F_GETFL:
+                        return file->f_flags;
+                    case F_SETFL:
+                        // Unsupported for now
+                        return -EINVAL;
                     default:
                         Print("fcntl(): op ", op, " not supported\n");
                         return -EINVAL;
@@ -595,7 +614,6 @@ namespace
                 file->f_inode->ext2inode->i_mode =
                     (file->f_inode->ext2inode->i_mode & ~modeMask) | mode;
                 fs::idirty(*file->f_inode);
-                fs::iput(*file->f_inode);
                 return 0;
             }
             case SYS_link: {
