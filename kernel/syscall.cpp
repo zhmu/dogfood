@@ -348,12 +348,13 @@ namespace
                 if (flags & (O_RDONLY | O_WRONLY | O_RDWR) == 0) return -EINVAL;
 
                 auto& current = process::GetCurrent();
+                const auto mask = (~current.umask) & modeMask;
                 auto file = file::Allocate(current);
                 if (file == nullptr)
                     return -ENFILE;
 
                 fs::Inode* inode;
-                if (int errno = fs::Open(path.get(), flags, mode & modeMask, inode); errno != 0) {
+                if (int errno = fs::Open(path.get(), flags, mode & mask, inode); errno != 0) {
                     file::Free(*file);
                     return -errno;
                 }
@@ -563,8 +564,13 @@ namespace
                 fs::iput(*inode);
                 return 0;
             }
-            case SYS_umask:
-                break;
+            case SYS_umask: {
+                const auto new_mask = syscall::GetArgument<1, int>(*tf);
+                auto& proc = process::GetCurrent();
+                auto old_umask = proc.umask;
+                proc.umask = new_mask & modeMask;
+                return old_umask;
+            }
             case SYS_chmod: {
                 const auto path = syscall::GetArgument<1, const char*>(*tf);
                 auto mode = syscall::GetArgument<2, int>(*tf);
@@ -582,9 +588,10 @@ namespace
                 return -fs::Unlink(path.get());
             }
             case SYS_mkdir: {
+                const auto mask = (~process::GetCurrent().umask) & modeMask;
                 const auto path = syscall::GetArgument<1, const char*>(*tf);
                 const auto mode = syscall::GetArgument<2, int>(*tf);
-                return -fs::MakeDirectory(path.get(), mode & modeMask);
+                return -fs::MakeDirectory(path.get(), mode & mask);
             }
             case SYS_rmdir: {
                 const auto path = syscall::GetArgument<1, const char*>(*tf);

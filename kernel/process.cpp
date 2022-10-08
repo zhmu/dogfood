@@ -133,6 +133,7 @@ namespace process
         if (new_process == nullptr)
             return -ENOMEM;
         new_process->ppid = current->pid;
+        new_process->umask = current->umask;
         file::CloneTable(*current, *new_process);
         new_process->cwd = current->cwd;
         fs::iref(*new_process->cwd);
