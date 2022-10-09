@@ -87,7 +87,7 @@ off_t lseek(int fd, off_t offset, int whence)
     long l = offset;
     long r = _SYS_seek(fd, &l, whence);
     if (r < 0) {
-        errno = r & 0x1ff;
+        errno = -r;
         return -1;
     }
     return l;
@@ -136,7 +136,7 @@ void* mmap(void* ptr, size_t len, int prot, int flags, int fd, off_t offset)
 
     long r = _SYS_vmop(&vo);
     if (r < 0) {
-        errno = r & 0x1ff;
+        errno = -r;
         return MAP_FAILED;
     }
 

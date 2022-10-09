@@ -89,4 +89,4 @@
 #define EFTYPE 79
 
 /* Not in POSIX, but useful nevertheless: last errno we have defined */
-#define ELAST 78
+#define ELAST 79

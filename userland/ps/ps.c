@@ -14,7 +14,7 @@ int main(int argc, char* argv[])
         struct PROCINFO pi;
         long r = _SYS_procinfo(pid, sizeof(pi), &pi);
         if (r < 0) {
-            errno = r & 0x1ff;
+            errno = -r;
             if (errno == ERANGE) {
                 fprintf(stderr, "sizeof(PROCINFO) mismatch - recompile kernel and userland\n");
             } else {
