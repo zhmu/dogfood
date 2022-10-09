@@ -617,6 +617,13 @@ namespace ext2
         FreeInode(inode);
     }
 
+    void Truncate(fs::Inode& inode)
+    {
+        // We always truncate to zero bytes...
+        inode.ext2inode->i_size = 0;
+        FreeDataBlocks(inode);
+    }
+
     int RemoveDirectory(fs::Inode& inode)
     {
         if (!ext2::RemoveEntryFromDirectory(inode, ".."))

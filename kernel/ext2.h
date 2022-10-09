@@ -210,5 +210,6 @@ namespace ext2
     int CreateDirectory(fs::Inode& parent, const char* name, int mode);
     int RemoveDirectory(fs::Inode& inode);
     void Unlink(fs::Inode& inode);
+    void Truncate(fs::Inode& inode);
 
 } // namespace ext2

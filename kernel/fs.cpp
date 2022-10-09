@@ -267,6 +267,9 @@ namespace fs
                 fs::iput(*parent);
             if ((flags & (O_CREAT | O_EXCL)) == (O_CREAT | O_EXCL))
                 return EEXIST;
+            if (flags & O_TRUNC) {
+                ext2::Truncate(*inode);
+            }
             return 0;
         }
         if (parent == nullptr)
