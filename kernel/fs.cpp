@@ -232,24 +232,21 @@ namespace fs
         return current_inode;
     }
 
-    Inode* namei2(const char* path, const bool follow, Inode*& parent, char* component)
+    Inode* namei2(const char* path, const bool follow, Inode*& parent, char* component, fs::Inode* lookup_root = nullptr)
     {
-        auto current_inode = [&]() {
-            if (path[0] == '/')
-                return rootInode;
-            else
-                return process::GetCurrent().cwd;
-        }();
-
+        if (path[0] == '/')
+            lookup_root = rootInode;
+        else if (lookup_root == nullptr)
+            lookup_root = process::GetCurrent().cwd;
         int depth = 0;
-        return Lookup(current_inode, path, follow, parent, component, depth);
+        return Lookup(lookup_root, path, follow, parent, component, depth);
     }
 
-    Inode* namei(const char* path, const bool follow)
+    Inode* namei(const char* path, const bool follow, fs::Inode* parent_inode)
     {
         Inode* parent;
         char component[MaxPathLength];
-        auto inode = namei2(path, follow, parent, component);
+        auto inode = namei2(path, follow, parent, component, parent_inode);
         if (parent != nullptr)
             iput(*parent);
         if (inode != nullptr)

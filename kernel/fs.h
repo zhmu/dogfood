@@ -43,7 +43,7 @@ namespace fs
     void iput(Inode& inode);
     void iref(Inode& inode);
     void idirty(Inode& inode);
-    Inode* namei(const char* path, const bool follow);
+    Inode* namei(const char* path, const bool follow, fs::Inode* parent_inode = nullptr);
     bool Stat(Inode& inode, stat& sbuf);
     int ResolveDirectoryName(Inode& inode, char* buffer, int bufferSize);
     int Link(const char* source, const char* dest);

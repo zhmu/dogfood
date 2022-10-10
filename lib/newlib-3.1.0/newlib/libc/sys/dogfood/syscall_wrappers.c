@@ -14,11 +14,12 @@
 #include <stdarg.h>
 #include <grp.h>
 #include <pwd.h>
+#include <dogfood/fcntl.h>
 #include <dogfood/vmop.h>
 
 extern char** environ;
 
-long set_errno_or_extract_value(long v)
+static long set_errno_or_extract_value(long v)
 {
     if (v < 0) {
         errno = -v;
@@ -60,11 +61,11 @@ void _exit(int n)
         return (rt)set_errno_or_extract_value(_SYS_##name((long)a, (long)b, (long)c)); \
     }
 
-#define SYSCALL4(name)                                              \
-    int name(long a, long b, long c, long d)                        \
+#define SYSCALL4(name, rt, t1, t2, t3, t4)                          \
+    rt name(t1 a, t2 b, t3 c, t4 d)                        \
     {                                                               \
         extern long _SYS_##name(long a, long b, long c, long d);    \
-        return set_errno_or_extract_value(_SYS_##name(a, b, c, d)); \
+        return (rt)set_errno_or_extract_value(_SYS_##name((long)a, (long)b, (long)c, (long)d)); \
     }
 
 #define SYSCALL5(name)                                                   \
@@ -166,10 +167,10 @@ char* getcwd(char* buf, size_t size)
     return NULL;
 }
 
-SYSCALL4(fcntl)
+SYSCALL4(fcntl, int, int, long, long, long)
 SYSCALL5(ioctl)
-SYSCALL4(mount)
-SYSCALL4(unmount)
+SYSCALL4(mount, int, const char*, const char*, const char*, long)
+SYSCALL1(unmount, int, const char*)
 SYSCALL2(statfs, int, const char*, struct statfs*)
 SYSCALL2(fstatfs, int, int, struct statfs*)
 SYSCALL2(nanosleep, int, const struct timespec*, struct timespec*)
@@ -181,7 +182,6 @@ SYSCALL3(write, ssize_t, int, void*, size_t)
 SYSCALL1(unlink, int, const char*)
 SYSCALL3(execve, int, const char*, const char**, const char**)
 SYSCALL1(dup, int, int)
-SYSCALL2(stat, int, const char*, struct stat*)
 SYSCALL1(chdir, int, const char*)
 SYSCALL2(fstat, int, int, struct stat*)
 SYSCALL1(fchdir,int,  int)
@@ -191,7 +191,6 @@ SYSCALL2(clock_settime, int, clockid_t, struct timespec*)
 SYSCALL2(clock_gettime, int, clockid_t, const struct timespec*)
 SYSCALL2(clock_getres, int, clockid_t, struct timespec*)
 SYSCALL3(readlink, ssize_t, const char*, char*, size_t)
-SYSCALL2(lstat, int, const char*, struct stat*)
 SYSCALL3(sigaction, int, int, const struct sigaction*, struct sigaction*)
 SYSCALL3(sigprocmask, int, int, const sigset_t*, sigset_t*)
 SYSCALL1(sigsuspend, int, const sigset_t*)
@@ -216,6 +215,7 @@ SYSCALL2(chmod, int, const char*, mode_t)
 SYSCALL2(mkdir, int, const char*, mode_t)
 SYSCALL1(rmdir, int, const char*)
 SYSCALL2(fchmod, int, int, mode_t)
+SYSCALL4(fstatat, int, int, const char*, struct stat*, int)
 
 int pipe(int* fd)
 {
@@ -402,12 +402,16 @@ ssize_t send(int socket, const void* buffer, size_t length, int flags)
     return -1;
 }
 
-int fstatat(int fd, const char *__restrict path, struct stat *__restrict buf, int flag)
-{
-    errno = ENOSYS;
-    return -1;
-}
-
 unsigned int sleep(unsigned int seconds) { return 0; }
 
 int wait(int* wstatus) { return waitpid(-1, wstatus, 0); }
+
+int stat(const char* path, struct stat* st)
+{
+    return fstatat(AT_FDCWD, path, st, 0);
+}
+
+int lstat(const char* path, struct stat* st)
+{
+    return fstatat(AT_FDCWD, path, st, AT_SYMLINK_NOFOLLOW);
+}

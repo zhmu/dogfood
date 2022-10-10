@@ -91,10 +91,6 @@ constexpr Syscall syscalls[] = {
      SYS_rename,
      {{"oldpath", ArgumentType::PathString, Direction::In},
       {"newpath", ArgumentType::PathString, Direction::In}}},
-    {"stat",
-     SYS_stat,
-     {{"path", ArgumentType::PathString, Direction::In},
-      {"buf", ArgumentType::Void, Direction::Out}}},
     {"chdir", SYS_chdir, {{"path", ArgumentType::PathString, Direction::In}}},
     {"fstat",
      SYS_fstat,
@@ -125,10 +121,6 @@ constexpr Syscall syscalls[] = {
      {{"path", ArgumentType::PathString, Direction::In},
       {"buffer", ArgumentType::Void, Direction::Out},
       {"bufsize", ArgumentType::Size, Direction::In}}},
-    {"lstat",
-     SYS_lstat,
-     {{"path", ArgumentType::PathString, Direction::In},
-      {"buf", ArgumentType::Void, Direction::Out}}},
     {"getcwd",
      SYS_getcwd,
      {{"path", ArgumentType::Void, Direction::Out},
@@ -207,6 +199,10 @@ constexpr Syscall syscalls[] = {
      SYS_procinfo,
      {{"pid", ArgumentType::Int, Direction::In}, {"size", ArgumentType::Int, Direction::In},
       {"procinfo", ArgumentType::Void, Direction::InOut}}},
+    {"fstatat",
+     SYS_fstatat,
+     {{"fd", ArgumentType::FD, Direction::In}, {"path", ArgumentType::PathString, Direction::In},
+      {"buf", ArgumentType::Void, Direction::Out}, {"flags", ArgumentType::Void, Direction::In}}},
 };
 
 const char* errnoStrings[] = {
@@ -370,25 +366,6 @@ namespace
                 file::Free(*file);
                 return 0;
             }
-            case SYS_stat:
-            case SYS_lstat: {
-                const auto path = syscall::GetArgument<1, const char*>(*tf);
-                auto statBuf = syscall::GetArgument<2, stat*>(*tf);
-
-                auto inode = fs::namei(path.get(), num != SYS_lstat);
-                if (inode == nullptr)
-                    return -ENOENT;
-
-                int ret = 0;
-                stat st{};
-                if (fs::Stat(*inode, st)) {
-                    if (!statBuf.Set(st)) ret = -EFAULT;
-                } else {
-                    ret = -EIO;
-                }
-                fs::iput(*inode);
-                return ret;
-            }
             case SYS_fstat: {
                 const auto file = file::FindByIndex(process::GetCurrent(), syscall::GetArgument<1>(*tf));
                 auto statBuf = syscall::GetArgument<2, stat*>(*tf);
@@ -403,6 +380,36 @@ namespace
                     if (!fs::Stat(*file->f_inode, st)) return -EIO;
                 }
                 return statBuf.Set(st) ? 0 : -EFAULT;
+            }
+            case SYS_fstatat: {
+                const auto path = syscall::GetArgument<2, const char*>(*tf);
+                auto statBuf = syscall::GetArgument<3, stat*>(*tf);
+                const auto flags = syscall::GetArgument<4>(*tf);
+
+                fs::Inode* base_inode = nullptr;
+                const auto fd = syscall::GetArgument<1>(*tf);
+                if (fd == AT_FDCWD) {
+                    base_inode = process::GetCurrent().cwd;
+                } else {
+                    const auto file = file::FindByIndex(process::GetCurrent(), fd);
+                    if (file == nullptr) return -EBADF;
+                    base_inode = file->f_inode;
+                }
+
+                const auto follow = (flags & AT_SYMLINK_NOFOLLOW) == 0;
+                auto inode = fs::namei(path.get(), follow, base_inode);
+                if (inode == nullptr)
+                    return -ENOENT;
+
+                int ret = 0;
+                stat st{};
+                if (fs::Stat(*inode, st)) {
+                    if (!statBuf.Set(st)) ret = -EFAULT;
+                } else {
+                    ret = -EIO;
+                }
+                fs::iput(*inode);
+                return ret;
             }
             case SYS_seek: {
                 const auto file = file::FindByIndex(process::GetCurrent(), syscall::GetArgument<1>(*tf));
@@ -664,7 +671,12 @@ namespace
 extern "C" uint64_t perform_syscall(amd64::TrapFrame* tf)
 {
 #if DEBUG_SYSCALL
-    bool quiet = syscall::GetNumber(*tf) == SYS_read || syscall::GetNumber(*tf) == SYS_write;
+    const bool quiet = [tf]() {
+        const auto nr = syscall::GetNumber(*tf);
+        if (nr != SYS_read && nr != SYS_write) return false;
+        const auto fd = syscall::GetArgument<1>(*tf);
+        return fd == 0 || fd == 1 || fd == 2;
+    }();
 
     const Syscall* syscall = GetSyscallByNumber(syscall::GetNumber(*tf));
     if (!quiet) {

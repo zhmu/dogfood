@@ -24,8 +24,7 @@
 // Result sys_dup(fdindex_t fd);
 #define SYS_rename 12
 // Result sys_rename(const char* oldpath, const char* newpath);
-#define SYS_stat 13
-// Result sys_stat(const char* path, struct stat* buf);
+// 13 was SYS_stat
 #define SYS_chdir 14
 // Result sys_chdir(const char* path);
 #define SYS_fstat 15
@@ -46,8 +45,7 @@
 // Result sys_clock_getres(clockid_t id, struct timespec* res);
 #define SYS_readlink 23
 // Result sys_readlink(const char* path, char* buffer, size_t bufsize);
-#define SYS_lstat 24
-// Result sys_lstat(const char* path, struct stat* buf);
+// 24 was SYS_lstat
 #define SYS_getcwd 25
 // Result sys_getcwd(char* buf, size_t buflen);
 #define SYS_sigaction 26
@@ -114,3 +112,5 @@
 // Result fchmod(int fd, mode_t mode)
 #define SYS_procinfo 57
 // Result procinfo(int pid, size_t pi_size, struct PROCINFO* pi)
+#define SYS_fstatat 58
+// Result fstatat(int fd, const char* path, struct stat* buf, int flag)
