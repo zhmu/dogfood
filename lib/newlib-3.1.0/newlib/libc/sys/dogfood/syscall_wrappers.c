@@ -15,6 +15,7 @@
 #include <grp.h>
 #include <pwd.h>
 #include <dogfood/fcntl.h>
+#include <dogfood/utsname.h>
 #include <dogfood/vmop.h>
 
 extern char** environ;
@@ -182,6 +183,7 @@ SYSCALL3(write, ssize_t, int, void*, size_t)
 SYSCALL1(unlink, int, const char*)
 SYSCALL3(execve, int, const char*, const char**, const char**)
 SYSCALL1(dup, int, int)
+SYSCALL1(uname, int, struct utsname*)
 SYSCALL1(chdir, int, const char*)
 SYSCALL2(fstat, int, int, struct stat*)
 SYSCALL1(fchdir,int,  int)
@@ -347,12 +349,6 @@ int getrlimit(int resource, struct rlimit* rlim)
 }
 
 char* ttyname(int fd) { return "console"; }
-
-int uname(struct utsname* u)
-{
-    errno = ENOSYS;
-    return -1;
-}
 
 clock_t times(struct tms* buf)
 {

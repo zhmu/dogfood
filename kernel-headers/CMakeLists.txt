@@ -8,6 +8,7 @@ set(HEADERS_DOGFOOD
     include/dogfood/syscall.h
     include/dogfood/types.h
     include/dogfood/vmop.h
+    include/dogfood/utsname.h
 )
 
 install(FILES ${HEADERS_DOGFOOD} DESTINATION usr/include/dogfood)

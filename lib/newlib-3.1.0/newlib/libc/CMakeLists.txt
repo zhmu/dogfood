@@ -834,6 +834,7 @@ set(HEADERS_SYS
     include/sys/types.h
     include/sys/unistd.h
     include/sys/utime.h
+    include/sys/utsname.h
     include/sys/wait.h
     sys/dogfood/sys/dirent.h
     sys/dogfood/sys/errno.h

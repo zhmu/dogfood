@@ -24,7 +24,8 @@
 // Result sys_dup(fdindex_t fd);
 #define SYS_rename 12
 // Result sys_rename(const char* oldpath, const char* newpath);
-// 13 was SYS_stat
+#define SYS_uname 13
+// Result sys_uname(struct utsname* uts)
 #define SYS_chdir 14
 // Result sys_chdir(const char* path);
 #define SYS_fstat 15

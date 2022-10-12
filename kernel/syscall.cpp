@@ -11,6 +11,7 @@
 #include <dogfood/fcntl.h>
 #include <dogfood/stat.h>
 #include <dogfood/syscall.h>
+#include <dogfood/utsname.h>
 
 #include "x86_64/amd64.h"
 #include "hw/console.h"
@@ -203,6 +204,9 @@ constexpr Syscall syscalls[] = {
      SYS_fstatat,
      {{"fd", ArgumentType::FD, Direction::In}, {"path", ArgumentType::PathString, Direction::In},
       {"buf", ArgumentType::Void, Direction::Out}, {"flags", ArgumentType::Void, Direction::In}}},
+    {"uname",
+     SYS_uname,
+     {{"uts", ArgumentType::Void, Direction::Out}}},
 };
 
 const char* errnoStrings[] = {
@@ -657,6 +661,16 @@ namespace
             }
             case SYS_procinfo: {
                 return process::ProcInfo(*tf);
+            }
+            case SYS_uname: {
+                auto utsBuf = syscall::GetArgument<1, utsname*>(*tf);
+                utsname uts{};
+                strlcpy(uts.sysname, "dogfood", sizeof(uts.sysname));
+                strlcpy(uts.nodename, "localhost", sizeof(uts.nodename));
+                strlcpy(uts.release, "[git hash here]", sizeof(uts.release));
+                strlcpy(uts.version, "0.2", sizeof(uts.version));
+                strlcpy(uts.machine, "x86_64", sizeof(uts.machine));
+                return utsBuf.Set(uts) ? 0 : -EFAULT;
             }
         }
         Print("[", process::GetCurrent().pid, "] unsupported syscall ",
