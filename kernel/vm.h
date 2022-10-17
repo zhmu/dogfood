@@ -12,6 +12,7 @@ namespace amd64
 }
 
 namespace fs { struct Inode; }
+namespace page_allocator { struct Page; }
 
 namespace vm
 {
@@ -32,7 +33,7 @@ namespace vm
 
     struct Page {
         const uint64_t va{};
-        void* page{};
+        page_allocator::Page* page{};
         std::atomic<int> refcount{1};
     };
 
@@ -51,7 +52,7 @@ namespace vm
         uint64_t nextMmapAddress = 0;
         void* kernelStack = nullptr; // start of kernel stack
         std::vector<Mapping> mappings;
-        std::vector<void*> mdPages; // machine-dependant pages
+        std::vector<page_allocator::Page*> mdPages; // machine-dependant pages
     };
 
     void

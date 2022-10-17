@@ -100,34 +100,34 @@ namespace exec
             });
         }
 
-        void* PrepareNewUserlandStack(const char* const* argv, const char* const* envp)
+        page_allocator::Page* PrepareNewUserlandStack(const char* const* argv, const char* const* envp)
         {
-            auto ustack = reinterpret_cast<char*>(page_allocator::Allocate());
-            assert(ustack != nullptr);
-            memset(ustack, 0, vm::PageSize);
-
             int argc = 0, envc = 0;
             ApplyToArgumentArray(argv, [&](auto p) { ++argc; });
             ApplyToArgumentArray(envp, [&](auto p) { ++envc; });
 
-            auto sp = reinterpret_cast<uint64_t*>(ustack);
+            auto page = page_allocator::AllocateOne();
+            assert(page != nullptr);
+
+            auto ustack = page->GetData();
+            auto sp = reinterpret_cast<uint64_t*>(page->GetData());
             *sp++ = argc - 1; /* do not count nullptr */
             auto data_sp = reinterpret_cast<char*>(sp + argc + envc);
             CopyArgumentContentsToStack(argv, ustack, sp, data_sp);
             CopyArgumentContentsToStack(envp, ustack, sp, data_sp);
-            return ustack;
+            return page;
         }
 
-        void MapUserlandStack(vm::VMSpace& vs, void* ustack, amd64::TrapFrame& tf)
+        void MapUserlandStack(vm::VMSpace& vs, page_allocator::Page& page, amd64::TrapFrame& tf)
         {
             const auto ustackFlags = vm::Page_P | vm::Page_RW | vm::Page_US;
             auto& mapping = vm::Map(vs, vm::userland::stackBase, ustackFlags, vm::userland::stackSize);
             const auto ustackVA = vm::userland::stackBase + vm::userland::stackSize - vm::PageSize;
-            mapping.pages.push_back(new vm::Page{ ustackVA, ustack });
+            mapping.pages.push_back(new vm::Page{ ustackVA, &page });
 
             vm::MapMemory(vs,
                 ustackVA, vm::PageSize,
-                vm::VirtualToPhysical(ustack), ustackFlags);
+                page.GetPhysicalAddress(), ustackFlags);
 
             tf.rsp = ustackVA;
             tf.rdi = tf.rsp;
@@ -166,7 +166,7 @@ namespace exec
             return -EFAULT;
         }
 
-        MapUserlandStack(vs, ustack, tf);
+        MapUserlandStack(vs, *ustack, tf);
         amd64::FlushTLB();
 
         tf.rip = ehdr.e_entry;
@@ -189,7 +189,7 @@ namespace exec
 
         // PrepareNewUserlandStack() will first write argc (uint64_t), followed by
         // argv. We want the contents of argv[0]
-        const auto m = static_cast<const char*>(stack_vmpage->page);
+        const auto m = reinterpret_cast<const char*>(stack_vmpage->page->GetData());
         const uint64_t argv0 = *reinterpret_cast<const uint64_t*>(&m[sizeof(uint64_t)]);
         if (argv0 >= stack_vmpage->va && argv0 <= stack_vmpage->va + vm::PageSize) {
             const char* s = &m[argv0 - stack_vmpage->va];

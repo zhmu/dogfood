@@ -35,11 +35,12 @@ namespace vm
 
         char* AllocateMDPage(VMSpace& vs)
         {
-            auto new_page = page_allocator::Allocate();
+            auto new_page = page_allocator::AllocateOne();
             assert(new_page != nullptr);
             vs.mdPages.push_back(new_page);
-            memset(new_page, 0, vm::PageSize);
-            return static_cast<char*>(new_page);
+            auto ptr = new_page->GetData();
+            memset(ptr, 0, vm::PageSize);
+            return reinterpret_cast<char*>(ptr);
         }
 
         bool HandleMappingPageFault(VMSpace& vs, const uint64_t virt)
@@ -47,10 +48,10 @@ namespace vm
             const auto va = RoundDownToPage(virt);
             for(auto& mapping: vs.mappings) {
                 if (va < mapping.va_start || va >= mapping.va_end) continue;
-                void* page = page_allocator::Allocate();
+                auto page = page_allocator::AllocateOne();
                 if (page == nullptr)
                     return false;
-                memset(page, 0, vm::PageSize);
+                memset(page->GetData(), 0, vm::PageSize);
 
                 const auto readOffset = va - mapping.va_start;
                 int bytesToRead = vm::PageSize;
@@ -65,14 +66,14 @@ namespace vm
                         bytesToRead, " bytes\n");
                 }
                 if (bytesToRead > 0 &&
-                    fs::Read(*mapping.inode, page, mapping.inode_offset + readOffset, bytesToRead) != bytesToRead) {
-                    page_allocator::Free(page);
+                    fs::Read(*mapping.inode, page->GetData(), mapping.inode_offset + readOffset, bytesToRead) != bytesToRead) {
+                    page_allocator::Free(*page);
                     return false;
                 }
 
                 mapping.pages.push_back(new Page{ va, page });
 
-                MapMemory(vs, va, vm::PageSize, vm::VirtualToPhysical(page), mapping.pte_flags);
+                MapMemory(vs, va, vm::PageSize, page->GetPhysicalAddress(), mapping.pte_flags);
                 return true;
             }
             return false;
@@ -93,11 +94,11 @@ namespace vm
                 ++newP->refcount;
             } else {
                 newP = new Page{ p.va };
-                newP->page = page_allocator::Allocate();
+                newP->page = page_allocator::AllocateOne();
                 assert(newP->page != nullptr);
-                memcpy(newP->page, p.page, vm::PageSize);
+                memcpy(newP->page->GetData(), p.page->GetData(), vm::PageSize);
             }
-            MapMemory(vs, newP->va, vm::PageSize, vm::VirtualToPhysical(newP->page), destMapping.pte_flags);
+            MapMemory(vs, newP->va, vm::PageSize, newP->page->GetPhysicalAddress(), destMapping.pte_flags);
             destMapping.pages.push_back(newP);
         }
 
@@ -174,7 +175,7 @@ namespace vm
         assert(!IsActive(vs));
         assert(vs.mappings.empty());
         for(auto& p: vs.mdPages) {
-            page_allocator::Free(p);
+            page_allocator::Free(*p);
         }
         vs.mdPages.clear();
         vs.pageDirectory = 0;
@@ -203,7 +204,7 @@ namespace vm
             for(auto& p: m.pages) {
                 MapMemory(vs, p->va, vm::PageSize, 0, 0);
                 if (--p->refcount == 0) {
-                    page_allocator::Free(p->page);
+                    page_allocator::Free(*p->page);
                     delete p;
                 }
             }

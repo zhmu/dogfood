@@ -22,14 +22,26 @@ namespace
 
     void Free(void*);
 
-    Header* ClaimPageForAllocator()
+    int UnitsToOrder(size_t nunits)
     {
-        auto p = page_allocator::Allocate();
+        const auto numBytes = nunits * sizeof(Header);
+        int order = 0;
+        while((vm::PageSize << order) < numBytes)
+            ++order;
+        Print("UnitsToOrder: nunits ", nunits, " bytes " , numBytes, " -> order ", order, " bytes ", vm::PageSize << order, "\n");
+        return order;
+    }
+
+    Header* AddMemory(size_t nunits)
+    {
+        // Always allocate at least a full page
+        const auto order = UnitsToOrder(std::min(nunits, unitsPerPage));
+        auto p = page_allocator::AllocateOrder(order);
         if (p == nullptr)
             return nullptr; // out of space
 
-        auto h = static_cast<Header*>(p);
-        h->h_size = unitsPerPage;
+        auto h = reinterpret_cast<Header*>(p->GetData());
+        h->h_size = (vm::PageSize << order) / sizeof(Header);
         // Call Free() to add the new memory to the freelist
         Free(static_cast<void*>(h + 1));
         return freelist;
@@ -68,7 +80,6 @@ namespace
     void* Allocate(size_t nbytes)
     {
         const auto nunits = (nbytes + sizeof(Header) - 1) / sizeof(Header) + 1;
-        assert(nunits < unitsPerPage);
         auto prevp = freelist;
         if (prevp == nullptr) {
             // No free list yet
@@ -94,7 +105,7 @@ namespace
             }
             if (p == freelist) {
                 // Wrapped around free list; try to increase backing store
-                p = ClaimPageForAllocator();
+                p = AddMemory(nunits);
                 if (!p)
                     return nullptr; /* none left */
             }

@@ -303,15 +303,15 @@ namespace
         // they are properly mapped.  Note that next_page is the kernel end +
         // the pages we used to store the memory mappings, so we'll need to
         // adjust the region to avoid re-using that memory.
-        page_allocator::Initialize();
         for (unsigned int n = 0; n < currentRegion; ++n) {
             auto region = regions[n];
             if (region.base == kernel_phys_end) {
                 region.length -= next_page - kernel_phys_end;
                 region.base = next_page;
             }
+            auto base = reinterpret_cast<char*>(vm::PhysicalToVirtual(region.base));
             page_allocator::RegisterMemory(
-                vm::PhysicalToVirtual(region.base), region.length / vm::PageSize);
+                base, region.length / vm::PageSize);
         }
     }
 
