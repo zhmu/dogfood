@@ -28,7 +28,6 @@ namespace
         int order = 0;
         while((vm::PageSize << order) < numBytes)
             ++order;
-        Print("UnitsToOrder: nunits ", nunits, " bytes " , numBytes, " -> order ", order, " bytes ", vm::PageSize << order, "\n");
         return order;
     }
 
@@ -40,7 +39,12 @@ namespace
         if (p == nullptr)
             return nullptr; // out of space
 
-        auto h = reinterpret_cast<Header*>(p->GetData());
+        // Take the pointer over; the memory allocator owns this memory now
+        // (and will currently never release it back to the page allocator)
+        auto page = p.release();
+        auto data = page->GetData();
+
+        auto h = reinterpret_cast<Header*>(data);
         h->h_size = (vm::PageSize << order) / sizeof(Header);
         // Call Free() to add the new memory to the freelist
         Free(static_cast<void*>(h + 1));

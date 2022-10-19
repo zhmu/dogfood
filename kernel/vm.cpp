@@ -36,9 +36,10 @@ namespace vm
         char* AllocateMDPage(VMSpace& vs)
         {
             auto new_page = page_allocator::AllocateOne();
-            assert(new_page != nullptr);
-            vs.mdPages.push_back(new_page);
+            assert(new_page);
+
             auto ptr = new_page->GetData();
+            vs.mdPages.push_back(std::move(new_page));
             memset(ptr, 0, vm::PageSize);
             return reinterpret_cast<char*>(ptr);
         }
@@ -49,7 +50,7 @@ namespace vm
             for(auto& mapping: vs.mappings) {
                 if (va < mapping.va_start || va >= mapping.va_end) continue;
                 auto page = page_allocator::AllocateOne();
-                if (page == nullptr)
+                if (!page)
                     return false;
                 memset(page->GetData(), 0, vm::PageSize);
 
@@ -67,39 +68,37 @@ namespace vm
                 }
                 if (bytesToRead > 0 &&
                     fs::Read(*mapping.inode, page->GetData(), mapping.inode_offset + readOffset, bytesToRead) != bytesToRead) {
-                    page_allocator::Free(*page);
                     return false;
                 }
 
-                mapping.pages.push_back(new Page{ va, page });
+                const auto pagePhysicalAddr = page->GetPhysicalAddress();
+                mapping.pages.push_back(MappedPage{va, std::move(page) });
 
-                MapMemory(vs, va, vm::PageSize, page->GetPhysicalAddress(), mapping.pte_flags);
+                MapMemory(vs, va, vm::PageSize, pagePhysicalAddr, mapping.pte_flags);
                 return true;
             }
             return false;
         }
 
-        bool CanReusePage(const Mapping& mapping, const Page& p)
+        bool CanReusePage(const Mapping& mapping, const MappedPage& mp)
         {
             if ((mapping.pte_flags & Page_RW) == 0)
                 return true;
             return false;
         }
 
-        void ClonePage(VMSpace& vs, Mapping& destMapping, Page& p)
+        void CloneMappedPage(VMSpace& vs, Mapping& destMapping, MappedPage& mp)
         {
-            Page* newP;
-            if (CanReusePage(destMapping, p)) {
-                newP = &p;
-                ++newP->refcount;
+            page_allocator::PageRef newPage;
+            if (CanReusePage(destMapping, mp)) {
+                newPage = page_allocator::AddReference(mp.page);
             } else {
-                newP = new Page{ p.va };
-                newP->page = page_allocator::AllocateOne();
-                assert(newP->page != nullptr);
-                memcpy(newP->page->GetData(), p.page->GetData(), vm::PageSize);
+                newPage = page_allocator::AllocateOne();
+                assert(newPage);
+                memcpy(newPage->GetData(), mp.page->GetData(), vm::PageSize);
             }
-            MapMemory(vs, newP->va, vm::PageSize, newP->page->GetPhysicalAddress(), destMapping.pte_flags);
-            destMapping.pages.push_back(newP);
+            MapMemory(vs, mp.va, vm::PageSize, newPage->GetPhysicalAddress(), destMapping.pte_flags);
+            destMapping.pages.push_back({ mp.va, std::move(newPage) });
         }
 
         int ConvertVmopFlags(int opflags)
@@ -118,8 +117,8 @@ namespace vm
         using namespace print;
         for(const auto& m: vs.mappings) {
             Print("  area ", Hex{m.va_start}, " .. ", Hex{m.va_end}, "\n");
-            for(auto& p: m.pages) {
-                Print("    va ", Hex{p->va}, " page ", p->page, " refcount ", p->refcount.load(), "\n");
+            for(auto& mp: m.pages) {
+                Print("    va ", Hex{mp.va}, " page ", mp.page.get(), " refcount ", mp.page->refcount.load(), "\n");
             }
         }
     }
@@ -174,10 +173,7 @@ namespace vm
     {
         assert(!IsActive(vs));
         assert(vs.mappings.empty());
-        for(auto& p: vs.mdPages) {
-            page_allocator::Free(*p);
-        }
-        vs.mdPages.clear();
+        vs.mdPages.clear(); // will Deref() all of them
         vs.pageDirectory = 0;
     }
 
@@ -201,12 +197,8 @@ namespace vm
         for(auto& m: vs.mappings) {
             if (m.inode != nullptr)
                 fs::iput(*m.inode);
-            for(auto& p: m.pages) {
-                MapMemory(vs, p->va, vm::PageSize, 0, 0);
-                if (--p->refcount == 0) {
-                    page_allocator::Free(*p->page);
-                    delete p;
-                }
+            for(auto& mp: m.pages) {
+                MapMemory(vs, mp.va, vm::PageSize, 0, 0);
             }
         }
         vs.mappings.clear();
@@ -216,14 +208,19 @@ namespace vm
     {
         auto& sourceVS = GetCurrent();
         for(auto& sourceMapping: sourceVS.mappings) {
-            destVS.mappings.push_back(sourceMapping);
+            destVS.mappings.push_back(Mapping{
+                sourceMapping.pte_flags,
+                sourceMapping.va_start,
+                sourceMapping.va_end,
+                sourceMapping.inode,
+                sourceMapping.inode_offset,
+                sourceMapping.inode_length,
+            });
             auto& destMapping = destVS.mappings.back();
-            destMapping = sourceMapping;
             if (destMapping.inode) fs::iref(*destMapping.inode);
-            destMapping.pages.clear();
 
             for(auto& p: sourceMapping.pages) {
-                ClonePage(destVS, destMapping, *p);
+                CloneMappedPage(destVS, destMapping, p);
             }
         }
     }
@@ -281,11 +278,7 @@ namespace vm
 
     Mapping& Map(VMSpace& vs, uint64_t va, uint64_t pteFlags, uint64_t mappingSize)
     {
-        Mapping mapping;
-        mapping.va_start = va;
-        mapping.va_end = va + mappingSize;
-        mapping.pte_flags = pteFlags;
-        vs.mappings.push_back(mapping);
+        vs.mappings.push_back(Mapping{ pteFlags, va, va + mappingSize });
         return vs.mappings.back();
     }
 

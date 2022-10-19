@@ -354,9 +354,9 @@ namespace
                     return -ENFILE;
 
                 fs::Inode* inode;
-                if (int errno = fs::Open(path.get(), flags, mode & mask, inode); errno != 0) {
+                if (int result = fs::Open(path.get(), flags, mode & mask, inode); result != 0) {
                     file::Free(*file);
-                    return -errno;
+                    return -result;
                 }
 
                 file->f_inode = inode;

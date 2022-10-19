@@ -70,7 +70,7 @@ namespace page_allocator
 
         void MarkPageAsFree(uint8_t* map, int bit) { map[bit / 8] &= ~(1 << (bit & 7)); }
 
-        Page* AllocateFromZone(PageZone& z, unsigned int order)
+        PageRef AllocateFromZone(PageZone& z, unsigned int order)
         {
             Debug("AllocateFromZone(): z=", &z, "order=", order, "\n");
 
@@ -102,16 +102,20 @@ namespace page_allocator
                 z.base[buddy_index].order = alloc_order;
             }
 
-            // Allocate using the intended order
+            // Grab a page from the order's free list
             assert(!z.free[order].empty());
             auto& p = z.free[order].front();
             z.free[order].pop_front();
-            const auto page_index = &p - z.base;
-            assert(p.order == order);
-            MarkPageInUse(z.bitmap, page_index);
-            Debug("page_alloc_zone(): got page=", &p, " index ", page_index, "\n");
             z.avail_pages -= 1 << order;
-            return &p;
+
+            // Properly fill out the page's fields
+            assert(p.order == order);
+            const auto prev_refcount = p.refcount.exchange(1);
+            assert(prev_refcount == 0);
+            const auto page_index = &p - z.base;
+            MarkPageInUse(z.bitmap, page_index);
+            Debug("page_alloc_zone(): got page=", &p, " index ", page_index, " refcount ", p.refcount.load(), "\n");
+            return PageRef(&p);
         }
 
         void FreeIndex(PageZone& z, unsigned int order, unsigned int index)
@@ -150,10 +154,17 @@ namespace page_allocator
         }
     } // namespace
 
-    void Free(Page& p)
-    {
-        assert(p.order >= 0 && p.order < MaxOrders);
-        FreeIndex(p.zone, p.order, &p - p.zone.base);
+    namespace detail {
+        void Deref(Page& p)
+        {
+            assert(p.order >= 0 && p.order < MaxOrders);
+
+            const auto prev_refcount = p.refcount.fetch_sub(1);
+            Debug("Deref(): page ", &p, " refcount ", prev_refcount, "\n");
+            assert(prev_refcount > 0);
+            if (prev_refcount == 1)
+                FreeIndex(p.zone, p.order, &p - p.zone.base);
+        }
     }
 
     void RegisterMemory(char* base, unsigned int num_pages)
@@ -190,7 +201,7 @@ namespace page_allocator
         zones.push_back(z);
     }
 
-    Page* AllocateOrder(int order)
+    PageRef AllocateOrder(int order)
     {
         assert(order >= 0 && order < MaxOrders);
 
@@ -203,9 +214,16 @@ namespace page_allocator
         panic("out of pages!");
     }
 
-    Page* AllocateOne()
+    PageRef AllocateOne()
     {
         return AllocateOrder(0);
+    }
+
+    PageRef AddReference(PageRef& page)
+    {
+        const auto prev_refcount = page->refcount.fetch_add(1);
+        assert(prev_refcount > 0);
+        return PageRef(page.get());
     }
 
     uint64_t GetNumberOfAvailablePages()

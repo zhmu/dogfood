@@ -2,6 +2,7 @@
 
 #include <atomic>
 #include <vector>
+#include "page_allocator.h"
 #include "types.h"
 
 namespace amd64
@@ -31,10 +32,9 @@ namespace vm
         inline constexpr uint64_t mmapBase = 0x0000008000000000;
     } // namespace userland
 
-    struct Page {
+    struct MappedPage {
         const uint64_t va{};
-        page_allocator::Page* page{};
-        std::atomic<int> refcount{1};
+        page_allocator::PageRef page;
     };
 
     struct Mapping {
@@ -44,7 +44,7 @@ namespace vm
         fs::Inode* inode = nullptr;
         uint64_t inode_offset{};
         uint64_t inode_length{};
-        std::vector<Page*> pages{};
+        std::vector<MappedPage> pages;
     };
 
     struct VMSpace {
@@ -52,7 +52,7 @@ namespace vm
         uint64_t nextMmapAddress = 0;
         void* kernelStack = nullptr; // start of kernel stack
         std::vector<Mapping> mappings;
-        std::vector<page_allocator::Page*> mdPages; // machine-dependant pages
+        std::vector<page_allocator::PageRef> mdPages; // machine-dependant pages
     };
 
     void

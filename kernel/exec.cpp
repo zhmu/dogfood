@@ -100,34 +100,35 @@ namespace exec
             });
         }
 
-        page_allocator::Page* PrepareNewUserlandStack(const char* const* argv, const char* const* envp)
+        page_allocator::PageRef PrepareNewUserlandStack(const char* const* argv, const char* const* envp)
         {
             int argc = 0, envc = 0;
             ApplyToArgumentArray(argv, [&](auto p) { ++argc; });
             ApplyToArgumentArray(envp, [&](auto p) { ++envc; });
 
             auto page = page_allocator::AllocateOne();
-            assert(page != nullptr);
+            assert(page);
 
             auto ustack = page->GetData();
-            auto sp = reinterpret_cast<uint64_t*>(page->GetData());
-            *sp++ = argc - 1; /* do not count nullptr */
+            auto sp = reinterpret_cast<uint64_t*>(ustack);
+            *sp++ = argc - 1; // do not count nullptr
             auto data_sp = reinterpret_cast<char*>(sp + argc + envc);
             CopyArgumentContentsToStack(argv, ustack, sp, data_sp);
             CopyArgumentContentsToStack(envp, ustack, sp, data_sp);
             return page;
         }
 
-        void MapUserlandStack(vm::VMSpace& vs, page_allocator::Page& page, amd64::TrapFrame& tf)
+        void MapUserlandStack(vm::VMSpace& vs, page_allocator::PageRef&& page, amd64::TrapFrame& tf)
         {
             const auto ustackFlags = vm::Page_P | vm::Page_RW | vm::Page_US;
             auto& mapping = vm::Map(vs, vm::userland::stackBase, ustackFlags, vm::userland::stackSize);
             const auto ustackVA = vm::userland::stackBase + vm::userland::stackSize - vm::PageSize;
-            mapping.pages.push_back(new vm::Page{ ustackVA, &page });
+            const auto pagePhysicalAddr = page->GetPhysicalAddress();
+            mapping.pages.push_back(vm::MappedPage{ ustackVA, std::move(page) });
 
             vm::MapMemory(vs,
                 ustackVA, vm::PageSize,
-                page.GetPhysicalAddress(), ustackFlags);
+                pagePhysicalAddr, ustackFlags);
 
             tf.rsp = ustackVA;
             tf.rdi = tf.rsp;
@@ -166,7 +167,7 @@ namespace exec
             return -EFAULT;
         }
 
-        MapUserlandStack(vs, *ustack, tf);
+        MapUserlandStack(vs, std::move(ustack), tf);
         amd64::FlushTLB();
 
         tf.rip = ehdr.e_entry;
@@ -185,14 +186,14 @@ namespace exec
         // The first page of this mapping is contains the stack as mapped by
         // MapUserlandStack()
         assert(!mapping_it->pages.empty());
-        auto stack_vmpage = mapping_it->pages.front();
+        auto& stack_vmpage = mapping_it->pages.front();
 
         // PrepareNewUserlandStack() will first write argc (uint64_t), followed by
         // argv. We want the contents of argv[0]
-        const auto m = reinterpret_cast<const char*>(stack_vmpage->page->GetData());
+        const auto m = reinterpret_cast<const char*>(stack_vmpage.page->GetData());
         const uint64_t argv0 = *reinterpret_cast<const uint64_t*>(&m[sizeof(uint64_t)]);
-        if (argv0 >= stack_vmpage->va && argv0 <= stack_vmpage->va + vm::PageSize) {
-            const char* s = &m[argv0 - stack_vmpage->va];
+        if (argv0 >= stack_vmpage.va && argv0 <= stack_vmpage.va + vm::PageSize) {
+            const char* s = &m[argv0 - stack_vmpage.va];
             // Only return s if it contains a terminator within max_length bytes
             for (size_t n = 0; n < max_length; ++n) {
                 if (s[n] == '\0') return s;
