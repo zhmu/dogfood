@@ -4,6 +4,9 @@
 #include "lib.h"
 #include <dogfood/errno.h>
 
+// XXX Disable this warning for now; x86 can handle the unaligned access just fine
+#pragma GCC diagnostic ignored "-Waddress-of-packed-member"
+
 namespace ext2
 {
     namespace
