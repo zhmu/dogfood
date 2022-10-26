@@ -138,7 +138,8 @@ switch_to:
     ret
 
 syscall_handler:
-    // Switch to kernel stack
+    // Switch to kernel stack - temporarily stash the userland %rsp at
+    // syscall_userland_rsp as we don't have any spare registers
     movq    %rsp, syscall_userland_rsp
     movq    syscall_kernel_rsp, %rsp
 
@@ -148,6 +149,7 @@ syscall_handler:
     SAVE_REGISTERS
     movq    %rcx, 0x88(%rsp)
 
+    // Write userland $rsp to the trap frame
     movq    syscall_userland_rsp, %rax
     movq    %rax, 0xa0(%rsp)
 
@@ -156,10 +158,21 @@ syscall_handler:
     movq    %rsp, %rdi
     call    perform_syscall
 
+    cli
+
+    // Store %rax and try to deliver a signal - supply the trap frame and
+    // enough space for a new trap frame to avoid it from getting optimized
+    // away
+    movq    %rax, 0x08(%rsp)
+    movq    %rsp, %rdi
+    subq    $0xb0, %rsp
+    movq    %rsp, %rsi
+    call    deliver_signal
+    movq    %rax, %rsp
+
+    // Copy userland rsp from stackframe; it'll be the last register we restore
     movq    0xa0(%rsp), %rbx
     movq    %rbx, syscall_userland_rsp
-
-    cli
 
     // Restore just what the ABI needs
     movq    0x10(%rsp), %rbx
@@ -170,7 +183,10 @@ syscall_handler:
     movq    0x70(%rsp), %r14
     movq    0x78(%rsp), %r15
     movq    0x88(%rsp), %rcx
-    // ... plus %rdi, as exec() uses this (first argument)
+    // ... plus %rax, the syscall return value
+    movq    0x08(%rsp), %rax
+    // ... plus %rdi/rsi, as exec()/signals uses this (first/second argument)
+    movq    0x30(%rsp), %rsi
     movq    0x38(%rsp), %rdi
 
     movq    syscall_userland_rsp, %rsp

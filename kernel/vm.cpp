@@ -15,9 +15,7 @@ static constexpr inline uint64_t initCodeBase = 0x8000000;
 
 extern "C" void* initcode;
 extern "C" void* initcode_end;
-extern "C" uint64_t syscall_kernel_rsp;
 extern amd64::PageDirectory kernel_pagedir;
-extern amd64::TSS kernel_tss;
 
 namespace vm
 {
@@ -146,10 +144,6 @@ namespace vm
     void Activate(VMSpace& vs)
     {
         amd64::write_cr3(vs.pageDirectory);
-        kernel_tss.rsp0 = reinterpret_cast<uint64_t>(
-            reinterpret_cast<char*>(vs.kernelStack) + vm::PageSize);
-        syscall_kernel_rsp = reinterpret_cast<uint64_t>(
-            reinterpret_cast<char*>(vs.kernelStack) + vm::PageSize);
     }
 
     void InitializeVMSpace(VMSpace& vs)

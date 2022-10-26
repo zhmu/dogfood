@@ -10,6 +10,8 @@
 
 extern "C" void switch_to(amd64::Context** prevContext, amd64::Context* newContext);
 extern "C" void* trap_return;
+extern amd64::TSS kernel_tss;
+extern "C" uint64_t syscall_kernel_rsp;
 
 namespace process
 {
@@ -39,6 +41,8 @@ namespace process
                 proc.pid = next_pid++;
 
                 vm::InitializeVMSpace(proc.vmspace);
+                proc.rsp0 = reinterpret_cast<uint64_t>(proc.vmspace.kernelStack) + vm::PageSize;
+
                 auto sp = static_cast<char*>(proc.vmspace.kernelStack) + vm::PageSize;
                 // Allocate trap frame for trap_return()
                 {
@@ -59,15 +63,6 @@ namespace process
                     proc.context = context;
                 }
                 return &proc;
-            }
-            return nullptr;
-        }
-
-        Process* FindProcessByPID(int pid)
-        {
-            for (auto& proc : process) {
-                if (proc.state != State::Unused && proc.pid == pid)
-                    return &proc;
             }
             return nullptr;
         }
@@ -100,6 +95,15 @@ namespace process
     } // namespace
 
     Process& GetCurrent() { return *current; }
+
+    Process* FindProcessByPID(int pid)
+    {
+        for (auto& proc : process) {
+            if (proc.state != State::Unused && proc.pid == pid)
+                return &proc;
+        }
+        return nullptr;
+    }
 
     void Sleep(WaitChannel waitChannel, int state)
     {
@@ -193,28 +197,6 @@ namespace process
         // NOTREACHED
     }
 
-    int Kill(amd64::TrapFrame& tf)
-    {
-        const auto pid = syscall::GetArgument<1, int>(tf);
-        const auto signal = syscall::GetArgument<2, int>(tf);
-        if (pid < 0)
-            return -EPERM;
-        if (signal < 1 || signal > 15)
-            return -EINVAL;
-
-        auto proc = FindProcessByPID(pid);
-        if (proc == nullptr)
-            return -ESRCH;
-
-        proc->signal = signal;
-        // TODO unblock child if needed
-        if (proc == current) {
-            Exit(tf);
-        }
-
-        return 0;
-    }
-
     int Exit(amd64::TrapFrame& tf)
     {
         if (current->pid == 1)
@@ -286,6 +268,12 @@ namespace process
         init->state = State::Runnable;
     }
 
+    void UpdateKernelStackForProcess(Process& proc)
+    {
+        kernel_tss.rsp0 = proc.rsp0;
+        syscall_kernel_rsp = proc.rsp0;
+    }
+
     void Scheduler()
     {
         while (1) {
@@ -299,6 +287,7 @@ namespace process
                 proc.state = State::Running;
 
                 vm::Activate(proc.vmspace);
+                UpdateKernelStackForProcess(proc);
                 if (prev && prev != current) {
                     amd64::fpu::SaveContext(&prev->fpu[0]);
                     amd64::fpu::RestoreContext(&current->fpu[0]);

@@ -9,6 +9,7 @@
 #include <sys/times.h>
 #include <sys/utime.h>
 #include <errno.h>
+#include <signal.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdarg.h>
@@ -39,7 +40,7 @@ void _exit(int n)
 
 #define SYSCALL0(name, rt)     \
     extern long _SYS_##name(); \
-    rt name(long a) { return (rt)set_errno_or_extract_value(_SYS_##name()); }
+    rt name() { return (rt)set_errno_or_extract_value(_SYS_##name()); }
 
 #define SYSCALL1(name, rt, t1)                          \
     rt name(t1 a)                                       \
@@ -193,7 +194,6 @@ SYSCALL2(clock_settime, int, clockid_t, struct timespec*)
 SYSCALL2(clock_gettime, int, clockid_t, const struct timespec*)
 SYSCALL2(clock_getres, int, clockid_t, struct timespec*)
 SYSCALL3(readlink, ssize_t, const char*, char*, size_t)
-SYSCALL3(sigaction, int, int, const struct sigaction*, struct sigaction*)
 SYSCALL3(sigprocmask, int, int, const sigset_t*, sigset_t*)
 SYSCALL1(sigsuspend, int, const sigset_t*)
 SYSCALL2(kill, int, pid_t, int)
@@ -410,4 +410,92 @@ int stat(const char* path, struct stat* st)
 int lstat(const char* path, struct stat* st)
 {
     return fstatat(AT_FDCWD, path, st, AT_SYMLINK_NOFOLLOW);
+}
+
+
+extern long _SYS_sigaction(long a, long b, long c);
+extern long _SYS_sigreturn();
+
+int sigaction(int sig, const struct sigaction* act, struct sigaction* oact)
+{
+    struct sigaction newact;
+    if (act != NULL) {
+        newact = *act;
+        newact.sa_restorer = (void(*)(void))&_SYS_sigreturn;
+    }
+    const int r = _SYS_sigaction(sig, act != NULL ? (long)&newact : 0, (long)oact);
+    return set_errno_or_extract_value(r);
+}
+
+sig_t signal(int sig, sig_t func)
+{
+    struct sigaction act;
+    memset(&act, 0, sizeof(act));
+
+    act.sa_handler = func;
+    sigemptyset(&act.sa_mask);
+    act.sa_flags = 0;
+
+    struct sigaction oact;
+    if (sigaction(sig, &act, &oact) < 0)
+        return SIG_ERR;
+    return oact.sa_handler;
+}
+
+int raise(int sig)
+{
+    return kill(getpid(), sig);
+}
+
+static inline unsigned int signal_mask(int signo)
+{
+    if (signo < SIGHUP || signo >= NSIG)
+        return 0;
+    return 1 << (signo - 1);
+}
+
+int sigemptyset(sigset_t* set)
+{
+    *set = 0;
+    return 0;
+}
+
+int sigfillset(sigset_t* set)
+{
+    int result = sigemptyset(set);
+    for (unsigned int signo = 1; result == 0 && signo < NSIG; signo++)
+        result = sigaddset(set, signo);
+    return result;
+}
+
+int sigaddset(sigset_t* set, int signo)
+{
+    unsigned int mask = signal_mask(signo);
+    if (mask == 0) {
+        errno = EINVAL;
+        return -1;
+    }
+    *set |= mask;
+    return 0;
+}
+
+int sigdelset(sigset_t* set, int signo)
+{
+    unsigned int mask = signal_mask(signo);
+    if (mask == 0) {
+        errno = EINVAL;
+        return -1;
+    }
+    *set &= ~mask;
+    return 0;
+}
+
+int sigismember(const sigset_t* set, int signo)
+{
+    unsigned int mask = signal_mask(signo);
+    if (mask == 0) {
+        errno = EINVAL;
+        return -1;
+    }
+    return (*set & mask) ? 1 : 0;
 }

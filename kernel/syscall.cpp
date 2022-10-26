@@ -5,6 +5,7 @@
 #include "file.h"
 #include "ext2.h"
 #include "process.h"
+#include "signal.h"
 #include "lib.h"
 #include "vm.h"
 #include <dogfood/errno.h>
@@ -540,7 +541,7 @@ namespace
             case SYS_vmop:
                 return vm::VmOp(*tf);
             case SYS_kill:
-                return process::Kill(*tf);
+                return signal::kill(*tf);
             case SYS_clone:
                 return process::Fork(*tf);
             case SYS_waitpid:
@@ -558,7 +559,9 @@ namespace
             case SYS_getppid:
                 return process::GetCurrent().ppid;
             case SYS_sigaction:
-                return 0; // not implemented
+                return signal::sigaction(*tf);
+            case SYS_sigreturn:
+                return signal::sigreturn(*tf);
             case SYS_clock_gettime:
                 return -ENOSYS;
             case SYS_chown: {

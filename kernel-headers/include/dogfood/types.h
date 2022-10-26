@@ -16,4 +16,5 @@ typedef __int64_t __time_t;
 typedef __uint64_t __fsblkcnt_t;
 typedef __uint64_t __fsfilcnt_t;
 typedef __uint32_t __key_t;
+typedef __uint32_t __sigset_t;
 #endif

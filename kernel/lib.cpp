@@ -172,6 +172,7 @@ namespace std {
     void __throw_bad_array_new_length() { panic("__throw_bad_array_new_length"); }
     void __throw_bad_alloc() { panic("__throw_bad_alloc"); }
     void __throw_length_error(const char* s) { panic("__throw_length_error"); }
+    void __throw_out_of_range_fmt(const char*, ...) { panic("__throw_out_of_range_fmt"); }
 }
 
 extern "C" int __cxa_atexit(void (*func)(void*), void* arg, void* dso_handle)

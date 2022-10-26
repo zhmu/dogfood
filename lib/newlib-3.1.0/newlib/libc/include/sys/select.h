@@ -11,9 +11,9 @@
 # if !(defined (_WINSOCK_H) || defined (_WINSOCKAPI_) || defined (__USE_W32_SOCKETS))
 
 #include <sys/cdefs.h>
-#include <sys/_sigset.h>
 #include <sys/_timeval.h>
 #include <sys/timespec.h>
+#include <dogfood/types.h> // for __sigset_t
 
 #if !defined(_SIGSET_T_DECLARED)
 #define	_SIGSET_T_DECLARED

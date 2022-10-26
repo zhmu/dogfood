@@ -164,8 +164,6 @@ set(SOURCES
     search/tsearch.c
     search/twalk.c
     signal/psignal.c
-    signal/raise.c
-    signal/signal.c
     ssp/chk_fail.c
     ssp/gets_chk.c
     ssp/memcpy_chk.c
@@ -597,7 +595,6 @@ set(SOURCES
     unix/getpwent.c
     unix/pread.c
     unix/pwrite.c
-    unix/sigset.c
 )
 
 set(SOURCES
@@ -685,6 +682,8 @@ set(SOURCES_notyet
     posix/collcmp.c
     posix/engine.c
     posix/fnmatch.c
+    signal/raise.c
+    signal/signal.c
     xdr/xdr.c
     xdr/xdr_array.c
     xdr/xdr_float.c
@@ -800,7 +799,6 @@ set(HEADERS_SYS
     include/sys/_default_fcntl.h
     include/sys/_intsup.h
     include/sys/_pthreadtypes.h
-    include/sys/_sigset.h
     include/sys/_stdint.h
     include/sys/_timespec.h
     include/sys/_timeval.h
@@ -821,7 +819,6 @@ set(HEADERS_SYS
     include/sys/resource.h
     include/sys/sched.h
     include/sys/select.h
-    include/sys/signal.h
     include/sys/stat.h
     include/sys/stdio.h
     include/sys/string.h
@@ -841,6 +838,7 @@ set(HEADERS_SYS
     sys/dogfood/sys/ioctl.h
     sys/dogfood/sys/mman.h
     sys/dogfood/sys/mount.h
+    sys/dogfood/sys/signal.h
     sys/dogfood/sys/socket.h
     sys/dogfood/sys/un.h
 )

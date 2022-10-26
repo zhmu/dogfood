@@ -1,0 +1,285 @@
+#include "x86_64/amd64.h"
+#include "lib.h"
+#include "process.h"
+#include "syscall.h"
+#include <dogfood/errno.h>
+#include <dogfood/signal.h>
+#include <bit>
+#include <limits>
+
+/*
+ * POSIX-like signal processing: the idea is that we'll deliver any pending
+ * signals whenever we are returning from a system call (syscall_handler in
+ * exception.S will call deliver_signal().
+ *
+ * The tricky case is delivering signals to userland. The scenario is the
+ * following:
+ *
+ *     int main() {
+ *         signal(SIGHUP, handler);
+ *         raise(SIGHUP);      ---> (a) syscall completion calls handler()
+ *     2:
+ *         ...
+ *     }
+ *
+ *     void handler(int signum) {
+ *        ....
+ *     } --> (b) return to 2 using sigreturn syscall
+ *
+ *
+ * Our approach mimics the approach taken by Linux: deliver_signal() will
+ * create a new amd64::TrapFrame on the kernel stack and use this frame to
+ * enter handler() with the correct parameters. Hence, deliver_signal() returns
+ * the address of the TrapFrame it wants to be restored.
+ *
+ * In order to properly return from handler()'s end to 2, we use 'sigreturn'
+ * system call, which restores the original TrapFrame used to enter the kernel
+ * (a).
+ *
+ * This still poses two challenges:
+ *
+ * - How does handler() invoke sigreturn() upon completion?
+ *   We take the same approach as Linux: sigaction() tells the kernel where to
+ *   continue execution once the signal handler ends using the sa_restorer
+ *   member of sigaction. This is the return address used for the call to handler()
+ *
+ * - How do we ensure the original trap frame isn't overwritten when we invoke
+ *   syscalls in handler()?
+ *   We avoid this by changing the process' kernel stack (rsp0) once we're
+ *   delivering a signal. This means we'll leave the first TrapFrame bytes
+ *   as they were, which ensures sigreturn() can properly restore them.
+ *
+ * TODO:
+ *
+ * - Unblock process upon signal delivery
+ * - Nested signals
+ * - Masking
+ */
+namespace signal {
+    namespace
+    {
+        constexpr auto inline DEBUG_SIGNAL = false;
+
+        std::optional<int> SignalNumberToIndex(const int sig)
+        {
+            if (sig >= 1 && sig < NSIG) return sig - 1;
+            return {};
+        }
+
+        template<typename T>
+        std::optional<int> ExtractAndResetPendingSignal(T& pending)
+        {
+            const auto value = pending.to_ullong();
+            if (!value) return {};
+
+            const auto bits = std::numeric_limits<decltype(value)>::digits;
+            const auto bit = (bits - 1) - std::countl_zero(value);
+            pending.reset(bit);
+            return bit + 1;
+        }
+
+        enum class DefaultAction {
+            Terminate,
+            CoreDump,
+            Ignore,
+            Stop,
+            Continue,
+        };
+
+        DefaultAction GetSignalDefaultAction(const int signo)
+        {
+            switch(signo) {
+                case SIGHUP: return DefaultAction::Terminate;
+                case SIGINT: return DefaultAction::Terminate;
+                case SIGQUIT: return DefaultAction::CoreDump;
+                case SIGILL: return DefaultAction::CoreDump;
+                case SIGTRAP: return DefaultAction::CoreDump;
+                case SIGABRT: return DefaultAction::CoreDump;
+                case SIGBUS: return DefaultAction::CoreDump;
+                case SIGFPE: return DefaultAction::CoreDump;
+                case SIGKILL: return DefaultAction::Terminate;
+                case SIGUSR1: return DefaultAction::Terminate;
+                case SIGSEGV: return DefaultAction::CoreDump;
+                case SIGUSR2: return DefaultAction::Terminate;
+                case SIGPIPE: return DefaultAction::Terminate;
+                case SIGALRM: return DefaultAction::Terminate;
+                case SIGTERM: return DefaultAction::Terminate;
+                case SIGCHLD: return DefaultAction::Ignore;
+                case SIGCONT: return DefaultAction::Continue;
+                case SIGSTOP: return DefaultAction::Stop;
+                case SIGTSTP: return DefaultAction::Stop;
+                case SIGTTIN: return DefaultAction::Stop;
+                case SIGTTOU: return DefaultAction::Stop;
+                case SIGURG: return DefaultAction::Ignore;
+                case SIGXCPU: return DefaultAction::CoreDump;
+                case SIGXFSZ: return DefaultAction::CoreDump;
+                case SIGVTALRM: return DefaultAction::Terminate;
+                case SIGPROF: return DefaultAction::Terminate;
+                case SIGSYS: return DefaultAction::Continue;
+            }
+            return DefaultAction::Terminate;
+        }
+
+        template<typename... Args>
+        void Debug(Args&&... args)
+        {
+            if constexpr (DEBUG_SIGNAL) {
+                Print(std::forward<Args>(args)...);
+            }
+        }
+    }
+
+
+    Action::Action(const struct sigaction& sa)
+        : mask(sa.sa_mask), flags(sa.sa_flags), restorer(sa.sa_restorer)
+    {
+        if (sa.sa_flags & SA_SIGINFO)
+            handler = reinterpret_cast<Handler>(sa.sa_sigaction);
+        else
+            handler = sa.sa_handler;
+    }
+
+    struct sigaction Action::ToSigAction() const
+    {
+        struct sigaction sa{};
+        sa.sa_mask = mask;
+        sa.sa_flags = flags;
+        sa.sa_restorer = restorer;
+        if (flags & SA_SIGINFO)
+            sa.sa_sigaction = reinterpret_cast<void(*)(int, siginfo_t*, void*)>(handler);
+        else
+            sa.sa_handler = handler;
+        return sa;
+    }
+
+    int kill(amd64::TrapFrame& tf)
+    {
+        const auto pid = syscall::GetArgument<1, int>(tf);
+        const auto signal = syscall::GetArgument<2, int>(tf);
+        if (pid < 0)
+            return -EPERM;
+        const auto index = SignalNumberToIndex(signal);
+        if (!index)
+            return -EINVAL;
+
+        auto proc = process::FindProcessByPID(pid);
+        if (proc == nullptr)
+            return -ESRCH;
+
+        // TODO unblock child if needed
+        proc->signal.pending.set(*index);
+        // Syscall return will handle the signal, via deliver_signal()
+        // TODO should we also handle it in interrupts?
+        return 0;
+    }
+
+    int sigaction(amd64::TrapFrame& tf)
+    {
+        const auto signum = syscall::GetArgument<1>(tf);
+        const auto act = syscall::GetArgument<2, struct sigaction*>(tf);
+        auto oldact = syscall::GetArgument<3, struct sigaction*>(tf);
+
+        Debug("sigaction ", signum, " act ", act.get(), " oldact ", oldact.get(), "\n");
+
+        const auto index = SignalNumberToIndex(signum);
+        if (!index)
+            return -EINVAL;
+
+        auto& action = process::GetCurrent().signal.action[*index];
+        if (oldact && !oldact.Set(action.ToSigAction()))
+            return -EFAULT;
+
+        if (act) {
+            const auto new_action = *act;
+            if (!new_action) return -EFAULT;
+            action = *new_action;
+        }
+        return 0;
+    }
+
+    int sigreturn(amd64::TrapFrame& tf)
+    {
+        auto& proc = process::GetCurrent();
+        Debug(">> sigreturn: rsp ", &tf, " proc.TrapFrame ", proc.trapFrame, "\n");
+
+        // Adjust rsp0 back so that the previous frame will be overwritten
+        proc.rsp0 += sizeof(amd64::TrapFrame);
+        process::UpdateKernelStackForProcess(proc);
+
+        // And overwrite our current trapframe with the original one, so we'll return to the pre-signal
+        // handling spot
+        auto preSignalTF = proc.trapFrame;
+        Debug("preSignalTF rsp ", print::Hex{preSignalTF->rsp}, " rip ", print::Hex{preSignalTF->rip}, "\n");
+        tf = *preSignalTF;
+        return 0;
+    }
+
+    amd64::TrapFrame& DeliverSignal(amd64::TrapFrame& tf, amd64::TrapFrame& newTF)
+    {
+        auto& proc = process::GetCurrent();
+        while(true) {
+            const auto signo = ExtractAndResetPendingSignal(proc.signal.pending);
+            if (!signo) break;
+            Debug("handling signal ", *signo, "\n");
+
+            const auto index = SignalNumberToIndex(*signo);
+            assert(index);
+            const auto action = proc.signal.action[*index];
+            Debug(">> delivering signal ", *signo, " to pid ", proc.pid, " -> action flags ", action.flags, " mask ", action.mask, " handler ", action.handler, "\n");
+
+            if (signo != SIGKILL && action.handler == SIG_IGN) {
+                Debug(" ignored, SIG_IGN\n");
+                continue;
+            }
+
+            if (action.handler == SIG_DFL) {
+                switch(GetSignalDefaultAction(*signo)) {
+                    case DefaultAction::CoreDump:
+                    case DefaultAction::Terminate:
+                        process::Exit(tf);
+                        break;
+                    case DefaultAction::Ignore:
+                        break;
+                    case DefaultAction::Stop:
+                        Debug("TODO: deliver_signal: Stop pid ", proc.pid, "\n");
+                        break;
+                    case DefaultAction::Continue:
+                        Debug("TODO: deliver_signal: Continue pid ", proc.pid, "\n");
+                        break;
+                }
+            } else {
+                newTF = tf;
+                Debug("INVOKE previous tf ", &tf, " rsp ", print::Hex{tf.rsp}, " rip ", print::Hex{tf.rip}, "\n");
+                Debug("INVOKE handler ", action.handler, "\n");
+                Debug("rsp ", print::Hex{newTF.rsp}, "\n");
+
+                // Create siginfo_t and return address on the userland stack
+                // TODO this could fault
+                newTF.rsp -= sizeof(siginfo_t);
+                auto siginfo = reinterpret_cast<siginfo_t*>(newTF.rsp);
+                *siginfo = {};
+                siginfo->si_signo = *signo;
+                newTF.rsp -= 8;
+                *reinterpret_cast<uint64_t*>(newTF.rsp) = reinterpret_cast<uint64_t>(action.restorer);
+
+                // Setup arguments (we always add the arguments for siginfo)
+                newTF.rdi = *signo;
+                newTF.rsi = reinterpret_cast<uint64_t>(siginfo);
+                newTF.rdx = 0; // TODO: void*
+                newTF.rip = reinterpret_cast<uint64_t>(action.handler);
+
+                // Adjust the rsp0 so that we'll keep the original trapframe, which is needed
+                // by sigreturn() (which will also undo the adjust)
+                proc.rsp0 -= sizeof(amd64::TrapFrame);
+                process::UpdateKernelStackForProcess(proc);
+                return newTF;
+            }
+        }
+        return tf;
+    }
+}
+
+extern "C" amd64::TrapFrame* deliver_signal(amd64::TrapFrame* tf, amd64::TrapFrame* newTF)
+{
+    return &signal::DeliverSignal(*tf, *newTF);
+}
