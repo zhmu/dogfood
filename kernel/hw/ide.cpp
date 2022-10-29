@@ -46,6 +46,16 @@ namespace ide
         unsigned int ReadStatus() { return inb(io::AltPort + port::AltStatus); }
 
         bio::Buffer* queue = nullptr;
+
+        bool IsQueued(bio::Buffer& buffer)
+        {
+            auto q = queue;
+            while (q != nullptr) {
+                if (q == &buffer) return true;
+                q = q->qnext;
+            }
+            return false;
+        }
     } // namespace
 
     void Initialize()
@@ -116,6 +126,13 @@ namespace ide
     void PerformIO(bio::Buffer& buffer)
     {
         auto state = interrupts::SaveAndDisable();
+
+        if (IsQueued(buffer)) {
+            // Already queued; just wait until the request is handled
+            process::Sleep(&buffer, state);
+            interrupts::Restore(state);
+            return;
+        }
 
         // Append buffer to queue
         {
