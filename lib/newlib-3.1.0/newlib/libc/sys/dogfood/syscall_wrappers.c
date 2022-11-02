@@ -218,6 +218,7 @@ SYSCALL2(mkdir, int, const char*, mode_t)
 SYSCALL1(rmdir, int, const char*)
 SYSCALL2(fchmod, int, int, mode_t)
 SYSCALL4(fstatat, int, int, const char*, struct stat*, int)
+SYSCALL4(ptrace, long, int, pid_t, void*, void*)
 
 int pipe(int* fd)
 {

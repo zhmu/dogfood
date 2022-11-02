@@ -171,6 +171,14 @@ namespace exec
         amd64::FlushTLB();
 
         tf.rip = ehdr.e_entry;
+
+        auto& current = process::GetCurrent();
+        if (current.ptrace.traced) {
+            current.ptrace.signal = SIGTRAP;
+            current.state = process::State::Stopped;
+            signal::Send(*current.parent, SIGCHLD);
+            process::Yield();
+        }
         return 0;
     }
 

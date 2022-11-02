@@ -3,6 +3,7 @@
 #include "types.h"
 #include "file.h"
 #include "fs.h"
+#include "ptrace.h"
 #include "signal.h"
 #include "vm.h"
 
@@ -14,7 +15,7 @@ namespace amd64
 
 namespace process
 {
-    enum class State { Unused, Construct, Runnable, Running, Zombie, Sleeping };
+    enum class State { Unused, Construct, Runnable, Running, Zombie, Sleeping, Stopped };
 
     constexpr int maxFiles = 20;
 
@@ -22,7 +23,6 @@ namespace process
     struct Process {
         State state = State::Unused;
         int pid = -1;
-        int ppid = -1;
         int umask = 0;
         Process* parent = nullptr;
         WaitChannel waitChannel{};
@@ -35,6 +35,7 @@ namespace process
         fs::Inode* cwd = nullptr;
         vm::VMSpace vmspace;
         signal::State signal;
+        ptrace::State ptrace;
     };
 
     Process& GetCurrent();
@@ -44,6 +45,7 @@ namespace process
 
     void UpdateKernelStackForProcess(Process& proc);
 
+    void Yield();
     void Sleep(WaitChannel, int);
     void Wakeup(WaitChannel);
 

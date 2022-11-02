@@ -46,7 +46,8 @@
 // Result sys_clock_getres(clockid_t id, struct timespec* res);
 #define SYS_readlink 23
 // Result sys_readlink(const char* path, char* buffer, size_t bufsize);
-// 24 was SYS_lstat
+#define SYS_ptrace 24
+// Result sys_ptrace(int request, pid_t pid, void* addr, void* data);
 #define SYS_getcwd 25
 // Result sys_getcwd(char* buf, size_t buflen);
 #define SYS_sigaction 26

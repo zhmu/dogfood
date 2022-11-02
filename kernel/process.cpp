@@ -7,6 +7,7 @@
 #include "vm.h"
 #include <dogfood/errno.h>
 #include <dogfood/procinfo.h>
+#include <dogfood/wait.h>
 
 extern "C" void switch_to(amd64::Context** prevContext, amd64::Context* newContext);
 extern "C" void* trap_return;
@@ -86,12 +87,6 @@ namespace process
             vm::DestroyVMSpace(proc.vmspace);
             proc.state = State::Unused;
         }
-
-        void Yield()
-        {
-            amd64::fpu::SaveContext(&current->fpu[0]);
-            switch_to(&current->context, cpu_context);
-        }
     } // namespace
 
     Process& GetCurrent() { return *current; }
@@ -103,6 +98,12 @@ namespace process
                 return &proc;
         }
         return nullptr;
+    }
+
+    void Yield()
+    {
+        amd64::fpu::SaveContext(&current->fpu[0]);
+        switch_to(&current->context, cpu_context);
     }
 
     void Sleep(WaitChannel waitChannel, int state)
@@ -136,7 +137,7 @@ namespace process
         auto new_process = AllocateProcess();
         if (new_process == nullptr)
             return -ENOMEM;
-        new_process->ppid = current->pid;
+        new_process->parent = current;
         new_process->umask = current->umask;
         file::CloneTable(*current, *new_process);
         new_process->cwd = current->cwd;
@@ -175,13 +176,22 @@ namespace process
             auto state = interrupts::SaveAndDisable();
             bool have_children = false;
             for (auto& proc : process) {
-                if (proc.state == State::Unused || proc.ppid != current->pid)
+                if (proc.state == State::Unused || proc.parent != current)
                     continue;
 
                 have_children = true;
+                if (proc.state == State::Stopped) {
+                    if (proc.ptrace.signal == 0) continue;
+                    if ((options & WUNTRACED) == 0 && !proc.ptrace.traced) continue;
+                    const auto setOkay = !statLocPtr || statLocPtr.Set(W_MAKE(W_STATUS_STOPPED, proc.ptrace.signal));
+                    proc.ptrace.signal = 0;
+                    interrupts::Restore(state);
+                    return setOkay ? pid : -EFAULT;
+                }
+
                 if (proc.state == State::Zombie) {
                     const auto pid = proc.pid;
-                    const auto setOkay = !statLocPtr || statLocPtr.Set(0);
+                    const auto setOkay = !statLocPtr || statLocPtr.Set(W_MAKE(W_STATUS_EXITED, 0));
                     DestroyZombieProcess(proc);
                     interrupts::Restore(state);
                     return setOkay ? pid : -EFAULT;
@@ -190,6 +200,11 @@ namespace process
             if (!have_children) {
                 interrupts::Restore(state);
                 return -ECHILD;
+            }
+
+            if (options & WNOHANG) {
+                interrupts::Restore(state);
+                return 0;
             }
 
             Sleep(&process, state);
@@ -212,6 +227,12 @@ namespace process
 
         auto state = interrupts::SaveAndDisable();
         current->state = State::Zombie;
+        for (auto& proc : process) {
+            if (proc.parent == current) {
+                proc.parent = &process[0]; // init
+                assert(proc.parent->pid == 1);
+            }
+        }
         interrupts::Restore(state);
 
         Wakeup(&process);

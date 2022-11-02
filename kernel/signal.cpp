@@ -6,6 +6,7 @@
 #include <dogfood/signal.h>
 #include <bit>
 #include <limits>
+#include <utility>
 
 /*
  * POSIX-like signal processing: the idea is that we'll deliver any pending
@@ -152,6 +153,26 @@ namespace signal {
         return sa;
     }
 
+    bool Send(process::Process& proc, int signal)
+    {
+        const auto index = SignalNumberToIndex(signal);
+        if (!index)
+            return false;
+
+        proc.signal.pending.set(*index);
+
+        // Wake up process upon new signal retrieval
+        auto state = interrupts::SaveAndDisable();
+        if (proc.state == process::State::Sleeping) {
+            proc.state = process::State::Runnable;
+        }
+        interrupts::Restore(state);
+
+        // Syscall return will handle the signal, via deliver_signal()
+        // TODO should we also handle it in interrupts?
+        return true;
+    }
+
     int kill(amd64::TrapFrame& tf)
     {
         const auto pid = syscall::GetArgument<1, int>(tf);
@@ -166,11 +187,7 @@ namespace signal {
         if (proc == nullptr)
             return -ESRCH;
 
-        // TODO unblock child if needed
-        proc->signal.pending.set(*index);
-        // Syscall return will handle the signal, via deliver_signal()
-        // TODO should we also handle it in interrupts?
-        return 0;
+        return Send(*proc, signal) ? 0 : -EINVAL;
     }
 
     int sigaction(amd64::TrapFrame& tf)
@@ -218,14 +235,30 @@ namespace signal {
     {
         auto& proc = process::GetCurrent();
         while(true) {
-            const auto signo = ExtractAndResetPendingSignal(proc.signal.pending);
-            if (!signo) break;
-            Debug("handling signal ", *signo, "\n");
+            const auto pending_signal = ExtractAndResetPendingSignal(proc.signal.pending);
+            if (!pending_signal) break;
+            int signo = *pending_signal;
+            Debug("handling signal ", signo, "\n");
 
-            const auto index = SignalNumberToIndex(*signo);
+            if (proc.ptrace.traced && signo != SIGKILL) {
+                // Ask the debugger what is to be done with the signal
+                proc.ptrace.signal = signo;
+                proc.state = process::State::Stopped;
+                signal::Send(*proc.parent, SIGCHLD);
+                process::Yield();
+                signo = std::exchange(proc.ptrace.signal, 0);
+                if (!signo) continue;
+
+                if (signo == SIGSTOP) continue; // ignore SIGSTOP
+
+                // TODO Check if this new signal is blocked
+            }
+
+
+            const auto index = SignalNumberToIndex(signo);
             assert(index);
             const auto action = proc.signal.action[*index];
-            Debug(">> delivering signal ", *signo, " to pid ", proc.pid, " -> action flags ", action.flags, " mask ", action.mask, " handler ", action.handler, "\n");
+            Debug(">> delivering signal ", signo, " to pid ", proc.pid, " -> action flags ", action.flags, " mask ", action.mask, " handler ", action.handler, "\n");
 
             if (signo != SIGKILL && action.handler == SIG_IGN) {
                 Debug(" ignored, SIG_IGN\n");
@@ -233,7 +266,7 @@ namespace signal {
             }
 
             if (action.handler == SIG_DFL) {
-                switch(GetSignalDefaultAction(*signo)) {
+                switch(GetSignalDefaultAction(signo)) {
                     case DefaultAction::CoreDump:
                     case DefaultAction::Terminate:
                         process::Exit(tf);
@@ -241,10 +274,11 @@ namespace signal {
                     case DefaultAction::Ignore:
                         break;
                     case DefaultAction::Stop:
-                        Debug("TODO: deliver_signal: Stop pid ", proc.pid, "\n");
+                        proc.state = process::State::Stopped;
+                        process::Yield();
                         break;
                     case DefaultAction::Continue:
-                        Debug("TODO: deliver_signal: Continue pid ", proc.pid, "\n");
+                        proc.state = process::State::Runnable;
                         break;
                 }
             } else {
@@ -258,12 +292,12 @@ namespace signal {
                 newTF.rsp -= sizeof(siginfo_t);
                 auto siginfo = reinterpret_cast<siginfo_t*>(newTF.rsp);
                 *siginfo = {};
-                siginfo->si_signo = *signo;
+                siginfo->si_signo = signo;
                 newTF.rsp -= 8;
                 *reinterpret_cast<uint64_t*>(newTF.rsp) = reinterpret_cast<uint64_t>(action.restorer);
 
                 // Setup arguments (we always add the arguments for siginfo)
-                newTF.rdi = *signo;
+                newTF.rdi = signo;
                 newTF.rsi = reinterpret_cast<uint64_t>(siginfo);
                 newTF.rdx = 0; // TODO: void*
                 newTF.rip = reinterpret_cast<uint64_t>(action.handler);

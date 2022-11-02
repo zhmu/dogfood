@@ -28,6 +28,7 @@ namespace signal {
         std::array<Action, NSIG - 1> action;
     };
 
+    bool Send(process::Process&, int signo);
     int kill(amd64::TrapFrame& tf);
     int sigaction(amd64::TrapFrame& tf);
     int sigreturn(amd64::TrapFrame& tf);

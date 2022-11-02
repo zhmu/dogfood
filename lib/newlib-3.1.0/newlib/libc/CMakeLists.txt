@@ -838,6 +838,7 @@ set(HEADERS_SYS
     sys/dogfood/sys/ioctl.h
     sys/dogfood/sys/mman.h
     sys/dogfood/sys/mount.h
+    sys/dogfood/sys/ptrace.h
     sys/dogfood/sys/signal.h
     sys/dogfood/sys/socket.h
     sys/dogfood/sys/un.h

@@ -173,6 +173,17 @@ if [ "$BUILD_TARGET" -ne "0" -o \( "${ONLY_REQUESTED_TARGETS}" -eq "0" -a ! -f "
     TARGET_DIRTY=1
 fi
 
+if [ "$BUILD_TARGET" -ne "0" -o \( "${ONLY_REQUESTED_TARGETS}" -eq "0" -a ! -f "${OUTDIR}/usr/bin/strace" \) ]; then
+    echo "*** Building strace (target)"
+    rm -rf build/strace
+    mkdir -p build/strace
+    cd build/strace
+    cmake -GNinja -DCMAKE_TOOLCHAIN_FILE=${TOOLCHAIN_FILE} -DCMAKE_INSTALL_PREFIX=${OUTDIR} ../../userland/strace
+    ninja install
+    cd ../..
+    TARGET_DIRTY=1
+fi
+
 if [ "$BUILD_TARGET" -ne "0" -o \( "${ONLY_REQUESTED_TARGETS}" -eq "0" -a ! -f "${OUTDIR}/usr/bin/ld" \) ]; then
     echo "*** Building binutils (target)"
     rm -rf build/binutils-target
