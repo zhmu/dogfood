@@ -15,6 +15,8 @@ set(HEADERS_DOGFOOD
     include/dogfood/user.h
     include/dogfood/utsname.h
     include/dogfood/wait.h
+    include/dogfood/socket.h
+    include/dogfood/netinet.h
 )
 
 install(FILES ${HEADERS_DOGFOOD} DESTINATION usr/include/dogfood)
