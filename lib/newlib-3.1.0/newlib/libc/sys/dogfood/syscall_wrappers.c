@@ -15,6 +15,7 @@
 #include <stdarg.h>
 #include <grp.h>
 #include <pwd.h>
+#include <pwd.h>
 #include <dogfood/fcntl.h>
 #include <dogfood/utsname.h>
 #include <dogfood/vmop.h>
@@ -219,6 +220,8 @@ SYSCALL1(rmdir, int, const char*)
 SYSCALL2(fchmod, int, int, mode_t)
 SYSCALL4(fstatat, int, int, const char*, struct stat*, int)
 SYSCALL4(ptrace, long, int, pid_t, void*, void*)
+SYSCALL2(setreuid, int, uid_t, uid_t);
+SYSCALL2(setregid, int, gid_t, gid_t);
 
 int pipe(int* fd)
 {
@@ -263,18 +266,6 @@ int setpgid(pid_t pid, pid_t pgid)
 }
 
 unsigned int alarm(unsigned int seconds) { return 0; }
-
-int setreuid(uid_t ruid, uid_t euid)
-{
-    errno = -ENOSYS;
-    return -1;
-}
-
-int setregid(gid_t rgid, gid_t egid)
-{
-    errno = -ENOSYS;
-    return -1;
-}
 
 #define _SC_PAGESIZE 8
 #define _SC_CLK_TCK 2
@@ -399,7 +390,26 @@ ssize_t send(int socket, const void* buffer, size_t length, int flags)
     return -1;
 }
 
-unsigned int sleep(unsigned int seconds) { return 0; }
+int setsockopt(int socket, int level, int option_name, const void* option_value, socklen_t option_len)
+{
+    errno = ENOSYS;
+    return -1;
+}
+
+int getsockopt(int socket, int level, int option_name, void* option_value, socklen_t option_len)
+{
+    errno = ENOSYS;
+    return -1;
+}
+
+unsigned int sleep(unsigned int seconds)
+{
+    struct timespec ts;
+    ts.tv_sec = seconds;
+    ts.tv_nsec = 0;
+    if (nanosleep(&ts, &ts) == 0) return 0;
+    return ts.tv_sec;
+}
 
 int wait(int* wstatus) { return waitpid(-1, wstatus, 0); }
 
@@ -412,7 +422,6 @@ int lstat(const char* path, struct stat* st)
 {
     return fstatat(AT_FDCWD, path, st, AT_SYMLINK_NOFOLLOW);
 }
-
 
 extern long _SYS_sigaction(long a, long b, long c);
 extern long _SYS_sigreturn();
@@ -500,3 +509,8 @@ int sigismember(const sigset_t* set, int signo)
     }
     return (*set & mask) ? 1 : 0;
 }
+
+int seteuid(uid_t uid) { return setreuid(-1, uid); }
+int setegid(gid_t gid) { return setregid(-1, gid); }
+int setuid(uid_t uid) { return setreuid(uid, -1); }
+int setgid(gid_t gid) { return setregid(gid, -1); }

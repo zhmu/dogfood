@@ -116,3 +116,7 @@
 // Result procinfo(int pid, size_t pi_size, struct PROCINFO* pi)
 #define SYS_fstatat 58
 // Result fstatat(int fd, const char* path, struct stat* buf, int flag)
+#define SYS_setreuid 59
+// Result setreuid(uid_t ruid, uid_t euid)
+#define SYS_setregid 60
+// Result setregid(gid_t rgid, gid_t egid)

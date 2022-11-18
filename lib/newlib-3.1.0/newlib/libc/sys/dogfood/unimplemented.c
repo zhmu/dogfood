@@ -17,3 +17,13 @@ const char* gai_strerror(int ecode)
 {
     return "not implemented";
 }
+
+char* getlogin()
+{
+    return NULL;
+}
+
+int issetugid()
+{
+    return 0;
+}

@@ -855,6 +855,7 @@ set(HEADERS_ARPA
 )
 set(HEADERS_NETINET
     include/netinet/in.h
+    include/netinet/tcp.h
 )
 
 # add libM
