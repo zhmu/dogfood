@@ -614,6 +614,7 @@ set(SOURCES
     sys/dogfood/readdir.c
     sys/dogfood/closedir.c
     sys/dogfood/rewinddir.c
+    sys/dogfood/termios.c
     sys/dogfood/unimplemented.c
 )
 
@@ -841,6 +842,7 @@ set(HEADERS_SYS
     sys/dogfood/sys/ptrace.h
     sys/dogfood/sys/signal.h
     sys/dogfood/sys/socket.h
+    sys/dogfood/sys/termios.h
     sys/dogfood/sys/un.h
 )
 set(HEADERS_RPC

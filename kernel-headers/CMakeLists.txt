@@ -8,6 +8,8 @@ set(HEADERS_DOGFOOD
     include/dogfood/stat.h
     include/dogfood/signal.h
     include/dogfood/syscall.h
+    include/dogfood/termios.h
+    include/dogfood/tty.h
     include/dogfood/types.h
     include/dogfood/vmop.h
     include/dogfood/user.h
