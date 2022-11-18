@@ -527,6 +527,14 @@ extern "C" {
 
 #endif /* __CYGWIN__ */
 
+#ifdef __dogfood__
+
+/* Dogfood tries to adhere to some reasonable POSIX */
+#define _POSIX_VERSION				200809L
+#define _POSIX2_VERSION				200809L
+
+#endif /*__dogfood__ */
+
 #ifdef __cplusplus
 }
 #endif

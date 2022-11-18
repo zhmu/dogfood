@@ -597,6 +597,19 @@ set(SOURCES
     unix/pwrite.c
 )
 
+set(POSIX_SOURCES
+    posix/collate.c
+    posix/collcmp.c
+)
+# posix/fnmatch.c
+# posix/engine.c
+
+# files in the posix/ subdirectory need to have an extra include
+foreach(_x IN ITEMS ${POSIX_SOURCES})
+    set_source_files_properties(${_x} PROPERTIES COMPILE_FLAGS -I${CMAKE_CURRENT_SOURCE_DIR}/posix)
+endforeach()
+set(SOURCES ${SOURCES} ${POSIX_SOURCES})
+
 set(SOURCES
     ${SOURCES}
     machine/x86_64/memcpy.S
@@ -679,10 +692,6 @@ set(SOURCES_notyet
     iconv/lib/nullconv.c
     iconv/lib/ucsconv.c
     misc/lock.c
-    posix/collate.c
-    posix/collcmp.c
-    posix/engine.c
-    posix/fnmatch.c
     signal/raise.c
     signal/signal.c
     xdr/xdr.c
