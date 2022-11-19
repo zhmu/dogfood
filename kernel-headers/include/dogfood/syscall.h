@@ -120,3 +120,7 @@
 // Result setreuid(uid_t ruid, uid_t euid)
 #define SYS_setregid 60
 // Result setregid(gid_t rgid, gid_t egid)
+#define SYS_sigpending 71
+// Result sigpending(sigset_t* set)
+#define SYS_sigwait 72
+// Result sigwait(const sigset_t* set, int* sig)

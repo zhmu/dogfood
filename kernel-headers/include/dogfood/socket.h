@@ -1,6 +1,8 @@
 #ifndef __DOGFOOD_SOCKET_H__
 #define __DOGFOOD_SOCKET_H__
 
+#define SOL_SOCKET 1
+
 typedef int socklen_t;
 typedef unsigned int sa_family_t;
 
@@ -23,6 +25,11 @@ typedef unsigned int sa_family_t;
 
 #define SO_BROADCAST 1
 #define SO_REUSEADDR 2
+#define SO_ERROR 3
+
+#define MSG_PEEK (1 << 0)
+#define MSG_OOB (1 << 1)
+#define MSG_WAITALL (1 << 2)
 
 struct sockaddr {
     sa_family_t sa_family;

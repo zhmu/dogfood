@@ -17,6 +17,7 @@ set(HEADERS_DOGFOOD
     include/dogfood/wait.h
     include/dogfood/socket.h
     include/dogfood/netinet.h
+    include/dogfood/ioctl.h
 )
 
 install(FILES ${HEADERS_DOGFOOD} DESTINATION usr/include/dogfood)

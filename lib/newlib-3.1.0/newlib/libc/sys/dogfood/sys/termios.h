@@ -15,13 +15,18 @@ __BEGIN_DECLS
 #define TCSADRAIN 2
 #define TCSAFLUSH 3
 
+int tcdrain(int fd);
+int tcflow(int fildes, int action);
+int tcflush(int fildes, int queue_selector);
 int tcgetattr(int fildes, struct termios* termios_p);
+pid_t tcgetpgrp(int fildes);
+int tcsendbreak(int fildes, int duration);
 int tcsetattr(int fildes, int optional_actions, const struct termios* termios_p);
-
-speed_t cfgetispeed(const struct termios* termios_p);
-speed_t cfgetospeed(const struct termios* termios_p);
+int tcsetpgrp(int fildes, pid_t pgid);
 int cfsetispeed(struct termios* termios_p, speed_t speed);
 int cfsetospeed(struct termios* termios_p, speed_t speed);
+speed_t cfgetispeed(const struct termios* termios_p);
+speed_t cfgetospeed(const struct termios* termios_p);
 
 #define TCOOFF 1
 #define TCOON 2

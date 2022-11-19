@@ -99,9 +99,14 @@ off_t lseek(int fd, off_t offset, int whence)
 
 SYSCALL1(clone, int, int)
 
-int fork()
+pid_t fork()
 {
     return clone(0);
+}
+
+pid_t vfork()
+{
+    return clone(1);
 }
 
 extern long _SYS_vmop(struct VMOP_OPTIONS*);
@@ -222,6 +227,8 @@ SYSCALL4(fstatat, int, int, const char*, struct stat*, int)
 SYSCALL4(ptrace, long, int, pid_t, void*, void*)
 SYSCALL2(setreuid, int, uid_t, uid_t);
 SYSCALL2(setregid, int, gid_t, gid_t);
+SYSCALL1(sigpending, int, sigset_t*);
+SYSCALL2(sigwait, int, const sigset_t*, int*);
 
 int pipe(int* fd)
 {
@@ -279,6 +286,11 @@ long sysconf(int name)
             return 100;
     }
     return 0;
+}
+
+int getpagesize()
+{
+    return sysconf(_SC_PAGESIZE);
 }
 
 struct group* getgrnam(const char* name) { return NULL; }
@@ -384,6 +396,18 @@ int socket(int domain, int type, int protocol)
     return -1;
 }
 
+ssize_t recv(int socket, void* buffer, size_t length, int flags)
+{
+    errno = ENOSYS;
+    return -1;
+}
+
+ssize_t recvfrom(int socket, void* buffer, size_t length, int flags, struct sockaddr* address, socklen_t* address_len)
+{
+    errno = ENOSYS;
+    return -1;
+}
+
 ssize_t send(int socket, const void* buffer, size_t length, int flags)
 {
     errno = ENOSYS;
@@ -396,7 +420,7 @@ int setsockopt(int socket, int level, int option_name, const void* option_value,
     return -1;
 }
 
-int getsockopt(int socket, int level, int option_name, void* option_value, socklen_t option_len)
+int getsockopt(int socket, int level, int option_name, void* option_value, socklen_t* option_len)
 {
     errno = ENOSYS;
     return -1;

@@ -78,7 +78,6 @@ int tcgetattr(int fildes, struct termios* termios_p)
 
 pid_t tcgetpgrp(int fildes) { return ioctl(fildes, TIOCGPGRP); }
 
-
 int tcsendbreak(int fildes, int duration)
 {
     struct timespec tv;
