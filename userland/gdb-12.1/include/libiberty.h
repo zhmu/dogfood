@@ -114,6 +114,7 @@ extern char *basename (const char *) ATTRIBUTE_RETURNS_NONNULL ATTRIBUTE_NONNULL
 /* Do not allow basename to be used if there is no prototype seen.  We
    either need to use the above prototype or have one from
    autoconf which would result in HAVE_DECL_BASENAME being set.  */
+#undef basename /* Need to get rid of define by newlib first */
 #define basename basename_cannot_be_used_without_a_prototype
 #endif
 #endif
