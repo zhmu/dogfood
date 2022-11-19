@@ -41,5 +41,5 @@ add_custom_command(
     DEPENDS multiboot kernel.bin
     COMMAND cat $<TARGET_FILE:multiboot> kernel.bin > ${CMAKE_CURRENT_BINARY_DIR}/kernel.mb
 )
-add_custom_target(kernel_mb DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/kernel.mb)
+add_custom_target(kernel_mb ALL DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/kernel.mb)
 install(FILES ${CMAKE_CURRENT_BINARY_DIR}/kernel.mb DESTINATION .)
