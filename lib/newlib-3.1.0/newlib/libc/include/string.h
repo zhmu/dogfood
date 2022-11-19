@@ -130,9 +130,7 @@ char	*strlwr (char *);
 char	*strupr (char *);
 #endif
 
-#ifndef DEFS_H	/* Kludge to work around problem compiling in gdb */
 char	*strsignal (int __signo);
-#endif
 
 #ifdef __CYGWIN__
 int	strtosigno (const char *__name);
