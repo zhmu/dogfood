@@ -16,6 +16,9 @@ cp ci/toolchain/Dockerfile ${BUILD_DIR}
 mkdir -p ${BUILD_DIR}/work/userland
 cp -r "userland/binutils-${BINUTILS_VERSION}" ${BUILD_DIR}/work/userland
 cp -r "userland/gcc-${GCC_VERSION}" ${BUILD_DIR}/work/userland
+cp -r "userland/gmp-${GMP_VERSION}" ${BUILD_DIR}/work/userland/gcc-${GCC_VERSION}/gmp
+cp -r "userland/mpfr-${MPFR_VERSION}" ${BUILD_DIR}/work/userland/gcc-${GCC_VERSION}/mpfr
+cp -r "userland/mpc-${MPC_VERSION}" ${BUILD_DIR}/work/userland/gcc-${GCC_VERSION}/mpc
 cp -r settings.sh ${BUILD_DIR}/work
 cp -r build-toolchain.sh ${BUILD_DIR}/work
 

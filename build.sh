@@ -196,12 +196,48 @@ if [ "$BUILD_TARGET" -ne "0" -o \( "${ONLY_REQUESTED_TARGETS}" -eq "0" -a ! -f "
     TARGET_DIRTY=1
 fi
 
+if [ "$BUILD_TARGET" -ne "0" -o \( "${ONLY_REQUESTED_TARGETS}" -eq "0" -a ! -f "${SYSROOT}/lib/libgmp.a" \) ]; then
+    echo "*** Building gmp (sysroot)"
+    rm -rf build/gmp-sysroot
+    mkdir -p build/gmp-sysroot
+    cd build/gmp-sysroot
+    CFLAGS="--sysroot ${SYSROOT}" ../../userland/gmp-${GMP_VERSION}/configure --host=${TARGET} --target=${TARGET} --prefix=${SYSROOT}
+    make ${MAKE_ARGS}
+    make ${MAKE_ARGS} install
+    cd ../..
+    TARGET_DIRTY=1
+fi
+
+if [ "$BUILD_TARGET" -ne "0" -o \( "${ONLY_REQUESTED_TARGETS}" -eq "0" -a ! -f "${SYSROOT}/lib/libmpfr.a" \) ]; then
+    echo "*** Building mpfr (sysroot)"
+    rm -rf build/mpfr-sysroot
+    mkdir -p build/mpfr-sysroot
+    cd build/mpfr-sysroot
+    CFLAGS="--sysroot ${SYSROOT}" ../../userland/mpfr-${MPFR_VERSION}/configure --host=${TARGET} --target=${TARGET} --prefix=${SYSROOT} --with-gmp=${SYSROOT}
+    make ${MAKE_ARGS}
+    make ${MAKE_ARGS} install
+    cd ../..
+    TARGET_DIRTY=1
+fi
+
+if [ "$BUILD_TARGET" -ne "0" -o \( "${ONLY_REQUESTED_TARGETS}" -eq "0" -a ! -f "${SYSROOT}/lib/libmpc.a" \) ]; then
+    echo "*** Building mpc (target)"
+    rm -rf build/mpc-sysroot
+    mkdir -p build/mpc-sysroot
+    cd build/mpc-sysroot
+    CFLAGS="--sysroot ${SYSROOT}" ../../userland/mpc-${MPC_VERSION}/configure --host=${TARGET} --target=${TARGET} --prefix=${SYSROOT} --with-gmp=${SYSROOT}
+    make ${MAKE_ARGS}
+    make ${MAKE_ARGS} install
+    cd ../..
+    TARGET_DIRTY=1
+fi
+
 if [ "$BUILD_TARGET" -ne "0" -o \( "${ONLY_REQUESTED_TARGETS}" -eq "0" -a ! -f "${OUTDIR}/usr/bin/gcc" \) ]; then
     echo "*** Building gcc (target)"
     rm -rf build/gcc-target
     mkdir -p build/gcc-target
     cd build/gcc-target
-    CFLAGS="--sysroot ${SYSROOT}" CXXFLAGS="--sysroot ${SYSROOT}" ../../userland/gcc-${GCC_VERSION}/configure --host=${TARGET} --target=${TARGET} --disable-nls --disable-werror --enable-languages='c,c++' --prefix=/usr
+    CFLAGS="--sysroot ${SYSROOT}" CXXFLAGS="--sysroot ${SYSROOT}" ../../userland/gcc-${GCC_VERSION}/configure --host=${TARGET} --target=${TARGET} --disable-nls --disable-werror --enable-languages='c,c++' --prefix=/usr --with-gmp=${SYSROOT}
     # XXX for some reason, we need to explicitely configure/build the host
     # libcpp; otherwise it inherits our sysroot which messes things up...
     make ${MAKE_ARGS} configure-build-libcpp
