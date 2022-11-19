@@ -270,6 +270,19 @@ if [ "$BUILD_TARGET" -ne "0" -o \( "${ONLY_REQUESTED_TARGETS}" -eq "0" -a ! -f "
     TARGET_DIRTY=1
 fi
 
+if [ "$BUILD_TARGET" -ne "0" -o \( "${ONLY_REQUESTED_TARGETS}" -eq "0" -a ! -f "${OUTDIR}/usr/bin/gdb" \) ]; then
+    echo "*** Building gdb (target)"
+    rm -rf build/gdb-target
+    mkdir -p build/gdb-target
+    cd build/gdb-target
+    CFLAGS="--sysroot ${SYSROOT}" ../../userland/gdb-${GDB_VERSION}/configure --host=${TARGET} --target=${TARGET} --prefix=/usr --with-libgmp-prefix=${SYSROOT}
+   CFLAGS="--sysroot /tmp/dogfood-sysroot" ../../userland/gdb-12.1/configure --host=x86_64-elf-dogfood --target=x86_64-elf-dogfood --prefix=/usr --with-libgmp-prefix=/tmp/dogfood-sysroot
+    make ${MAKE_ARGS}
+    make ${MAKE_ARGS} install DESTDIR=${OUTDIR}
+    cd ../..
+    TARGET_DIRTY=1
+fi
+
 if [ "$TARGET_DIRTY" -ne "0" -o \( "${ONLY_REQUESTED_TARGETS}" -eq "0" -a ! -f "${OUTDIR_IMAGES}/ext2.img" \) ]; then
     echo "*** Creating ext2 image..."
     rm -f ${OUTDIR_IMAGES}/ext2.img
