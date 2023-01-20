@@ -214,6 +214,33 @@ namespace signal {
         return 0;
     }
 
+    int sigprocmask(amd64::TrapFrame& tf)
+    {
+        const auto how = syscall::GetArgument<1>(tf);
+        auto set = syscall::GetArgument<2, sigset_t*>(tf);
+        auto oset = syscall::GetArgument<3, sigset_t*>(tf);
+        auto& mask = process::GetCurrent().signal.mask;
+
+        if (oset && !oset.Set(mask)) return -EFAULT;
+
+        switch(how) {
+            case SIG_BLOCK:
+                if (set) mask = mask | **set;
+                // TODO handle signals that can't be blocked
+                break;
+            case SIG_UNBLOCK:
+                if (set) mask = mask & ~(**set);
+                break;
+            case SIG_SETMASK:
+                mask = set;
+                break;
+            default:
+                return -EINVAL;
+        }
+
+        return 0;
+    }
+
     int sigreturn(amd64::TrapFrame& tf)
     {
         auto& proc = process::GetCurrent();
@@ -250,10 +277,7 @@ namespace signal {
                 if (!signo) continue;
 
                 if (signo == SIGSTOP) continue; // ignore SIGSTOP
-
-                // TODO Check if this new signal is blocked
             }
-
 
             const auto index = SignalNumberToIndex(signo);
             assert(index);

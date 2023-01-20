@@ -25,6 +25,7 @@ namespace signal {
     struct State
     {
         std::bitset<NSIG - 1> pending;
+        sigset_t mask{};
         std::array<Action, NSIG - 1> action;
     };
 
@@ -32,4 +33,5 @@ namespace signal {
     int kill(amd64::TrapFrame& tf);
     int sigaction(amd64::TrapFrame& tf);
     int sigreturn(amd64::TrapFrame& tf);
+    int sigprocmask(amd64::TrapFrame& tf);
 }
