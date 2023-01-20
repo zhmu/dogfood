@@ -90,7 +90,7 @@ namespace
 
     const char* ErrnoToString(int n)
     {
-        if (n < 1 || n > (sizeof(errnoStrings) / sizeof(errnoStrings[0]) - 1))
+        if (n < 1 || n >= (sizeof(errnoStrings) / sizeof(errnoStrings[0]) - 1))
             return "?";
         return errnoStrings[n - 1];
     }
@@ -114,42 +114,47 @@ namespace
         return reinterpret_cast<T>(value);
     }
 
-    void PrintArguments(const user_registers& regs, const syscall::SyscallArgument args[])
+    void PrintArguments(const user_registers& regs, const syscall::SyscallArguments& args)
     {
         int n = 1, m = 0;
-        for (const auto* arg = &args[0]; arg->name != nullptr; ++arg, ++n) {
+        for(const auto& arg: args) {
+            if (!arg.name) break;
             if (m++ > 0)
                 printf(", ");
-            switch (arg->type) {
+            switch (arg.type) {
                 case syscall::ArgumentType::Int:
+                case syscall::ArgumentType::Long:
                 case syscall::ArgumentType::FD:
                 case syscall::ArgumentType::Size:
                 case syscall::ArgumentType::PID: {
                     const auto p = GetArgument<unsigned long>(regs, n);
-                    printf("%s: %d", arg->name, p);
+                    printf("%s: %d", arg.name, p);
                     break;
                 }
                 case syscall::ArgumentType::PathString:
                 case syscall::ArgumentType::CharPtr: {
                     const auto p = GetArgument<const void*>(regs, n);
-                    printf("%s: %p", arg->name, p);
+                    printf("%s: %p", arg.name, p);
                     break;
                 }
                 case syscall::ArgumentType::OffsetPtr:
                 case syscall::ArgumentType::SizePtr: {
                     const auto p = GetArgument<const long*>(regs, n);
-                    printf("%s: %p", arg->name, p);
+                    printf("%s: %p", arg.name, p);
                     break;
                 }
                 case syscall::ArgumentType::IntPtr:
                 case syscall::ArgumentType::Void:
                 case syscall::ArgumentType::CharPtrArray:
+                case syscall::ArgumentType::FdSetPtr:
+                case syscall::ArgumentType::Timeval:
                 default: {
                     const auto p = GetArgument<const void*>(regs, n);
-                    printf("%s: %p", arg->name, p);
+                    printf("%s: %p", arg.name, p);
                     break;
                 }
             }
+            ++n;
         }
     }
 
