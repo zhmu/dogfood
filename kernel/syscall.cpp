@@ -4,6 +4,7 @@
 #include "exec.h"
 #include "file.h"
 #include "ext2.h"
+#include "pipe.h"
 #include "process.h"
 #include "ptrace.h"
 #include "signal.h"
@@ -27,10 +28,7 @@ namespace
         auto file2 = file::Allocate(current);
         if (file2 == nullptr)
             return -ENFILE;
-        *file2 = file;
-        file2->f_flags &= ~O_CLOEXEC;
-        if (file2->f_inode != nullptr)
-            fs::iref(*file2->f_inode);
+        file::Dup(file, *file2);
         return file2 - &current.files[0];
     }
 
@@ -180,9 +178,7 @@ namespace
                 auto file2 = file::AllocateByIndex(current, newfd);
                 if (file2 == nullptr)
                     return -ENFILE;
-                *file2 = *file;
-                if (file2->f_inode != nullptr)
-                    fs::iref(*file2->f_inode);
+                file::Dup(*file, *file2);
                 return file2 - &current.files[0];
             }
             case SYS_fcntl: {
@@ -210,8 +206,9 @@ namespace
                     case F_GETFL:
                         return file->f_flags;
                     case F_SETFL:
-                        // Unsupported for now
-                        return -EINVAL;
+                        if (arg != O_NONBLOCK) return -EINVAL;
+                        file->f_flags |= O_NONBLOCK;
+                        return 0;
                     default:
                         Print("fcntl(): op ", op, " not supported\n");
                         return -EINVAL;
@@ -391,6 +388,12 @@ namespace
             }
             case SYS_ptrace: {
                 return ptrace::PTrace(*tf);
+            }
+            case SYS_sigprocmask: {
+                return signal::sigprocmask(*tf);
+            }
+            case SYS_pipe: {
+                return pipe::pipe(*tf);
             }
         }
         Print("[", process::GetCurrent().pid, "] unsupported syscall ",

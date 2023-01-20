@@ -124,3 +124,5 @@
 // Result sigpending(sigset_t* set)
 #define SYS_sigwait 72
 // Result sigwait(const sigset_t* set, int* sig)
+#define SYS_pipe 73
+// Result pipe(int* fds)

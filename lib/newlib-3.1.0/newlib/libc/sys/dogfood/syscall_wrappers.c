@@ -71,11 +71,11 @@ void _exit(int n)
         return (rt)set_errno_or_extract_value(_SYS_##name((long)a, (long)b, (long)c, (long)d)); \
     }
 
-#define SYSCALL5(name)                                                   \
-    int name(long a, long b, long c, long d, long e)                     \
+#define SYSCALL5(name, rt, t1, t2, t3, t4, t5)                           \
+    rt name(t1 a, t2 b, t3 c, t4 d, t5 e)                    \
     {                                                                    \
         extern long _SYS_##name(long a, long b, long c, long d, long e); \
-        return set_errno_or_extract_value(_SYS_##name(a, b, c, d, e));   \
+        return (rt)set_errno_or_extract_value(_SYS_##name((long)a, (long)b, (long)c, (long)d, (long)e));   \
     }
 
 #define SYSCALL6(name)                                                           \
@@ -176,7 +176,7 @@ char* getcwd(char* buf, size_t size)
 }
 
 SYSCALL4(fcntl, int, int, long, long, long)
-SYSCALL5(ioctl)
+SYSCALL5(ioctl, int, long, long, long, long, long)
 SYSCALL4(mount, int, const char*, const char*, const char*, long)
 SYSCALL1(unmount, int, const char*)
 SYSCALL2(statfs, int, const char*, struct statfs*)
@@ -229,12 +229,7 @@ SYSCALL2(setreuid, int, uid_t, uid_t);
 SYSCALL2(setregid, int, gid_t, gid_t);
 SYSCALL1(sigpending, int, sigset_t*);
 SYSCALL2(sigwait, int, const sigset_t*, int*);
-
-int pipe(int* fd)
-{
-    errno = ENOSYS;
-    return -1;
-}
+SYSCALL1(pipe, int, int*);
 
 int killpg(pid_t pgrp, int sig)
 {
@@ -344,7 +339,6 @@ int pselect(int nfds, fd_set* readfds, fd_set* writefds, fd_set* exceptfds, cons
     errno = ENOSYS;
     return -1;
 }
-
 
 int getrlimit(int resource, struct rlimit* rlim)
 {

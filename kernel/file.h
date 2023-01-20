@@ -10,6 +10,10 @@ namespace process
 {
     struct Process;
 }
+namespace pipe
+{
+    struct Pipe;
+}
 
 namespace file
 {
@@ -18,6 +22,7 @@ namespace file
         int f_flags = 0;
         bool f_console = false;
         fs::Inode* f_inode = nullptr;
+        pipe::Pipe* f_pipe = nullptr;
         off_t f_offset = 0;
     };
 
@@ -26,6 +31,7 @@ namespace file
     void CloneTable(const process::Process& parent, process::Process& child);
     File* FindByIndex(process::Process& proc, int fd);
     File* AllocateByIndex(process::Process& proc, int fd);
+    void Dup(const File& source, File& dest);
 
     int Write(File& file, const void* buf, int len);
     int Read(File& file, void* buf, int len);

@@ -1,6 +1,7 @@
 #include "file.h"
 #include "process.h"
 #include "fs.h"
+#include "pipe.h"
 #include "lib.h"
 #include <dogfood/errno.h>
 #include <dogfood/fcntl.h>
@@ -29,6 +30,34 @@ namespace file
 
         if (file.f_inode != nullptr)
             fs::iput(*file.f_inode);
+
+        if (file.f_pipe != nullptr) {
+            if (file.f_flags & O_RDONLY)
+                --file.f_pipe->p_num_readers;
+            else if (file.f_flags & O_WRONLY)
+                --file.f_pipe->p_num_writers;
+            else
+                assert(0);
+            Print("closing pipe, flags ", print::Hex{file.f_flags}, " p_num_readers ", file.f_pipe->p_num_readers, " p_num_writers ", file.f_pipe->p_num_writers, "\n");
+            process::Wakeup(file.f_pipe);
+        }
+
+        file = File{};
+    }
+
+    void Dup(const File& source, File& dest)
+    {
+        assert(dest.f_refcount == 0);
+        dest = source;
+        if (dest.f_inode != nullptr)
+            fs::iref(*dest.f_inode);
+        if (dest.f_pipe != nullptr) {
+            if (dest.f_flags & O_RDONLY)
+                ++dest.f_pipe->p_num_readers;
+            else if (dest.f_flags & O_WRONLY)
+                ++dest.f_pipe->p_num_writers;
+        }
+        dest.f_flags &= ~O_CLOEXEC;
     }
 
     void CloneTable(const process::Process& parent, process::Process& child)
@@ -41,14 +70,7 @@ namespace file
                 continue;
 
             auto& childFile = child.files[n];
-            childFile.f_refcount = 1;
-            childFile.f_console = parentFile.f_console;
-            childFile.f_offset = parentFile.f_offset;
-            childFile.f_flags = parentFile.f_flags;
-            if (parentFile.f_inode != nullptr) {
-                fs::iref(*parentFile.f_inode);
-                childFile.f_inode = parentFile.f_inode;
-            }
+            file::Dup(parentFile, childFile);
         }
     }
 
@@ -56,6 +78,8 @@ namespace file
     {
         if (file.f_console)
             return console::Write(buf, len);
+        if (file.f_pipe)
+            return file.f_pipe->Write(buf, len);
 
         const auto count = fs::Write(*file.f_inode, buf, file.f_offset, len);
         file.f_offset += count;
@@ -66,6 +90,8 @@ namespace file
     {
         if (file.f_console)
             return console::Read(buf, len);
+        if (file.f_pipe)
+            return file.f_pipe->Read(buf, len, (file.f_flags & O_NONBLOCK) != 0);
 
         const auto count = fs::Read(*file.f_inode, buf, file.f_offset, len);
         file.f_offset += count;
