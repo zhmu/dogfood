@@ -87,6 +87,21 @@ namespace console
         return ptr - reinterpret_cast<char*>(buf);
     }
 
+    bool CanRead()
+    {
+        // TODO Maybe we should check if the buffer contains a '\r' / \'n' ??
+        auto state = interrupts::SaveAndDisable();
+        using namespace input_buffer;
+        const auto result = read_offset != write_offset;
+        interrupts::Restore(state);
+        return result;
+    }
+
+    bool CanWrite()
+    {
+        return true;
+    }
+
     void OnIRQ()
     {
         while (true) {

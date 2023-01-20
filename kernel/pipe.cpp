@@ -79,6 +79,22 @@ namespace pipe
         return n;
     }
 
+    bool Pipe::CanRead()
+    {
+        auto state = interrupts::SaveAndDisable();
+        const auto result = p_num_writers > 0 && p_buffer_readpos != p_buffer_writepos;
+        interrupts::Restore(state);
+        return result;
+    }
+
+    bool Pipe::CanWrite()
+    {
+        auto state = interrupts::SaveAndDisable();
+        const auto result = p_num_readers > 0; // XXX check for buffer space
+        interrupts::Restore(state);
+        return result;
+    }
+
     int pipe(amd64::TrapFrame& tf)
     {
         auto fdsPtr = syscall::GetArgument<1, int*>(tf);

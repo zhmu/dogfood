@@ -804,6 +804,7 @@ set(HEADERS_MACHINE
     include/machine/types.h
 )
 
+#include/sys/select.h
 set(HEADERS_SYS
     ${HEADERS_SYS}
     include/sys/_default_fcntl.h
@@ -828,7 +829,6 @@ set(HEADERS_SYS
     include/sys/reent.h
     include/sys/resource.h
     include/sys/sched.h
-    include/sys/select.h
     include/sys/stat.h
     include/sys/stdio.h
     include/sys/string.h
@@ -849,6 +849,7 @@ set(HEADERS_SYS
     sys/dogfood/sys/mman.h
     sys/dogfood/sys/mount.h
     sys/dogfood/sys/ptrace.h
+    sys/dogfood/sys/select.h
     sys/dogfood/sys/signal.h
     sys/dogfood/sys/socket.h
     sys/dogfood/sys/termios.h

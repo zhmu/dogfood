@@ -62,9 +62,11 @@ __BEGIN_DECLS
 int select __P ((int __n, fd_set *__readfds, fd_set *__writefds,
 		 fd_set *__exceptfds, struct timeval *__timeout));
 #if __POSIX_VISIBLE >= 200112
+/*
 int pselect __P ((int __n, fd_set *__readfds, fd_set *__writefds,
 		  fd_set *__exceptfds, const struct timespec *__timeout,
 		  const sigset_t *__set));
+*/
 #endif
 
 __END_DECLS

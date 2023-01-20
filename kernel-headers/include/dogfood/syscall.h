@@ -126,3 +126,5 @@
 // Result sigwait(const sigset_t* set, int* sig)
 #define SYS_pipe 73
 // Result pipe(int* fds)
+#define SYS_select 74
+// Result select(int nfds, fd_set* readfds, fd_set* writefds, fd_set* exceptfds, struct timeval* tv)

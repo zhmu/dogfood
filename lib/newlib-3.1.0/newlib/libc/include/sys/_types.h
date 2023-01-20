@@ -104,7 +104,6 @@ typedef	__uint32_t	__socklen_t;
 
 typedef	int		__nl_item;
 typedef	unsigned short	__nlink_t;
-typedef	long		__suseconds_t;	/* microseconds (signed) */
 typedef	unsigned long	__useconds_t;	/* microseconds (unsigned) */
 
 #ifdef __GNUCLIKE_BUILTIN_VARARGS

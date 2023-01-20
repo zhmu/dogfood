@@ -7,6 +7,7 @@
 #include "pipe.h"
 #include "process.h"
 #include "ptrace.h"
+#include "select.h"
 #include "signal.h"
 #include "lib.h"
 #include "vm.h"
@@ -170,12 +171,14 @@ namespace
                 return DupFD(*file);
             }
             case SYS_dup2: {
-                const auto file = file::FindByIndex(process::GetCurrent(), syscall::GetArgument<1>(*tf));
+                const auto sourceFd = syscall::GetArgument<1>(*tf);
+                const auto file = file::FindByIndex(process::GetCurrent(), sourceFd);
                 if (file == nullptr)
                     return -EBADF;
-                const auto newfd = syscall::GetArgument<2>(*tf);
+                const auto newFd = syscall::GetArgument<2>(*tf);
+                if (sourceFd == newFd) return newFd;
                 auto& current = process::GetCurrent();
-                auto file2 = file::AllocateByIndex(current, newfd);
+                auto file2 = file::AllocateByIndex(current, newFd);
                 if (file2 == nullptr)
                     return -ENFILE;
                 file::Dup(*file, *file2);
@@ -394,6 +397,9 @@ namespace
             }
             case SYS_pipe: {
                 return pipe::pipe(*tf);
+            }
+            case SYS_select: {
+                return select::Select(*tf);
             }
         }
         Print("[", process::GetCurrent().pid, "] unsupported syscall ",

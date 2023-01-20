@@ -19,6 +19,9 @@ namespace pipe
 
         int Read(void* buf, int len, const bool nonblock);
         int Write(const void* buf, int len);
+
+        bool CanRead();
+        bool CanWrite();
     };
 
     int pipe(amd64::TrapFrame& context);

@@ -36,4 +36,8 @@ namespace file
     int Write(File& file, const void* buf, int len);
     int Read(File& file, void* buf, int len);
 
+    bool CanRead(File& file);
+    bool CanWrite(File& file);
+    bool HasError(File& file);
+
 } // namespace file

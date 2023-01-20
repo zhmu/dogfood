@@ -9,4 +9,7 @@ namespace console
     int Read(void* buf, int len);
     int Write(const void* buf, int len);
 
+    bool CanRead();
+    bool CanWrite();
+
 } // namespace console

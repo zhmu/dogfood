@@ -98,6 +98,29 @@ namespace file
         return count;
     }
 
+    bool CanRead(File& file)
+    {
+        if (file.f_pipe)
+            return file.f_pipe->CanRead();
+        if (file.f_console)
+            return console::CanRead();
+        return false;
+    }
+
+    bool CanWrite(File& file)
+    {
+        if (file.f_pipe)
+            return file.f_pipe->CanWrite();
+        if (file.f_console)
+            return console::CanWrite();
+        return false;
+    }
+
+    bool HasError(File& file)
+    {
+        return false;
+    }
+
     File* FindByIndex(process::Process& proc, int fd)
     {
         if (fd < 0 || fd >= process::maxFiles)
