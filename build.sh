@@ -128,6 +128,16 @@ if [ "${BUILD_KERNEL}" -ne "0" -o \( "${ONLY_REQUESTED_TARGETS}" -eq "0" -a ! -f
     KERNEL_DIRTY=1
 fi
 
+if [ "${BUILD_KERNEL}" -ne "0" -o \( "${ONLY_REQUESTED_TARGETS}" -eq "0" -a ! -f "${OUTDIR_KERNEL}/loader.efi" \) ]; then
+    echo "*** Building loader"
+    rm -rf build/loader
+    mkdir -p build/loader
+    cd build/loader
+    cmake -GNinja -DCMAKE_TOOLCHAIN_FILE=${TOOLCHAIN_FILE} -DCMAKE_INSTALL_PREFIX=${OUTDIR_KERNEL} ../../loader
+    ninja
+    cd ../..
+fi
+
 if [ "$BUILD_TARGET" -ne "0" -o \( "${ONLY_REQUESTED_TARGETS}" -eq "0" -a ! -f "${OUTDIR}/bin/sh" \) ]; then
     echo "*** Building dash (target)"
     cd userland/dash-0.5.10.2

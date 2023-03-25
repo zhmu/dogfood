@@ -1,0 +1,48 @@
+#pragma once
+
+#include "bio.h"
+
+static constexpr auto ENOSPC = 1;
+static constexpr auto EIO = 2;
+static constexpr auto ELOOP = 3;
+static constexpr auto EEXIST = 4;
+static constexpr auto ENOENT = 5;
+static constexpr auto EPERM = 6;
+static constexpr auto ENOTDIR = 7;
+static constexpr auto ENOTEMPTY = 8;
+static constexpr auto ENAMETOOLONG = 9;
+
+namespace ext2 {
+    struct Inode;
+}
+
+namespace fs {
+    using InodeNumber = uint32_t;
+    using Offset = uint64_t;
+    inline constexpr unsigned int MaxPathLength = 256;
+    inline constexpr unsigned int MaxDirectoryEntryNameLength = 64;
+
+    struct Inode {
+        bio::Device dev = 0;
+        InodeNumber inum = 0;
+        int refcount = 0;
+        bool dirty = false;
+        ext2::Inode* ext2inode = nullptr;
+    };
+
+    struct DEntry {
+        InodeNumber d_ino = 0;
+        char d_name[MaxDirectoryEntryNameLength] = {};
+    };
+
+    bool Mount(bio::Device dev);
+
+    Inode* iget(bio::Device dev, fs::InodeNumber inum);
+    void iput(Inode&);
+    void idirty(Inode&);
+
+    int Read(fs::Inode& inode, void* dst, fs::Offset offset, unsigned int count);
+    int Write(fs::Inode& inode, const void* src, fs::Offset offset, unsigned int count);
+
+    Inode* namei(const char* path, const bool follow, fs::Inode* parent_inode);
+}
