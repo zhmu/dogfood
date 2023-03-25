@@ -35,7 +35,7 @@ namespace pipe
                 interrupts::Restore(state);
                 return 0;
             }
-            process::Sleep(this, state);
+            process::Sleep(this);
             Debug("Pipe::Read done blocking\n");
         }
 

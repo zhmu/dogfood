@@ -136,7 +136,7 @@ namespace ide
 
         if (IsQueued(buffer)) {
             // Already queued; just wait until the request is handled
-            process::Sleep(&buffer, state);
+            process::Sleep(&buffer);
             interrupts::Restore(state);
             return;
         }
@@ -157,7 +157,7 @@ namespace ide
             ExecuteIO(buffer);
 
         while ((buffer.flags & (bio::flag::Valid | bio::flag::Dirty)) != bio::flag::Valid) {
-            process::Sleep(&buffer, state);
+            process::Sleep(&buffer);
         }
         interrupts::Restore(state);
     }

@@ -46,7 +46,7 @@ namespace process
     void UpdateKernelStackForProcess(Process& proc);
 
     void Yield();
-    void Sleep(WaitChannel, int);
+    void Sleep(WaitChannel);
     void Wakeup(WaitChannel);
 
     int Exit(amd64::TrapFrame& context);

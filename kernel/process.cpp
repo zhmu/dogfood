@@ -106,20 +106,20 @@ namespace process
         switch_to(&current->context, cpu_context);
     }
 
-    void Sleep(WaitChannel waitChannel, int state)
+    void Sleep(WaitChannel waitChannel)
     {
         assert(interrupts::Save() == 0); // interrupts must be disabled
         if (current == nullptr) {
             interrupts::Enable();
             interrupts::Wait();
-            interrupts::Restore(state);
-            return;
+            interrupts::Disable();
+        } else {
+            current->waitChannel = waitChannel;
+            current->state = State::Sleeping;
+            interrupts::Enable();
+            Yield();
+            interrupts::Disable();
         }
-
-        current->waitChannel = waitChannel;
-        current->state = State::Sleeping;
-        interrupts::Restore(state);
-        Yield();
     }
 
     void Wakeup(WaitChannel waitChannel)
@@ -207,7 +207,7 @@ namespace process
                 return 0;
             }
 
-            Sleep(&process, state);
+            Sleep(&process);
         }
         // NOTREACHED
     }

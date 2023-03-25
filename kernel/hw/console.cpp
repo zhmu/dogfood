@@ -69,7 +69,7 @@ namespace console
             auto state = interrupts::SaveAndDisable();
             while (read_offset == write_offset) {
                 // Not enough data; wait for more
-                process::Sleep(&data[0], state);
+                process::Sleep(&data[0]);
             }
 
             auto ch = data[read_offset];
