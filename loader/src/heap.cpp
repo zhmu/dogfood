@@ -1,3 +1,9 @@
+/*-
+ * SPDX-License-Identifier: Zlib
+ *
+ * Copyright (c) 2009-2023 Rink Springer <rink@rink.nu>
+ * For conditions of distribution and use, see LICENSE file
+ */
 // This implements a simple memory allocater based on the "The C Programming
 // Language" by Kernighan and Ritchie Section 8.7: Example - A Storage
 // Allocator".
