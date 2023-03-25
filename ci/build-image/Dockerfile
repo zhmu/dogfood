@@ -8,11 +8,13 @@ LABEL maintainer "Rink Springer <rink@rink.nu>"
 # for the bootable iso and e2fsprogs for the filesystem image
 # we'll be building stuff locally so
 # grub2 build needs python
+# dosfstools, mtools to create/fill EFI partition
 RUN apt-get update && apt-get upgrade -y && \
     apt-get install --no-install-recommends -y ninja-build \
     gettext autopoint texinfo autoconf automake make \
     gcc build-essential bison flex wget ca-certificates \
-    xorriso e2fsprogs python3 qemu-system-x86 && \
+    xorriso e2fsprogs python3 qemu-system-x86 \
+    dosfstools mtools && \
     rm -rf /var/lib/apt/lists/*
 
 # Install GRUB2 ourselves; trying to install it in a Docker image causes all kinds

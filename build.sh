@@ -4,6 +4,7 @@
 
 OUTDIR=target # cross-compiled binaries end up here
 OUTDIR_KERNEL=target-kernel # kernel ends up here
+OUTDIR_EFI=target-efi # used to generate efi image
 OUTDIR_IMAGES=images # images end up here
 MAKE_ARGS=
 
@@ -11,6 +12,7 @@ MAKE_ARGS=
 CLEAN_TARGET=0
 BUILD_SYSROOT=0
 BUILD_KERNEL=0
+BUILD_LOADER=0
 BUILD_TARGET=0
 ONLY_REQUESTED_TARGETS=0
 while [ "$1" != "" ]; do
@@ -25,6 +27,7 @@ while [ "$1" != "" ]; do
             echo ""
             echo " -s    (re)build sysroot"
             echo " -k    (re)build kernel"
+            echo " -l    (re)build loader"
             echo " -t    (re)build target"
             exit 1
 			;;
@@ -39,6 +42,9 @@ while [ "$1" != "" ]; do
             ;;
         -k)
             BUILD_KERNEL=1
+            ;;
+        -l)
+            BUILD_LOADER=1
             ;;
         -t)
             BUILD_TARGET=1
@@ -60,19 +66,24 @@ fi
 if [ "$CLEAN_TARGET" -ne 0 ]; then
     rm -rf ${OUTDIR}
     rm -rf ${OUTDIR_KERNEL}
+    rm -rf ${OUTDIR_EFI}
 fi
 mkdir -p ${TOOLCHAIN}
 mkdir -p ${OUTDIR}
 mkdir -p ${OUTDIR_KERNEL}
+mkdir -p ${OUTDIR_EFI}
 mkdir -p ${OUTDIR_IMAGES}
 TOOLCHAIN=`realpath ${TOOLCHAIN}`
 OUTDIR=`realpath ${OUTDIR}`
 OUTDIR_KERNEL=`realpath ${OUTDIR_KERNEL}`
+OUTDIR_EFI=`realpath ${OUTDIR_EFI}`
 
 export PATH=${TOOLCHAIN}/bin:${PATH}
 
 KERNEL_DIRTY=0
 TARGET_DIRTY=0
+LOADER_DIRTY=0
+IMAGE_DIRTY=0
 
 if [ "$BUILD_SYSROOT" -ne "0" -o \( "${ONLY_REQUESTED_TARGETS}" -eq "0" -a ! -f "${SYSROOT}/usr/include/dogfood/types.h" \) ]; then
     echo "*** Installing kernel headers (sysroot)"
@@ -125,17 +136,22 @@ if [ "${BUILD_KERNEL}" -ne "0" -o \( "${ONLY_REQUESTED_TARGETS}" -eq "0" -a ! -f
     cmake -GNinja -DCMAKE_TOOLCHAIN_FILE=${TOOLCHAIN_FILE} -DCMAKE_INSTALL_PREFIX=${OUTDIR_KERNEL} ../..
     ninja kernel_mb install
     cd ../..
+    cp build/kernel/kernel/kernel.elf ${OUTDIR}
     KERNEL_DIRTY=1
+    TARGET_DIRTY=1
 fi
 
-if [ "${BUILD_KERNEL}" -ne "0" -o \( "${ONLY_REQUESTED_TARGETS}" -eq "0" -a ! -f "${OUTDIR_KERNEL}/loader.efi" \) ]; then
+if [ "${BUILD_LOADER}" -ne "0" -o \( "${ONLY_REQUESTED_TARGETS}" -eq "0" -a ! -f "${OUTDIR_EFI}/efi/boot/bootx64.efi" \) ]; then
     echo "*** Building loader"
     rm -rf build/loader
     mkdir -p build/loader
     cd build/loader
-    cmake -GNinja -DCMAKE_TOOLCHAIN_FILE=${TOOLCHAIN_FILE} -DCMAKE_INSTALL_PREFIX=${OUTDIR_KERNEL} ../../loader
+    cmake -GNinja -DCMAKE_TOOLCHAIN_FILE=${TOOLCHAIN_FILE} ../../loader
     ninja
+    mkdir -p ${OUTDIR_EFI}/efi/boot
+    cp loader.efi ${OUTDIR_EFI}/efi/boot/bootx64.efi
     cd ../..
+    LOADER_DIRTY=1
 fi
 
 if [ "$BUILD_TARGET" -ne "0" -o \( "${ONLY_REQUESTED_TARGETS}" -eq "0" -a ! -f "${OUTDIR}/bin/sh" \) ]; then
@@ -296,7 +312,8 @@ fi
 if [ "$TARGET_DIRTY" -ne "0" -o \( "${ONLY_REQUESTED_TARGETS}" -eq "0" -a ! -f "${OUTDIR_IMAGES}/ext2.img" \) ]; then
     echo "*** Creating ext2 image..."
     rm -f ${OUTDIR_IMAGES}/ext2.img
-    mkfs.ext2 -d ${OUTDIR} ${OUTDIR_IMAGES}/ext2.img 1g
+    mkfs.ext2 -d ${OUTDIR} ${OUTDIR_IMAGES}/ext2.img 768m
+    IMAGE_DIRTY=1
 fi
 
 if [ "$KERNEL_DIRTY" -ne "0" -o \( "${ONLY_REQUESTED_TARGETS}" -eq "0" -a ! -f "${OUTDIR_IMAGES}/kernel.iso" \) ]; then
@@ -313,6 +330,31 @@ menuentry "Dogfood" {
 }
 " > build/kernel-iso/boot/grub/grub.cfg
     grub-mkrescue -o ${OUTDIR_IMAGES}/kernel.iso build/kernel-iso
+fi
+
+if [ "$LOADER_DIRTY" -ne "0" -o \( "${ONLY_REQUESTED_TARGETS}" -eq "0" -a ! -f "${OUTDIR_IMAGES}/efi.img" \) ]; then
+    echo "*** Creating EFI image..."
+    dd if=/dev/zero of=${OUTDIR_IMAGES}/efi.img bs=1M count=32
+    mformat -i ${OUTDIR_IMAGES}/efi.img ::/
+    mcopy -i ${OUTDIR_IMAGES}/efi.img -s target-efi/* ::/
+    IMAGE_DIRTY=1
+fi
+
+if [ "$IMAGE_DIRTY" -ne "0" -o \( "${ONLY_REQUESTED_TARGETS}" -eq "0" -a ! -f "${OUTDIR_IMAGES}/dogfood.img" \) ]; then
+    echo "*** Creating Dogfood image..."
+    if [ ! -f "${OUTDIR_IMAGES}/dogfood.img" ]; then
+        dd if=/dev/zero of=${OUTDIR_IMAGES}/dogfood.img bs=1M count=1024
+        # new gpt schema, make 2 partition, change first partition to EFI system
+        echo 'g\nn\n1\n2048\n+32M\nn\n2\n\n\nt\n1\n1\nw\n'|fdisk ${OUTDIR_IMAGES}/dogfood.img
+    fi
+    if [ "$LOADER_DIRTY" -ne "0" ]; then
+        EFI_SECTOR=`fdisk -l images/dogfood.img|grep "EFI System"|awk '{print $2*512}'`
+        dd if=${OUTDIR_IMAGES}/efi.img of=${OUTDIR_IMAGES}/dogfood.img bs=${EFI_SECTOR} seek=1 conv=notrunc
+    fi
+    if [ "$TARGET_DIRTY" -ne "0" ]; then
+        EXT2_SECTOR=`fdisk -l images/dogfood.img|grep "Linux filesystem"|awk '{print $2*512}'`
+        dd if=${OUTDIR_IMAGES}/ext2.img of=${OUTDIR_IMAGES}/dogfood.img bs=${EXT2_SECTOR} seek=1 conv=notrunc
+    fi
 fi
 
 if [ "${ONLY_REQUESTED_TARGETS}" -eq "0" -a ! -f "${OUTDIR_IMAGES}/run.sh" ]; then
