@@ -163,6 +163,7 @@ namespace process
         new_process->trapFrame->r14 = tf.r14;
         new_process->trapFrame->r15 = tf.r15;
         new_process->trapFrame->rbp = tf.rbp;
+        assert(((new_process->trapFrame->rsp - 8) & 0xf) == 0);
         return new_process->pid;
     }
 

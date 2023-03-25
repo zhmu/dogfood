@@ -130,8 +130,10 @@ namespace exec
                 ustackVA, vm::PageSize,
                 pagePhysicalAddr, ustackFlags);
 
-            tf.rsp = ustackVA;
-            tf.rdi = tf.rsp;
+            // Align the stack pointer in line with the AMD64 ELF ABI, 3.2.2
+            tf.rsp = ustackVA - 8;
+            assert(((tf.rsp - 8) & 0xf) == 0);
+            tf.rdi = ustackVA;
         }
     } // namespace
 
