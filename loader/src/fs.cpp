@@ -77,17 +77,17 @@ namespace fs
         ext2::WriteInode(inode);
     }
 
-    int Read(fs::Inode& inode, void* dst, fs::Offset offset, unsigned int count)
+    std::optional<size_t> Read(fs::Inode& inode, void* dst, fs::Offset offset, size_t count)
     {
         if (offset > inode.ext2inode->i_size || offset + count < offset)
-            return -1;
+            return {};
         if (offset + count > inode.ext2inode->i_size) {
             count = inode.ext2inode->i_size - offset;
         }
 
         auto d = reinterpret_cast<char*>(dst);
         while (count > 0) {
-            int chunkLen = count;
+            auto chunkLen = count;
             if (offset % bio::BlockSize) {
                 chunkLen = bio::BlockSize - (offset % bio::BlockSize);
                 if (chunkLen > count)
@@ -108,12 +108,12 @@ namespace fs
         return d - reinterpret_cast<char*>(dst);
     }
 
-    int Write(fs::Inode& inode, const void* src, fs::Offset offset, unsigned int count)
+    std::optional<size_t> Write(fs::Inode& inode, const void* src, fs::Offset offset, size_t count)
     {
         const auto newSize = offset + count;
         auto s = reinterpret_cast<const char*>(src);
         while (count > 0) {
-            int chunkLen = count;
+            auto chunkLen = count;
             if (offset % bio::BlockSize) {
                 chunkLen = bio::BlockSize - (offset % bio::BlockSize);
                 if (chunkLen > count)
@@ -181,9 +181,9 @@ namespace fs
         if (depth == maxSymLinkDepth) return ELOOP;
 
         char symlink[MaxPathLength];
-        const auto n = fs::Read(*inode, symlink, 0, sizeof(symlink) - 1);
-        if (n <= 0) return EIO;
-        symlink[n] = '\0';
+        const auto num_read = fs::Read(*inode, symlink, 0, sizeof(symlink) - 1);
+        if (!num_read || *num_read == 0) return EIO;
+        symlink[*num_read] = '\0';
 
         char component[MaxPathLength];
         Inode* newParent = nullptr;
@@ -243,55 +243,6 @@ namespace fs
         if (inode != nullptr)
             return inode;
         return nullptr;
-    }
-
-    int Open(const char* path, int flags, int mode, Inode*& inode)
-    {
-        Inode* parent;
-        char component[MaxPathLength];
-        inode = namei2(path, false /* ? */, parent, component);
-        if (inode != nullptr) {
-            if (parent != nullptr)
-                fs::iput(*parent);
-#if 0
-            if ((flags & (O_CREAT | O_EXCL)) == (O_CREAT | O_EXCL))
-                return EEXIST;
-            if (flags & O_TRUNC) {
-                ext2::Truncate(*inode);
-            }
-#endif
-            return 0;
-        }
-        if (parent == nullptr)
-            return ENOENT;
-#if 0
-        if ((flags & O_CREAT) == 0)
-            return ENOENT;
-#endif
-
-        auto inum = ext2::AllocateInode(*parent);
-        if (inum == 0)
-            return ENOSPC;
-
-        auto newInode = fs::iget(parent->dev, inum);
-        assert(newInode != nullptr);
-        {
-            auto& e2i = *newInode->ext2inode;
-            memset(&e2i, 0, sizeof(e2i));
-            e2i.i_mode = EXT2_S_IFREG | mode;
-            e2i.i_links_count = 1;
-        }
-        fs::idirty(*newInode);
-
-        if (!ext2::AddEntryToDirectory(*parent, inum, EXT2_FT_REG_FILE, component)) {
-            // TODO deallocate inode
-            return ENOSPC;
-        }
-        fs::idirty(*parent);
-        fs::iput(*parent);
-
-        inode = newInode;
-        return 0;
     }
 
     int Unlink(const char* path)

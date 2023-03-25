@@ -6,6 +6,8 @@ extern "C" {
 #include <span>
 #include "bio.h"
 #include "kernel.h"
+#include "memory.h"
+#include "heap.h"
 #include "fs.h"
 
 namespace
@@ -13,21 +15,6 @@ namespace
     static constexpr auto inline NumberOfHeapPages = 16; // 64KB
     static constexpr auto inline KernelFile = "/kernel.elf";
     EFI_PHYSICAL_ADDRESS heapBase;
-}
-
-namespace heap {
-    void InitializeHeap(void* ptr, size_t number_of_bytes);
-}
-
-namespace memory {
-    void ProcessMemoryMap(std::span<char> descriptor_map, const size_t descriptor_size);
-}
-
-uint8_t buf[512];
-
-extern "C" int koe()
-{
-    return 42;
 }
 
 extern "C" EFI_STATUS

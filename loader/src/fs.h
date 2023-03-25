@@ -1,6 +1,7 @@
 #pragma once
 
 #include "bio.h"
+#include <optional>
 
 static constexpr auto ENOSPC = 1;
 static constexpr auto EIO = 2;
@@ -41,8 +42,8 @@ namespace fs {
     void iput(Inode&);
     void idirty(Inode&);
 
-    int Read(fs::Inode& inode, void* dst, fs::Offset offset, unsigned int count);
-    int Write(fs::Inode& inode, const void* src, fs::Offset offset, unsigned int count);
+    std::optional<size_t> Read(fs::Inode& inode, void* dst, fs::Offset offset, size_t count);
+    std::optional<size_t> Write(fs::Inode& inode, const void* src, fs::Offset offset, size_t count);
 
     Inode* namei(const char* path, const bool follow, fs::Inode* parent_inode);
 }

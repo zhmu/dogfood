@@ -10,8 +10,6 @@ extern EFI_HANDLE LibImageHandle;
 #include <span>
 #include "multiboot.h"
 
-extern "C" int koe();
-
 namespace kernel
 {
 
@@ -148,13 +146,11 @@ void Execute()
         memset(&dst[phdr.p_filesz], 0, phdr.p_memsz - phdr.p_filesz);
     }
 
-    koe();
-
-    uint64_t entry = kernelEhdr->e_entry;
+    const auto entry = kernelEhdr->e_entry;
     __asm __volatile(
         "cli\n"
         "movq %%rax, %%cr3\n"
-        "jmp %%rbx\n"
+        "jmp *%%rbx\n"
     : : "a" (pd_phys), "b" (entry), "D" (mb));
 
     for(;;);

@@ -157,7 +157,7 @@ namespace ext2
             ReadBlockGroup(dev, bgroup, blockGroup);
             if (Strategy::HasFreeItems(blockGroup)) {
                 const auto bitmapFirstBlockNr = Strategy::GetBitmapBlock(blockGroup) * biosPerBlock;
-                for (int itemIndex = 0; itemIndex < Strategy::GetItemsPerGroup(); ++itemIndex) {
+                for (unsigned int itemIndex = 0; itemIndex < Strategy::GetItemsPerGroup(); ++itemIndex) {
                     auto& buf = bio::bread(dev, bitmapFirstBlockNr + (itemIndex / bitsPerBlock));
                     auto& bitmapPtr = buf.data[(itemIndex % bitsPerBlock) / 8];
                     auto bitmapBit = (1 << (itemIndex % 8));
@@ -260,7 +260,7 @@ namespace ext2
     {
         const auto pointersPerBlock = blockSize / sizeof(uint32_t);
         const auto pointersPerBioBlock = bio::BlockSize / sizeof(uint32_t);
-        for (int n = 0; n < pointersPerBlock; ++n) {
+        for (unsigned int n = 0; n < pointersPerBlock; ++n) {
             const auto bioBlockNr = blockNr * biosPerBlock + (n / pointersPerBioBlock);
             const auto offset = (n % pointersPerBioBlock) * sizeof(uint32_t);
             auto& bio = bio::bread(dev, bioBlockNr);
@@ -374,7 +374,7 @@ namespace ext2
             bio::bwrite(*bio);
 
         // Zero new block content
-        for (int n = 0; n < biosPerBlock; ++n) {
+        for (unsigned int n = 0; n < biosPerBlock; ++n) {
             auto& newBIO = bio::bread(inode.dev, (newBlock * biosPerBlock) + n);
             memset(newBIO.data, 0, bio::BlockSize);
             bio::bwrite(newBIO);
@@ -430,10 +430,9 @@ namespace ext2
         } u;
 
         while (offset < dirInode.ext2inode->i_size) {
-            int n = fs::Read(
+            if (const auto num_read = fs::Read(
                 dirInode, reinterpret_cast<void*>(&u.block), offset,
-                sizeof(DirectoryEntry) + fs::MaxDirectoryEntryNameLength);
-            if (n <= 0)
+                sizeof(DirectoryEntry) + fs::MaxDirectoryEntryNameLength); !num_read || *num_read == 0)
                 return false;
 
             const auto& de = u.de;
@@ -488,9 +487,9 @@ namespace ext2
         fs::Offset offset = 0;
         while (offset < dirInode.ext2inode->i_size) {
             DirectoryEntry dentry;
-            int n = fs::Read(
+            if (const auto num_read = fs::Read(
                 dirInode, reinterpret_cast<void*>(&dentry), offset, sizeof(DirectoryEntry));
-            if (n <= 0)
+                !num_read || *num_read == 0)
                 break;
 
             const auto currentEntryLength =

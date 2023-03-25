@@ -29,7 +29,7 @@ namespace bio {
             EFI_BLOCK_IO* blockIo;
         };
         BlockDevice* block_devices;
-        size_t num_block_devices = 0;
+        int num_block_devices = 0;
 
         constexpr inline auto NumberOfBios = 32;
         Buffer* buffer;
@@ -107,7 +107,7 @@ namespace bio {
         panic("bwrite() is unsupported");
     }
 
-    void brelse(Buffer& bio)
+    void brelse(Buffer&)
     {
     }
 

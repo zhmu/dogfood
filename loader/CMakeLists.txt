@@ -1,8 +1,7 @@
 cmake_minimum_required(VERSION 3.12)
 project(loader C CXX ASM)
 
-set(COMMON_FLAGS "-Wno-error=pragmas -mno-red-zone -mno-avx -fpic  -g -O2 -Wall -Wextra -fshort-wchar -fno-strict-aliasing -ffreestanding -fno-stack-protector -fno-stack-check -fno-stack-check -fno-merge-all-constants -DGNU_EFI_USE_MS_ABI -maccumulate-outgoing-args")
-# not Werror
+set(COMMON_FLAGS "-Wno-error=pragmas -mno-red-zone -mno-avx -fpic  -g -O2 -Wall -Wextra -Werror -fshort-wchar -fno-strict-aliasing -ffreestanding -fno-stack-protector -fno-stack-check -fno-stack-check -fno-merge-all-constants -DGNU_EFI_USE_MS_ABI -maccumulate-outgoing-args")
 set(CMAKE_ASM_FLAGS "${COMMON_FLAGS} -std=c11")
 set(CMAKE_C_FLAGS "${COMMON_FLAGS} -std=c11")
 set(CMAKE_CXX_FLAGS "${COMMON_FLAGS} -std=c++20 -fno-exceptions -fno-rtti")

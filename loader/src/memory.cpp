@@ -31,25 +31,6 @@ void sort_items(std::span<char> descriptor_map, const size_t descriptor_size)
     }
 }
 
-const char* ourtype2string(MemoryType t)
-{
-    switch(t) {
-        case MemoryType::Invalid:
-            return "Invalid";
-        case MemoryType::Reserved:
-            return "Reserved";
-        case MemoryType::ACPI:
-            return "ACPI";
-        case MemoryType::Usuable:
-            return "Usuable";
-        case MemoryType::EfiRuntimeCode:
-            return "EfiRuntimeCode";
-        case MemoryType::EfiRuntimeData:
-            return "EfiRuntimeData";
-    }
-    return "?";
-}
-
 MemoryType ConvertEfiMemoryType(const UINT32 v)
 {
     const auto type = static_cast<EFI_MEMORY_TYPE>(v);
@@ -100,19 +81,6 @@ std::span<Entry> merge_items(std::span<const char> descriptor_map, const size_t 
     }
 
     return { &result[0], &result[num_results] };
-}
-
-void show_items(std::span<Entry> items)
-{
-    size_t usable = 0;
-    for(const auto i: items) {
-        const auto size = (i.phys_end - i.phys_start) / 1024;
-        if (i.type == MemoryType::Usuable)
-            usable += size;
-        Print(reinterpret_cast<const CHAR16*>(L"%12x %12x %8d %a\n"),
-         i.phys_start, i.phys_end, size, ourtype2string(i.type));
-    }
-    Print(reinterpret_cast<const CHAR16*>(L"total usable: %d KB\n"), usable);
 }
 
 std::span<Entry> ProcessMemoryMap(std::span<char> descriptor_map, const size_t descriptor_size)

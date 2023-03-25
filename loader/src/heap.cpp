@@ -5,6 +5,7 @@
 // heap::InitializeHeap() must be called once to provide the memory manager
 // with the heap buffer it is allowed to allocate from. This buffer cannot be
 // extended after it has been set up.
+#include "heap.h"
 #include <cstddef>
 #include <algorithm>
 
