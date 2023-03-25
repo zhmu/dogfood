@@ -1,0 +1,33 @@
+add_library(efi
+    lib/boxdraw.c
+    lib/smbios.c
+    lib/console.c
+    lib/crc.c
+    lib/data.c
+    lib/debug.c
+    lib/dpath.c
+    lib/error.c
+    lib/event.c
+    lib/exit.c
+    lib/guid.c
+    lib/hand.c
+    lib/hw.c
+    lib/init.c
+    lib/lock.c
+    lib/misc.c
+    lib/pause.c
+    lib/print.c
+    lib/sread.c
+    lib/str.c
+    lib/cmdline.c
+    lib/runtime/rtlock.c
+    lib/runtime/efirtlib.c
+    lib/runtime/rtstr.c
+    lib/runtime/vm.c
+    lib/runtime/rtdata.c
+    lib/x86_64/initplat.c
+    lib/x86_64/math.c
+    lib/x86_64/setjmp.S
+    lib/x86_64/callwrap.c
+)
+target_include_directories(efi PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/inc PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/lib)
