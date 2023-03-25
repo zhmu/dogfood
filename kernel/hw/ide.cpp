@@ -14,7 +14,7 @@ namespace ide
         namespace io
         {
             constexpr unsigned int Port = 0x1f0;
-            constexpr unsigned int AltPort = 0x3f4;
+            constexpr unsigned int AltPort = 0x3f6;
         } // namespace io
         namespace port
         {
@@ -26,7 +26,6 @@ namespace ide
             constexpr unsigned int CylinderHi = 5;
             constexpr unsigned int DeviceHead = 6;
             constexpr unsigned int Status = 7;
-            constexpr unsigned int AltStatus = 2;
             constexpr unsigned int Command = 7;
         } // namespace port
         namespace status
@@ -41,9 +40,12 @@ namespace ide
             constexpr unsigned int ReadSectors = 0x20;  // 28 bit PIO
             constexpr unsigned int WriteSectors = 0x30; // 28 bit PIO
         }                                               // namespace command
+        namespace control {
+            constexpr unsigned int SRST = (1 << 2);
+        }
 
         bool IsWrite(const bio::Buffer& buffer) { return (buffer.flags & bio::flag::Dirty) != 0; }
-        unsigned int ReadStatus() { return inb(io::AltPort + port::AltStatus); }
+        unsigned int ReadStatus() { return inb(io::AltPort); }
 
         bio::Buffer* queue = nullptr;
 
@@ -60,8 +62,12 @@ namespace ide
 
     void Initialize()
     {
-        pic::Enable(pic::irq::IDE);
         outb(io::Port + port::DeviceControl, 0);
+        pic::Enable(pic::irq::IDE);
+        // Reset all devices on the bus
+        outb(io::AltPort, control::SRST);
+        outb(io::AltPort, 0);
+
     }
 
     void ExecuteIO(bio::Buffer& buffer)
@@ -105,6 +111,7 @@ namespace ide
         if (stat & status::Error)
             panic("ide::OnIRQ() with error status");
 
+        if (!queue) return;
         bio::Buffer* buffer = queue;
         queue = queue->qnext;
 
