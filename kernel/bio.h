@@ -16,6 +16,7 @@ namespace bio
         int flags{};
         int refCount{};
         BlockNumber blockNumber{};
+        BlockNumber ioBlockNumber{};
         uint8_t data[BlockSize];
         Buffer* prev = nullptr;
         Buffer* next = nullptr;
@@ -23,6 +24,8 @@ namespace bio
     };
 
     void Initialize();
+    void RegisterDevice(int device, uint64_t first_lba);
+
     Buffer& bread(int dev, BlockNumber blockNumber);
     void bwrite(Buffer& buf);
     void brelse(Buffer& buf);

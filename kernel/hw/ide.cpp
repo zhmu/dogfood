@@ -68,6 +68,8 @@ namespace ide
         outb(io::AltPort, control::SRST);
         outb(io::AltPort, 0);
 
+        bio::RegisterDevice(0, 0);
+
     }
 
     void ExecuteIO(bio::Buffer& buffer)
@@ -75,13 +77,15 @@ namespace ide
         const bool isWrite = (buffer.flags & bio::flag::Dirty) != 0;
         const auto command = isWrite ? command::WriteSectors : command::ReadSectors;
 
+        const auto lba = buffer.ioBlockNumber;
+        const int unit = 0;
         outb(
             io::Port + port::DeviceHead,
-            0xe0 | (buffer.dev ? 0x10 : 0) | ((buffer.blockNumber >> 24) & 0xf));
+            0xe0 | (unit ? 0x10 : 0) | ((lba >> 24) & 0xf));
         outb(io::Port + port::SectorCount, 1);
-        outb(io::Port + port::SectorNumber, buffer.blockNumber & 0xff);
-        outb(io::Port + port::CylinderLo, (buffer.blockNumber >> 8) & 0xff);
-        outb(io::Port + port::CylinderHi, (buffer.blockNumber >> 16) & 0xff);
+        outb(io::Port + port::SectorNumber, lba & 0xff);
+        outb(io::Port + port::CylinderLo, (lba >> 8) & 0xff);
+        outb(io::Port + port::CylinderHi, (lba >> 16) & 0xff);
         outb(io::Port + port::Command, command);
         if (isWrite) {
             while (ReadStatus() & status::Busy)

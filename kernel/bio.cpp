@@ -1,6 +1,8 @@
 #include "bio.h"
 #include "lib.h"
 #include "hw/ide.h"
+#include <array>
+#include <algorithm>
 
 namespace bio
 {
@@ -26,6 +28,31 @@ namespace bio
         } // namespace
     }     // namespace cache
 
+    namespace
+    {
+        struct BlockDevice
+        {
+            int device = -1;
+            uint64_t first_lba = -1;
+        };
+        std::array<BlockDevice, 4> blockDevice;
+    }
+
+    BlockDevice* FindBlockDevice(int device)
+    {
+        auto it = std::find_if(blockDevice.begin(), blockDevice.end(), [&](const auto& v) {
+            return v.device == device;
+        });
+        return it != blockDevice.end() ? &*it : nullptr;
+    }
+
+    void RegisterDevice(int device, uint64_t first_lba)
+    {
+        auto d = FindBlockDevice(-1);
+        assert(d != nullptr);
+        *d = { device, first_lba };
+    }
+
     void Initialize()
     {
         cache::head.next = &cache::head;
@@ -48,8 +75,11 @@ namespace bio
         // Sacrifice the least-recently used block (walks circular list backwards)
         for (auto buf = cache::head.prev; buf != &cache::head; buf = buf->prev) {
             if (buf->refCount == 0 && (buf->flags & flag::Dirty) == 0) {
+                auto bdev = FindBlockDevice(dev);
+                assert(bdev != nullptr);
                 buf->dev = dev;
                 buf->blockNumber = blockNumber;
+                buf->ioBlockNumber = bdev->first_lba + blockNumber;
                 buf->flags = 0; // not valid, not dirty either
                 buf->refCount = 1;
                 return *buf;
