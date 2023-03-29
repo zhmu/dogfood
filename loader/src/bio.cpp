@@ -76,8 +76,7 @@ namespace bio {
             EFI_BLOCK_IO* blockIo;
             status = BS->OpenProtocol(handles[n], &gEfiBlockIoProtocolGuid, reinterpret_cast<void**>(&blockIo), LibImageHandle, NULL, EFI_OPEN_PROTOCOL_BY_HANDLE_PROTOCOL);
             if (status != EFI_SUCCESS) continue;
-            // TODO Not yet, enable once we support partitions in Dogfood
-            //if (!blockIo->Media->LogicalPartition) continue;
+            if (!blockIo->Media->LogicalPartition) continue;
 
             auto id = DevicePathToString(device_path);
             //BS->FreePool(id);
