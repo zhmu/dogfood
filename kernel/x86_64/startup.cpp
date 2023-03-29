@@ -6,6 +6,7 @@
 #include "ext2.h"
 #include "fs.h"
 #include "paging.h"
+#include "partition.h"
 #include "process.h"
 #include "vm.h"
 
@@ -405,6 +406,7 @@ extern "C" void startup(const MULTIBOOT* mb)
     pic::Enable(pic::irq::Timer);
     pic::Enable(pic::irq::COM1);
     interrupts::Enable();
+    partition::Initialize();
     fs::Initialize();
     fs::MountRootFileSystem();
     process::Initialize();

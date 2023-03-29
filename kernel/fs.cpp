@@ -11,7 +11,7 @@ namespace fs
 {
     namespace
     {
-        constexpr inline Device rootDeviceNumber = 0;
+        constexpr inline Device rootDeviceNumber = 2;
         constexpr inline int maxSymLinkDepth = 10;
 
         namespace cache

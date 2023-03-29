@@ -121,4 +121,5 @@ void* operator new(size_t len) { return Allocate(len); }
 void* operator new[](size_t len) { return Allocate(len); }
 
 void operator delete(void* p) noexcept { Free(p); }
+void operator delete[](void* p) noexcept { Free(p); }
 void operator delete(void* p, size_t) noexcept { Free(p); }
