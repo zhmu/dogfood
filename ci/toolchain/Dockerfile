@@ -11,7 +11,7 @@ ENV home=/home/build
 # step 1: install gcc/binutils/etc
 RUN apt-get update && \
     apt-get install -y --no-install-recommends build-essential ninja-build cmake texinfo bison \
-            flex automake && \
+            autoconf-archive flex automake && \
     rm -rf /var/lib/apt/lists/*
 
 ADD --chown=build:build work /work
