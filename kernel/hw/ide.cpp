@@ -41,7 +41,8 @@ namespace ide
             constexpr unsigned int WriteSectors = 0x30; // 28 bit PIO
         }                                               // namespace command
         namespace control {
-            constexpr unsigned int SRST = (1 << 2);
+            constexpr unsigned int nIEN = (1 << 1); // interrupt enable (inverted)
+            constexpr unsigned int SRST = (1 << 2); // Software reset
         }
 
         bool IsWrite(const bio::Buffer& buffer) { return (buffer.flags & bio::flag::Dirty) != 0; }
@@ -65,8 +66,12 @@ namespace ide
         outb(io::Port + port::DeviceControl, 0);
         pic::Enable(pic::irq::IDE);
         // Reset all devices on the bus
-        outb(io::AltPort, control::SRST);
+        outb(io::AltPort, control::nIEN | control::SRST);
+        for(int n = 0; n < 10000; ++n)
+            (void)inb(io::Port + port::Status);
         outb(io::AltPort, 0);
+        for(int n = 0; n < 10000; ++n)
+            (void)inb(io::Port + port::Status);
 
         bio::RegisterDevice(0, 0);
 
