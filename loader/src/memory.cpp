@@ -11,12 +11,15 @@ extern "C" {
 #include <cstddef>
 #include <cstring>
 #include <algorithm>
+#include "dogfood/loader.h"
 #include "memory.h"
 #include "lib.h"
 
 namespace memory {
 
 namespace {
+
+constexpr auto inline SHOW_LOADER_MEMORY_MAP = false;
 
 void sort_items(std::span<char> descriptor_map, const size_t descriptor_size)
 {
@@ -37,7 +40,7 @@ void sort_items(std::span<char> descriptor_map, const size_t descriptor_size)
     }
 }
 
-MemoryType ConvertEfiMemoryType(const UINT32 v)
+loader::memory::Type ConvertEfiMemoryType(const UINT32 v)
 {
     const auto type = static_cast<EFI_MEMORY_TYPE>(v);
     switch(type) {
@@ -46,28 +49,28 @@ MemoryType ConvertEfiMemoryType(const UINT32 v)
         case EfiBootServicesCode:
         case EfiBootServicesData:
         case EfiConventionalMemory:
-            return MemoryType::Usuable;
+            return loader::memory::Type::Usable;
         case EfiRuntimeServicesCode:
-            return MemoryType::EfiRuntimeCode;
+            return loader::memory::Type::EfiRuntimeCode;
         case EfiRuntimeServicesData:
-            return MemoryType::EfiRuntimeData;
+            return loader::memory::Type::EfiRuntimeData;
         case EfiMemoryMappedIO:
         case EfiMemoryMappedIOPortSpace:
         case EfiPalCode:
         case EfiReservedMemoryType:
-            return MemoryType::Reserved;
+            return loader::memory::Type::Reserved;
         case EfiACPIReclaimMemory:
         case EfiACPIMemoryNVS:
-            return MemoryType::ACPI;
+            return loader::memory::Type::ACPI;
         case EfiUnusableMemory:
         default:
-            return MemoryType::Invalid;
+            return loader::memory::Type::Invalid;
     }
 }
 
-std::span<Entry> merge_items(std::span<const char> descriptor_map, const size_t descriptor_size)
+std::span<loader::memory::Entry> merge_items(std::span<const char> descriptor_map, const size_t descriptor_size)
 {
-    auto result = new Entry[descriptor_map.size() / descriptor_size];
+    auto result = new loader::memory::Entry[descriptor_map.size() / descriptor_size];
 
     size_t num_results = 0;
     for(size_t offset = 0; offset < descriptor_map.size() - descriptor_size; offset += descriptor_size) {
@@ -78,10 +81,10 @@ std::span<Entry> merge_items(std::span<const char> descriptor_map, const size_t 
         const auto end = start + descriptor->NumberOfPages * EFI_PAGE_SIZE;
 
         auto& current_entry = result[num_results - 1];
-        if (num_results > 0 && current_entry.type == type && current_entry.phys_end == start) {
-            current_entry.phys_end = end;
+        if (num_results > 0 && current_entry.type == type && (current_entry.phys_addr + current_entry.length_in_bytes) == start) {
+            current_entry.length_in_bytes += end - start;
         } else {
-            result[num_results] = { type, start, end };
+            result[num_results] = { type, start, end - start };
             ++num_results;
         }
     }
@@ -89,17 +92,23 @@ std::span<Entry> merge_items(std::span<const char> descriptor_map, const size_t 
     return { &result[0], &result[num_results] };
 }
 
-std::span<Entry> ProcessMemoryMap(std::span<char> descriptor_map, const size_t descriptor_size)
+std::span<loader::memory::Entry> ProcessMemoryMap(std::span<char> descriptor_map, const size_t descriptor_size)
 {
     sort_items(descriptor_map, descriptor_size);
     auto items = merge_items(descriptor_map, descriptor_size);
-    //show_items(items);
+
+    if constexpr (SHOW_LOADER_MEMORY_MAP) {
+        Print(reinterpret_cast<const CHAR16*>(L"Loader memory map\n"));
+        for(const auto& item: items) {
+            Print(reinterpret_cast<const CHAR16*>(L"%lx..%lx type %d\n"), item.phys_addr, item.phys_addr + item.length_in_bytes - 1, item.type);
+        }
+    }
     return items;
 }
 
 }
 
-std::pair<std::span<Entry>, unsigned int> ConstructMemoryMap()
+std::pair<std::span<loader::memory::Entry>, unsigned int> ConstructMemoryMap()
 {
     UINTN map_size = 0;
     UINTN map_key = 0;

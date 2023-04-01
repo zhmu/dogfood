@@ -1,5 +1,4 @@
 #include "lib.h"
-#include "multiboot.h"
 #include "page_allocator.h"
 #include "amd64.h"
 #include "bio.h"
@@ -13,6 +12,8 @@
 #include "hw/console.h"
 #include "hw/ide.h"
 #include "hw/pic.h"
+
+#include "dogfood/loader.h"
 
 using namespace amd64;
 
@@ -212,7 +213,19 @@ namespace
         }
     }
 
-    void InitializeMemory(const MULTIBOOT& mb)
+    constexpr auto IsMemoryUsableByKernel(const loader::memory::Type type)
+    {
+        switch(type) {
+            case loader::memory::Type::Usable:
+            case loader::memory::Type::EfiRuntimeCode:
+            case loader::memory::Type::EfiRuntimeData:
+                return true;
+            default:
+                return false;
+        }
+    }
+
+    void InitializeMemory(const loader::Channel& lchan)
     {
         // Determine where the kernel resides in memory - we need to
         // exclude this range from our memory map
@@ -236,29 +249,23 @@ namespace
             ++currentRegion;
         };
 
-        {
-            const auto mm_end = reinterpret_cast<const char*>(mb.mb_mmap_addr + mb.mb_mmap_length);
-            for (auto mm_ptr = reinterpret_cast<const char*>(mb.mb_mmap_addr); mm_ptr < mm_end;
-                 /* nothing */) {
-                const auto mm = reinterpret_cast<const MULTIBOOT_MMAP*>(mm_ptr);
-                const auto entry_len = mm->mm_entry_len + sizeof(uint32_t);
-                mm_ptr += entry_len;
-                if (mm->mm_type != MULTIBOOT_MMAP_AVAIL)
-                    continue;
+        auto mm = lchan.memory_map;
+        for(size_t n = 0; n < lchan.num_memory_map_entries; ++n, ++mm) {
+            if (!IsMemoryUsableByKernel(mm->type))
+                continue;
 
-                // Combine the multiboot mmap to a base/length pair
-                const auto base = static_cast<uint64_t>(mm->mm_base_hi) << 32 | mm->mm_base_lo;
-                const auto length = (static_cast<uint64_t>(mm->mm_len_hi) << 32 | mm->mm_len_lo);
+            // Combine the multiboot mmap to a base/length pair
+            const auto base = mm->phys_addr;
+            const auto length = mm->length_in_bytes;
 
-                // We'll assume the region starts where the kernel resides; we'll need to
-                // adjust the base if this happens
-                const auto region = [&]() {
-                    if (base == kernel_phys_start)
-                        return Region{kernel_phys_end, (base + length) - kernel_phys_end};
-                    return Region{base, length};
-                }();
-                addRegion(region);
-            }
+            // We'll assume the region starts where the kernel resides; we'll need to
+            // adjust the base if this happens
+            const auto region = [&]() {
+                if (base == kernel_phys_start)
+                    return Region{kernel_phys_end, (base + length) - kernel_phys_end};
+                return Region{base, length};
+            }();
+            addRegion(region);
         }
 
         Print("physical memory regions:\n");
@@ -388,12 +395,12 @@ extern "C" void irq_handler(const struct TrapFrame* tf)
 }
 
 #ifndef BUILDING_TESTS
-extern "C" void startup(const MULTIBOOT* mb)
+extern "C" void startup(const loader::Channel* lchan)
 {
     SetupDescriptors();
     console::initialize();
     pic::Initialize();
-    InitializeMemory(*mb);
+    InitializeMemory(*lchan);
     InitializeSyscall();
     bio::Initialize();
 

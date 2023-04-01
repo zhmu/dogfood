@@ -19,6 +19,7 @@ set(HEADERS_DOGFOOD
     include/dogfood/netinet.h
     include/dogfood/ioctl.h
     include/dogfood/select.h
+    include/dogfood/loader.h
 )
 
 install(FILES ${HEADERS_DOGFOOD} DESTINATION usr/include/dogfood)

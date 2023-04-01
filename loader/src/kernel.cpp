@@ -14,7 +14,7 @@ extern EFI_HANDLE LibImageHandle;
 #include "lib.h"
 #include "memory.h"
 #include <span>
-#include "multiboot.h"
+#include "dogfood/loader.h"
 
 namespace kernel
 {
@@ -88,14 +88,9 @@ void Execute()
     auto headerBase = reinterpret_cast<uint8_t*>(kernelEhdr);
     assert(headerBase != nullptr);
 
-    // Grab memory now that we can still print information if it fails
-    constexpr auto mb_mmap_max_entries = EFI_PAGE_SIZE / sizeof(MULTIBOOT_MMAP);
-    auto mmap = new MULTIBOOT_MMAP[mb_mmap_max_entries];
-
-    // Create multiboot structure
-    auto mb = new MULTIBOOT{};
-    assert(reinterpret_cast<uint64_t>(mmap) <= 0xffff'ffff);
-    mb->mb_mmap_addr = reinterpret_cast<uint64_t>(mmap) & 0xffff'ffff;
+    // Create channel for kernel to interact with loader
+    auto lchan = new loader::Channel{};
+    assert(reinterpret_cast<uint64_t>(lchan) <= 0xffff'ffff);
 
     // Grab 3 pages for bootstrap pagemap; these must be page-aligned
     EFI_PHYSICAL_ADDRESS pd_phys;
@@ -111,35 +106,13 @@ void Execute()
     }
 
     auto [ memory_map, map_key ] = memory::ConstructMemoryMap();
+    lchan->memory_map = &memory_map.front();
+    lchan->num_memory_map_entries = memory_map.size();
+
     const auto result = BS->ExitBootServices(LibImageHandle, map_key);
     if (result != EFI_SUCCESS) {
         panic("ExitBootServices() failed");
     }
-
-    // Construct multiboot memory map
-    size_t n = 0;
-    for(const auto& m: memory_map) {
-        auto& mm = mmap[n++];
-        mm.mm_entry_len = sizeof(MULTIBOOT_MMAP) - sizeof(uint32_t);
-        mm.mm_base_hi = m.phys_start >> 32;
-        mm.mm_base_lo = m.phys_start & 0xffff'ffff;
-        const auto length = m.phys_end - m.phys_start;
-        mm.mm_len_lo = length & 0xffff'ffff;
-        mm.mm_len_hi = length >> 32;
-        mm.mm_type = 0;
-        switch(m.type) {
-            case memory::MemoryType::Usuable:
-            case memory::MemoryType::EfiRuntimeCode:
-            case memory::MemoryType::EfiRuntimeData:
-                mm.mm_type = MULTIBOOT_MMAP_AVAIL;
-                break;
-            default:
-                mm.mm_type = 0;
-                break;
-
-        }
-    }
-    mb->mb_mmap_length = mb->mb_mmap_addr + n * sizeof(MULTIBOOT_MMAP);
 
     // We are in full control of memory now! Just memcpy stuff in the correct place
     // TODO: We could just leave it there and tell the kernel, but that is for later
@@ -157,7 +130,7 @@ void Execute()
         "cli\n"
         "movq %%rax, %%cr3\n"
         "jmp *%%rbx\n"
-    : : "a" (pd_phys), "b" (entry), "D" (mb));
+    : : "a" (pd_phys), "b" (entry), "D" (lchan));
 
     for(;;);
 }
