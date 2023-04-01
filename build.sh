@@ -3,9 +3,9 @@
 . ./settings.sh
 
 OUTDIR=target # cross-compiled binaries end up here
-OUTDIR_KERNEL=target-kernel # kernel ends up here
-OUTDIR_EFI=target-efi # used to generate efi image
-OUTDIR_IMAGES=images # images end up here
+OUTDIR_EXT2=${OUTDIR}/ext2 # used to generate ext2 image
+OUTDIR_EFI=${OUTDIR}/efi # used to generate efi image
+OUTDIR_IMAGES=${OUTDIR}/images # images end up here
 MAKE_ARGS=
 
 # parse options
@@ -65,25 +65,22 @@ fi
 # clean
 if [ "$CLEAN_TARGET" -ne 0 ]; then
     rm -rf ${OUTDIR}
-    rm -rf ${OUTDIR_KERNEL}
-    rm -rf ${OUTDIR_EFI}
 fi
 mkdir -p ${TOOLCHAIN}
-mkdir -p ${OUTDIR}
-mkdir -p ${OUTDIR_KERNEL}
+mkdir -p ${OUTDIR_EXT2}
 mkdir -p ${OUTDIR_EFI}
 mkdir -p ${OUTDIR_IMAGES}
 TOOLCHAIN=`realpath ${TOOLCHAIN}`
-OUTDIR=`realpath ${OUTDIR}`
-OUTDIR_KERNEL=`realpath ${OUTDIR_KERNEL}`
+OUTDIR_EXT2=`realpath ${OUTDIR_EXT2}`
 OUTDIR_EFI=`realpath ${OUTDIR_EFI}`
 
 export PATH=${TOOLCHAIN}/bin:${PATH}
 
-KERNEL_DIRTY=0
 TARGET_DIRTY=0
 LOADER_DIRTY=0
 IMAGE_DIRTY=0
+
+mkdir -p build
 
 if [ "$BUILD_SYSROOT" -ne "0" -o \( "${ONLY_REQUESTED_TARGETS}" -eq "0" -a ! -f "${SYSROOT}/usr/include/dogfood/types.h" \) ]; then
     echo "*** Installing kernel headers (sysroot)"
@@ -128,16 +125,15 @@ if [ "$BUILD_SYSROOT" -ne "0" -o \( "${ONLY_REQUESTED_TARGETS}" -eq "0" -a ! -f 
     cd ../..
 fi
 
-if [ "${BUILD_KERNEL}" -ne "0" -o \( "${ONLY_REQUESTED_TARGETS}" -eq "0" -a ! -f "${OUTDIR_KERNEL}/kernel.mb" \) ]; then
+if [ "${BUILD_KERNEL}" -ne "0" -o \( "${ONLY_REQUESTED_TARGETS}" -eq "0" -a ! -f "${OUTDIR_EXT2}/kernel.elf" \) ]; then
     echo "*** Building kernel"
     rm -rf build/kernel
     mkdir -p build/kernel
     cd build/kernel
-    cmake -GNinja -DCMAKE_TOOLCHAIN_FILE=${TOOLCHAIN_FILE} -DCMAKE_INSTALL_PREFIX=${OUTDIR_KERNEL} ../..
-    ninja kernel_mb install
+    cmake -GNinja -DCMAKE_TOOLCHAIN_FILE=${TOOLCHAIN_FILE} ../..
+    ninja kernel.elf
     cd ../..
-    cp build/kernel/kernel/kernel.elf ${OUTDIR}
-    KERNEL_DIRTY=1
+    cp build/kernel/kernel/kernel.elf ${OUTDIR_EXT2}
     TARGET_DIRTY=1
 fi
 
@@ -154,70 +150,70 @@ if [ "${BUILD_LOADER}" -ne "0" -o \( "${ONLY_REQUESTED_TARGETS}" -eq "0" -a ! -f
     LOADER_DIRTY=1
 fi
 
-if [ "$BUILD_TARGET" -ne "0" -o \( "${ONLY_REQUESTED_TARGETS}" -eq "0" -a ! -f "${OUTDIR}/bin/sh" \) ]; then
+if [ "$BUILD_TARGET" -ne "0" -o \( "${ONLY_REQUESTED_TARGETS}" -eq "0" -a ! -f "${OUTDIR_EXT2}/bin/sh" \) ]; then
     echo "*** Building dash (target)"
     cd userland/dash-0.5.10.2
     make clean || true
-    CFLAGS="--sysroot ${SYSROOT} -DJOBS=0" ./configure --host=${TARGET} --prefix=${OUTDIR}
+    CFLAGS="--sysroot ${SYSROOT} -DJOBS=0" ./configure --host=${TARGET} --prefix=${OUTDIR_EXT2}
     make ${MAKE_ARGS}
     make install
-    mv ${OUTDIR}/bin/dash ${OUTDIR}/bin/sh
+    mv ${OUTDIR_EXT2}/bin/dash ${OUTDIR_EXT2}/bin/sh
     cd ../..
     TARGET_DIRTY=1
 fi
 
-if [ "$BUILD_TARGET" -ne "0" -o \( "${ONLY_REQUESTED_TARGETS}" -eq "0" -a ! -f "${OUTDIR}/bin/ls" \) ]; then
+if [ "$BUILD_TARGET" -ne "0" -o \( "${ONLY_REQUESTED_TARGETS}" -eq "0" -a ! -f "${OUTDIR_EXT2}/bin/ls" \) ]; then
     echo "*** Building coreutils (target)"
     cd userland/coreutils-8.31
     make clean || true
-    CFLAGS="--sysroot ${SYSROOT} -DOK_TO_USE_1S_CLOCK" ./configure --host=${TARGET} --prefix=${OUTDIR}
+    CFLAGS="--sysroot ${SYSROOT} -DOK_TO_USE_1S_CLOCK" ./configure --host=${TARGET} --prefix=${OUTDIR_EXT2}
     make ${MAKE_ARGS}
     make install
     cd ../..
     TARGET_DIRTY=1
 fi
 
-if [ "$BUILD_TARGET" -ne "0" -o \( "${ONLY_REQUESTED_TARGETS}" -eq "0" -a ! -f "${OUTDIR}/sbin/init" \) ]; then
+if [ "$BUILD_TARGET" -ne "0" -o \( "${ONLY_REQUESTED_TARGETS}" -eq "0" -a ! -f "${OUTDIR_EXT2}/sbin/init" \) ]; then
     echo "*** Building init (target)"
     rm -rf build/init
     mkdir -p build/init
     cd build/init
-    cmake -GNinja -DCMAKE_TOOLCHAIN_FILE=${TOOLCHAIN_FILE} -DCMAKE_INSTALL_PREFIX=${OUTDIR} ../../userland/init
+    cmake -GNinja -DCMAKE_TOOLCHAIN_FILE=${TOOLCHAIN_FILE} -DCMAKE_INSTALL_PREFIX=${OUTDIR_EXT2} ../../userland/init
     ninja install
     cd ../..
     TARGET_DIRTY=1
 fi
 
-if [ "$BUILD_TARGET" -ne "0" -o \( "${ONLY_REQUESTED_TARGETS}" -eq "0" -a ! -f "${OUTDIR}/bin/ps" \) ]; then
+if [ "$BUILD_TARGET" -ne "0" -o \( "${ONLY_REQUESTED_TARGETS}" -eq "0" -a ! -f "${OUTDIR_EXT2}/bin/ps" \) ]; then
     echo "*** Building ps (target)"
     rm -rf build/ps
     mkdir -p build/ps
     cd build/ps
-    cmake -GNinja -DCMAKE_TOOLCHAIN_FILE=${TOOLCHAIN_FILE} -DCMAKE_INSTALL_PREFIX=${OUTDIR} ../../userland/ps
+    cmake -GNinja -DCMAKE_TOOLCHAIN_FILE=${TOOLCHAIN_FILE} -DCMAKE_INSTALL_PREFIX=${OUTDIR_EXT2} ../../userland/ps
     ninja install
     cd ../..
     TARGET_DIRTY=1
 fi
 
-if [ "$BUILD_TARGET" -ne "0" -o \( "${ONLY_REQUESTED_TARGETS}" -eq "0" -a ! -f "${OUTDIR}/usr/bin/strace" \) ]; then
+if [ "$BUILD_TARGET" -ne "0" -o \( "${ONLY_REQUESTED_TARGETS}" -eq "0" -a ! -f "${OUTDIR_EXT2}/usr/bin/strace" \) ]; then
     echo "*** Building strace (target)"
     rm -rf build/strace
     mkdir -p build/strace
     cd build/strace
-    cmake -GNinja -DCMAKE_TOOLCHAIN_FILE=${TOOLCHAIN_FILE} -DCMAKE_INSTALL_PREFIX=${OUTDIR} ../../userland/strace
+    cmake -GNinja -DCMAKE_TOOLCHAIN_FILE=${TOOLCHAIN_FILE} -DCMAKE_INSTALL_PREFIX=${OUTDIR_EXT2} ../../userland/strace
     ninja install
     cd ../..
     TARGET_DIRTY=1
 fi
 
-if [ "$BUILD_TARGET" -ne "0" -o \( "${ONLY_REQUESTED_TARGETS}" -eq "0" -a ! -f "${OUTDIR}/usr/bin/ld" \) ]; then
+if [ "$BUILD_TARGET" -ne "0" -o \( "${ONLY_REQUESTED_TARGETS}" -eq "0" -a ! -f "${OUTDIR_EXT2}/usr/bin/ld" \) ]; then
     echo "*** Building binutils (target)"
     rm -rf build/binutils-target
     mkdir -p build/binutils-target
     cd build/binutils-target
     CFLAGS="--sysroot ${SYSROOT}" ../../userland/binutils-${BINUTILS_VERSION}/configure --host=${TARGET} --target=${TARGET} --disable-nls --disable-werror --prefix=/usr
     make ${MAKE_ARGS}
-    make ${MAKE_ARGS} install DESTDIR=${OUTDIR}
+    make ${MAKE_ARGS} install DESTDIR=${OUTDIR_EXT2}
     cd ../..
     TARGET_DIRTY=1
 fi
@@ -258,7 +254,7 @@ if [ "$BUILD_TARGET" -ne "0" -o \( "${ONLY_REQUESTED_TARGETS}" -eq "0" -a ! -f "
     TARGET_DIRTY=1
 fi
 
-if [ "$BUILD_TARGET" -ne "0" -o \( "${ONLY_REQUESTED_TARGETS}" -eq "0" -a ! -f "${OUTDIR}/usr/bin/gcc" \) ]; then
+if [ "$BUILD_TARGET" -ne "0" -o \( "${ONLY_REQUESTED_TARGETS}" -eq "0" -a ! -f "${OUTDIR_EXT2}/usr/bin/gcc" \) ]; then
     echo "*** Building gcc (target)"
     rm -rf build/gcc-target
     mkdir -p build/gcc-target
@@ -269,34 +265,34 @@ if [ "$BUILD_TARGET" -ne "0" -o \( "${ONLY_REQUESTED_TARGETS}" -eq "0" -a ! -f "
     make ${MAKE_ARGS} configure-build-libcpp
     (cd build-x86_64-pc-linux-gnu/libcpp && make ${MAKE_ARGS})
     make ${MAKE_ARGS}
-    make ${MAKE_ARGS} install DESTDIR=${OUTDIR}
+    make ${MAKE_ARGS} install DESTDIR=${OUTDIR_EXT2}
     cd ../..
     TARGET_DIRTY=1
 fi
 
-if [ "$BUILD_TARGET" -ne "0" -o \( "${ONLY_REQUESTED_TARGETS}" -eq "0" -a ! -f "${OUTDIR}/usr/lib/libc.a" \) ]; then
+if [ "$BUILD_TARGET" -ne "0" -o \( "${ONLY_REQUESTED_TARGETS}" -eq "0" -a ! -f "${OUTDIR_EXT2}/usr/lib/libc.a" \) ]; then
     echo "*** Building newlib (target)"
     rm -rf build/newlib-target
     mkdir build/newlib-target
     cd build/newlib-target
-    cmake -GNinja -DCMAKE_TOOLCHAIN_FILE=${TOOLCHAIN_FILE} -DCMAKE_INSTALL_PREFIX=${OUTDIR} ../../lib/newlib-3.1.0
+    cmake -GNinja -DCMAKE_TOOLCHAIN_FILE=${TOOLCHAIN_FILE} -DCMAKE_INSTALL_PREFIX=${OUTDIR_EXT2} ../../lib/newlib-3.1.0
     ninja install
     cd ../..
     TARGET_DIRTY=1
 fi
 
-if [ "$BUILD_TARGET" -ne "0" -o \( "${ONLY_REQUESTED_TARGETS}" -eq "0" -a ! -f "${OUTDIR}/usr/include/dogfood/types.h" \) ]; then
+if [ "$BUILD_TARGET" -ne "0" -o \( "${ONLY_REQUESTED_TARGETS}" -eq "0" -a ! -f "${OUTDIR_EXT2}/usr/include/dogfood/types.h" \) ]; then
     echo "*** Installing kernel headers (target)"
     rm -rf build/headers-target
     mkdir build/headers-target
     cd build/headers-target
-    cmake -GNinja -DCMAKE_TOOLCHAIN_FILE=${TOOLCHAIN_FILE} -DCMAKE_INSTALL_PREFIX=${OUTDIR} ../../kernel-headers
+    cmake -GNinja -DCMAKE_TOOLCHAIN_FILE=${TOOLCHAIN_FILE} -DCMAKE_INSTALL_PREFIX=${OUTDIR_EXT2} ../../kernel-headers
     ninja install
     cd ../..
     TARGET_DIRTY=1
 fi
 
-if [ "$BUILD_TARGET" -ne "0" -o \( "${ONLY_REQUESTED_TARGETS}" -eq "0" -a ! -f "${OUTDIR}/usr/bin/gdb" \) ]; then
+if [ "$BUILD_TARGET" -ne "0" -o \( "${ONLY_REQUESTED_TARGETS}" -eq "0" -a ! -f "${OUTDIR_EXT2}/usr/bin/gdb" \) ]; then
     echo "*** Building gdb (target)"
     rm -rf build/gdb-target
     mkdir -p build/gdb-target
@@ -304,7 +300,7 @@ if [ "$BUILD_TARGET" -ne "0" -o \( "${ONLY_REQUESTED_TARGETS}" -eq "0" -a ! -f "
     CFLAGS="--sysroot ${SYSROOT}" ../../userland/gdb-${GDB_VERSION}/configure --host=${TARGET} --target=${TARGET} --prefix=/usr --with-libgmp-prefix=${SYSROOT}
    CFLAGS="--sysroot /tmp/dogfood-sysroot" ../../userland/gdb-12.1/configure --host=x86_64-elf-dogfood --target=x86_64-elf-dogfood --prefix=/usr --with-libgmp-prefix=/tmp/dogfood-sysroot
     make ${MAKE_ARGS}
-    make ${MAKE_ARGS} install DESTDIR=${OUTDIR}
+    make ${MAKE_ARGS} install DESTDIR=${OUTDIR_EXT2}
     cd ../..
     TARGET_DIRTY=1
 fi
@@ -312,31 +308,16 @@ fi
 if [ "$TARGET_DIRTY" -ne "0" -o \( "${ONLY_REQUESTED_TARGETS}" -eq "0" -a ! -f "${OUTDIR_IMAGES}/ext2.img" \) ]; then
     echo "*** Creating ext2 image..."
     rm -f ${OUTDIR_IMAGES}/ext2.img
-    mkfs.ext2 -d ${OUTDIR} ${OUTDIR_IMAGES}/ext2.img 768m
+    mkfs.ext2 -d ${OUTDIR_EXT2} ${OUTDIR_IMAGES}/ext2.img 768m
     IMAGE_DIRTY=1
-fi
-
-if [ "$KERNEL_DIRTY" -ne "0" -o \( "${ONLY_REQUESTED_TARGETS}" -eq "0" -a ! -f "${OUTDIR_IMAGES}/kernel.iso" \) ]; then
-    echo "*** Creating kernel ISO image..."
-    mkdir -p build/kernel-iso
-    mkdir -p build/kernel-iso/boot/grub
-    cp build/kernel/kernel/kernel.mb build/kernel-iso
-    echo "set timeout=0
-set default=0
-
-menuentry "Dogfood" {
-    multiboot /kernel.mb
-    boot
-}
-" > build/kernel-iso/boot/grub/grub.cfg
-    grub-mkrescue -o ${OUTDIR_IMAGES}/kernel.iso build/kernel-iso
 fi
 
 if [ "$LOADER_DIRTY" -ne "0" -o \( "${ONLY_REQUESTED_TARGETS}" -eq "0" -a ! -f "${OUTDIR_IMAGES}/efi.img" \) ]; then
     echo "*** Creating EFI image..."
-    dd if=/dev/zero of=${OUTDIR_IMAGES}/efi.img bs=1M count=32
-    mformat -i ${OUTDIR_IMAGES}/efi.img ::/
-    mcopy -i ${OUTDIR_IMAGES}/efi.img -s target-efi/* ::/
+    EFI_IMAGE=${OUTDIR_IMAGES}/efi.img
+    dd if=/dev/zero of=${EFI_IMAGE} bs=1M count=32
+    mformat -i ${EFI_IMAGE} ::/
+    mcopy -i ${EFI_IMAGE} -s ${OUTDIR_EFI}/* ::/
     IMAGE_DIRTY=1
 fi
 
@@ -344,20 +325,20 @@ if [ "$IMAGE_DIRTY" -ne "0" -o \( "${ONLY_REQUESTED_TARGETS}" -eq "0" -a ! -f "$
     echo "*** Creating Dogfood image..."
     if [ ! -f "${OUTDIR_IMAGES}/dogfood.img" ]; then
         dd if=/dev/zero of=${OUTDIR_IMAGES}/dogfood.img bs=1M count=1024
-        # new gpt schema, make 2 partition, change first partition to EFI system
+        # new gpt schema, make 2 partition, first is 32MB, change first partition to EFI system
         echo 'g\nn\n1\n2048\n+32M\nn\n2\n\n\nt\n1\n1\nw\n'|fdisk ${OUTDIR_IMAGES}/dogfood.img
     fi
     if [ "$LOADER_DIRTY" -ne "0" ]; then
-        EFI_SECTOR=`fdisk -l images/dogfood.img|grep "EFI System"|awk '{print $2*512}'`
+        EFI_SECTOR=`fdisk -l ${OUTDIR_IMAGES}/dogfood.img|grep "EFI System"|awk '{print $2*512}'`
         dd if=${OUTDIR_IMAGES}/efi.img of=${OUTDIR_IMAGES}/dogfood.img bs=${EFI_SECTOR} seek=1 conv=notrunc
     fi
     if [ "$TARGET_DIRTY" -ne "0" ]; then
-        EXT2_SECTOR=`fdisk -l images/dogfood.img|grep "Linux filesystem"|awk '{print $2*512}'`
+        EXT2_SECTOR=`fdisk -l ${OUTDIR_IMAGES}/dogfood.img|grep "Linux filesystem"|awk '{print $2*512}'`
         dd if=${OUTDIR_IMAGES}/ext2.img of=${OUTDIR_IMAGES}/dogfood.img bs=${EXT2_SECTOR} seek=1 conv=notrunc
     fi
 fi
 
 if [ "${ONLY_REQUESTED_TARGETS}" -eq "0" -a ! -f "${OUTDIR_IMAGES}/run.sh" ]; then
-    echo "qemu-system-x86_64 -serial stdio -hda ext2.img -cdrom kernel.iso -boot d \$@" > ${OUTDIR_IMAGES}/run.sh
+    echo "qemu-system-x86_64 -bios /usr/share/qemu/OVMF.fd -drive format=raw,file=dogfood.img,if=ide,media=disk -serial stdio \$@" > ${OUTDIR_IMAGES}/run.sh
     chmod 755 ${OUTDIR_IMAGES}/run.sh
 fi

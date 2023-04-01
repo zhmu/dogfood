@@ -47,12 +47,11 @@ You can then build |dogfood| using the following commands:
 Running the result
 -------------------
 
-Upon successful completion, the ``images/`` directory contains the following
-files:
+Upon successful completion, the ``target/images/`` directory contains the
+following files:
 
-- ``ext2.img``: ext2fs filesystem image of the root filesystem
-- ``kernel.iso``: bootable ISO image containg the kernel and bootloader
-- ``run.sh``: script to launch a `qemu <https://www.qemu.org>`_ emulator with the two images
+- ``dogfood.img``: bootable hard disk image containing an EFI and ext2 partition
+- ``run.sh``: script to launch a `qemu <https://www.qemu.org>`_ emulator with the disk image
 
 |dogfood| does not currently support a VGA console; this means that any
 interaction is to be performed using the serial port (mapped to the standard in/output
