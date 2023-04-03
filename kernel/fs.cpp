@@ -103,9 +103,11 @@ namespace fs
                 chunkLen = bio::BlockSize;
 
             const uint32_t blockNr = ext2::bmap(inode, offset / bio::BlockSize, false);
-            auto& buf = bio::bread(inode.dev, blockNr);
-            memcpy(d, buf.data + (offset % bio::BlockSize), chunkLen);
-            bio::brelse(buf);
+            {
+                auto buf = bio::ReadBlock(inode.dev, blockNr);
+                assert(buf);
+                memcpy(d, buf->data + (offset % bio::BlockSize), chunkLen);
+            }
 
             d += chunkLen;
             offset += chunkLen;
@@ -129,10 +131,10 @@ namespace fs
                 chunkLen = bio::BlockSize;
 
             const uint32_t blockNr = ext2::bmap(inode, offset / bio::BlockSize, true);
-            auto& buf = bio::bread(inode.dev, blockNr);
-            memcpy(buf.data + (offset % bio::BlockSize), s, chunkLen);
-            bio::bwrite(buf);
-            bio::brelse(buf);
+            auto buf = bio::ReadBlock(inode.dev, blockNr);
+            assert(buf);
+            memcpy(buf->data + (offset % bio::BlockSize), s, chunkLen);
+            bio::WriteBlock(std::move(buf));
 
             s += chunkLen;
             offset += chunkLen;

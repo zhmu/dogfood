@@ -2,6 +2,7 @@
 #include "bio.h"
 #include "fs.h"
 #include "lib.h"
+#include <optional>
 #include <dogfood/errno.h>
 
 // XXX Disable this warning for now; x86 can handle the unaligned access just fine
@@ -22,10 +23,10 @@ namespace ext2
         void ReadBlocks(fs::Device dev, bio::BlockNumber blockNr, unsigned int count, Buffer* dest)
         {
             for (unsigned int n = 0; n < count; ++n) {
-                auto& buf = bio::bread(dev, blockNr + n);
+                auto buf = bio::ReadBlock(dev, blockNr + n);
+                assert(buf);
                 memcpy(
-                    reinterpret_cast<char*>(dest) + n * bio::BlockSize, buf.data, bio::BlockSize);
-                bio::brelse(buf);
+                    reinterpret_cast<char*>(dest) + n * bio::BlockSize, buf->data, bio::BlockSize);
             }
         }
 
@@ -34,12 +35,12 @@ namespace ext2
             fs::Device dev, bio::BlockNumber blockNr, unsigned int count, const Buffer* source)
         {
             for (unsigned int n = 0; n < count; ++n) {
-                auto& buf = bio::bread(dev, blockNr + n);
+                auto buf = bio::ReadBlock(dev, blockNr + n);
+                assert(buf);
                 memcpy(
-                    buf.data, reinterpret_cast<const char*>(source) + n * bio::BlockSize,
+                    buf->data, reinterpret_cast<const char*>(source) + n * bio::BlockSize,
                     bio::BlockSize);
-                bio::bwrite(buf);
-                bio::brelse(buf);
+                bio::WriteBlock(std::move(buf));
             }
         }
 
@@ -54,21 +55,21 @@ namespace ext2
 
         void ReadBlockGroup(fs::Device dev, const int bgNumber, BlockGroup& blockGroup)
         {
-            auto& buf = bio::bread(dev, CalculateBlockGroupBioBlockNumber(bgNumber));
+            auto buf = bio::ReadBlock(dev, CalculateBlockGroupBioBlockNumber(bgNumber));
+            assert(buf);
             memcpy(
                 reinterpret_cast<void*>(&blockGroup),
-                buf.data + (bgNumber * sizeof(BlockGroup) % bio::BlockSize), sizeof(BlockGroup));
-            bio::brelse(buf);
+                buf->data + (bgNumber * sizeof(BlockGroup) % bio::BlockSize), sizeof(BlockGroup));
         }
 
         void WriteBlockGroup(fs::Device dev, const int bgNumber, BlockGroup& blockGroup)
         {
-            auto& buf = bio::bread(dev, CalculateBlockGroupBioBlockNumber(bgNumber));
+            auto buf = bio::ReadBlock(dev, CalculateBlockGroupBioBlockNumber(bgNumber));
+            assert(buf);
             memcpy(
-                buf.data + (bgNumber * sizeof(BlockGroup) % bio::BlockSize),
+                buf->data + (bgNumber * sizeof(BlockGroup) % bio::BlockSize),
                 reinterpret_cast<void*>(&blockGroup), sizeof(BlockGroup));
-            bio::bwrite(buf);
-            bio::brelse(buf);
+            bio::WriteBlock(std::move(buf));
         }
 
         void UpdateSuperblock(fs::Device dev)
@@ -96,11 +97,11 @@ namespace ext2
             return blockNr;
         }();
 
-        auto& buf = bio::bread(dev, inodeBlockNr);
+        auto buf = bio::ReadBlock(dev, inodeBlockNr);
+        assert(buf);
         unsigned int idx = (iindex * superblock.s_inode_size) % bio::BlockSize;
-        const Inode& in = *reinterpret_cast<Inode*>(&buf.data[idx]);
+        const Inode& in = *reinterpret_cast<Inode*>(&buf->data[idx]);
         inode = in;
-        bio::brelse(buf);
     }
 
     template<typename Function>
@@ -134,12 +135,12 @@ namespace ext2
             return blockNr;
         }();
 
-        auto& buf = bio::bread(inode.dev, inodeBlockNr);
+        auto buf = bio::ReadBlock(inode.dev, inodeBlockNr);
+        assert(buf);
         unsigned int idx = (iindex * superblock.s_inode_size) % bio::BlockSize;
-        Inode& in = *reinterpret_cast<Inode*>(&buf.data[idx]);
+        Inode& in = *reinterpret_cast<Inode*>(&buf->data[idx]);
         in = *inode.ext2inode;
-        bio::bwrite(buf);
-        bio::brelse(buf);
+        bio::WriteBlock(std::move(buf));
     }
 
     template<typename Strategy>
@@ -154,20 +155,19 @@ namespace ext2
             if (Strategy::HasFreeItems(blockGroup)) {
                 const auto bitmapFirstBlockNr = Strategy::GetBitmapBlock(blockGroup) * biosPerBlock;
                 for (int itemIndex = 0; itemIndex < Strategy::GetItemsPerGroup(); ++itemIndex) {
-                    auto& buf = bio::bread(dev, bitmapFirstBlockNr + (itemIndex / bitsPerBlock));
-                    auto& bitmapPtr = buf.data[(itemIndex % bitsPerBlock) / 8];
+                    auto buf = bio::ReadBlock(dev, bitmapFirstBlockNr + (itemIndex / bitsPerBlock));
+                    assert(buf);
+                    auto& bitmapPtr = buf->data[(itemIndex % bitsPerBlock) / 8];
                     auto bitmapBit = (1 << (itemIndex % 8));
                     if ((bitmapPtr & bitmapBit) == 0) {
                         inum = (bgroup * Strategy::GetItemsPerGroup()) + itemIndex;
                         bitmapPtr |= bitmapBit;
-                        bio::bwrite(buf);
-                        bio::brelse(buf);
+                        bio::WriteBlock(std::move(buf));
 
                         Strategy::DecrementFreeItemCount(blockGroup);
                         WriteBlockGroup(dev, bgroup, blockGroup);
                         return true;
                     }
-                    bio::brelse(buf);
                 }
             }
             bgroup = (bgroup + 1) % numberOfBlockGroups;
@@ -185,16 +185,15 @@ namespace ext2
         ReadBlockGroup(dev, bgroup, blockGroup);
 
         const auto bitmapFirstBlockNr = Strategy::GetBitmapBlock(blockGroup) * biosPerBlock;
-        auto& buf = bio::bread(dev, bitmapFirstBlockNr + (itemIndex / bitsPerBlock));
-        auto& bitmapPtr = buf.data[(itemIndex % bitsPerBlock) / 8];
+        auto buf = bio::ReadBlock(dev, bitmapFirstBlockNr + (itemIndex / bitsPerBlock));
+        assert(buf);
+        auto& bitmapPtr = buf->data[(itemIndex % bitsPerBlock) / 8];
         auto bitmapBit = (1 << (itemIndex % 8));
         if ((bitmapPtr & bitmapBit) == 0) {
-            bio::brelse(buf);
             return false;
         }
         bitmapPtr &= ~bitmapBit;
-        bio::bwrite(buf);
-        bio::brelse(buf);
+        bio::WriteBlock(std::move(buf));
 
         Strategy::IncrementFreeItemCount(blockGroup);
         WriteBlockGroup(dev, bgroup, blockGroup);
@@ -259,10 +258,10 @@ namespace ext2
         for (int n = 0; n < pointersPerBlock; ++n) {
             const auto bioBlockNr = blockNr * biosPerBlock + (n / pointersPerBioBlock);
             const auto offset = (n % pointersPerBioBlock) * sizeof(uint32_t);
-            auto& bio = bio::bread(dev, bioBlockNr);
-            const auto indirectBlock = *reinterpret_cast<uint32_t*>(bio.data + offset);
+            auto bio = bio::ReadBlock(dev, bioBlockNr);
+            assert(bio);
+            const auto indirectBlock = *reinterpret_cast<uint32_t*>(bio->data + offset);
             f(indirectBlock);
-            bio::brelse(bio);
         }
     }
 
@@ -352,7 +351,7 @@ namespace ext2
     }
 
     bool AllocateNewBlockAsNecessary(
-        fs::Inode& inode, uint32_t* block, bio::Buffer* bio, const bool createIfNecessary)
+        fs::Inode& inode, uint32_t* block, std::optional<bio::BufferRef> bio, const bool createIfNecessary)
     {
         if (!createIfNecessary)
             return *block != 0;
@@ -366,15 +365,15 @@ namespace ext2
         *block = newBlock;
         ++inode.ext2inode->i_blocks;
         fs::idirty(inode);
-        if (bio != nullptr)
-            bio::bwrite(*bio);
+        if (bio)
+            bio::WriteBlock(std::move(*bio));
 
         // Zero new block content
         for (int n = 0; n < biosPerBlock; ++n) {
-            auto& newBIO = bio::bread(inode.dev, (newBlock * biosPerBlock) + n);
-            memset(newBIO.data, 0, bio::BlockSize);
-            bio::bwrite(newBIO);
-            bio::brelse(newBIO);
+            auto newBIO = bio::ReadBlock(inode.dev, (newBlock * biosPerBlock) + n);
+            assert(newBIO);
+            memset(newBIO->data, 0, bio::BlockSize);
+            bio::WriteBlock(std::move(newBIO));
         }
         return true;
     }
@@ -385,14 +384,14 @@ namespace ext2
         uint32_t bioBlockOffset = inodeBlockNr % biosPerBlock;
         if (ext2BlockNr < 12) {
             auto block = &inode.ext2inode->i_block[ext2BlockNr];
-            if (!AllocateNewBlockAsNecessary(inode, block, nullptr, createIfNecessary))
+            if (!AllocateNewBlockAsNecessary(inode, block, {}, createIfNecessary))
                 return 0;
             return (*block * biosPerBlock) + bioBlockOffset;
         }
 
         int level;
         auto indirectPtr = DetermineIndirect(*inode.ext2inode, ext2BlockNr, level);
-        if (!AllocateNewBlockAsNecessary(inode, indirectPtr, nullptr, createIfNecessary))
+        if (!AllocateNewBlockAsNecessary(inode, indirectPtr, {}, createIfNecessary))
             return 0;
         auto indirect = *indirectPtr;
         int block_shift = superblock.s_log_block_size + 8;
@@ -404,15 +403,15 @@ namespace ext2
                 blockIndex -= bio::BlockSize / sizeof(uint32_t);
                 indirect++;
             }
-            auto& buf = bio::bread(inode.dev, indirect);
+            auto buf = bio::ReadBlock(inode.dev, indirect);
+            assert(buf);
             indirect = [&]() -> uint32_t {
-                const auto blocks = reinterpret_cast<uint32_t*>(buf.data);
+                const auto blocks = reinterpret_cast<uint32_t*>(buf->data);
                 auto blockPtr = &blocks[blockIndex];
-                if (!AllocateNewBlockAsNecessary(inode, blockPtr, &buf, createIfNecessary))
+                if (!AllocateNewBlockAsNecessary(inode, blockPtr, std::move(buf), createIfNecessary))
                     return 0;
                 return *blockPtr;
             }();
-            bio::brelse(buf);
         } while (--level >= 0);
 
         return indirect > 0 ? indirect * biosPerBlock + bioBlockOffset : 0;

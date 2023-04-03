@@ -62,13 +62,13 @@ namespace bio
         }
     }
 
-    Buffer& bget(int dev, BlockNumber blockNumber)
+    BufferRef bget(int dev, BlockNumber blockNumber)
     {
         // Look through the cache; we skip head as it doesn't contain anything useful
         for (auto buf = cache::head.next; buf != &cache::head; buf = buf->next) {
             if (buf->dev == dev && buf->blockNumber == blockNumber) {
                 ++buf->refCount;
-                return *buf;
+                return BufferRef{buf};
             }
         }
 
@@ -82,34 +82,38 @@ namespace bio
                 buf->ioBlockNumber = bdev->first_lba + blockNumber;
                 buf->flags = 0; // not valid, not dirty either
                 buf->refCount = 1;
-                return *buf;
+                return BufferRef{buf};
             }
         }
 
         panic("bget: out of buffers");
     }
 
-    Buffer& bread(int dev, BlockNumber blockNumber)
+    BufferRef ReadBlock(int dev, BlockNumber blockNumber)
     {
-        auto& buf = bget(dev, blockNumber);
-        if ((buf.flags & flag::Valid) == 0)
-            ide::PerformIO(buf);
+        auto buf = bget(dev, blockNumber);
+        if (buf && (buf->flags & flag::Valid) == 0)
+            ide::PerformIO(*buf);
         return buf;
     }
 
-    void bwrite(Buffer& buf)
+    void WriteBlock(BufferRef buf)
     {
-        buf.flags |= flag::Dirty;
-        ide::PerformIO(buf);
+        assert(buf);
+        buf->flags |= flag::Dirty;
+        ide::PerformIO(*buf);
     }
 
-    void brelse(Buffer& buf)
+    namespace detail
     {
-        if (--buf.refCount == 0) {
-            // No longer in use; move to the cache
-            buf.prev->next = buf.next;
-            buf.next->prev = buf.prev;
-            cache::ClaimBuffer(buf);
+        void ReleaseBuffer(Buffer& buf)
+        {
+            if (--buf.refCount == 0) {
+                // No longer in use; move to the cache
+                buf.prev->next = buf.next;
+                buf.next->prev = buf.prev;
+                cache::ClaimBuffer(buf);
+            }
         }
     }
 

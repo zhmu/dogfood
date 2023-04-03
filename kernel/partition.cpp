@@ -74,9 +74,9 @@ namespace partition
         {
             PartitionHeader ph;
             {
-                auto& buf = bio::bread(device, block_nr);
-                memcpy(&ph, buf.data, sizeof(PartitionHeader));
-                bio::brelse(buf);
+                auto buf = bio::ReadBlock(device, block_nr);
+                assert(buf);
+                memcpy(&ph, buf->data, sizeof(PartitionHeader));
             }
 
             if (memcmp(reinterpret_cast<const char*>(ph.signature), reinterpret_cast<const char*>(constants::Signature.data()), constants::Signature.size()) != 0) {
@@ -102,9 +102,9 @@ namespace partition
             auto bytes_left = total_bytes;
             for (bio::BlockNumber blockNr = ph.partition_entry_lba; bytes_left > 0; ++blockNr) {
                 const auto chunk_length = std::min(bytes_left, bio::BlockSize);
-                auto& buf = bio::bread(device, blockNr);
-                memcpy(partition_ptr, buf.data, chunk_length);
-                bio::brelse(buf);
+                auto buf = bio::ReadBlock(device, blockNr);
+                assert(buf);
+                memcpy(partition_ptr, buf->data, chunk_length);
 
                 partition_ptr += chunk_length;
                 bytes_left -= chunk_length;

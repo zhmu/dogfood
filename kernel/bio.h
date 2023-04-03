@@ -1,4 +1,5 @@
 #include "types.h"
+#include <memory>
 
 namespace bio
 {
@@ -21,13 +22,25 @@ namespace bio
         Buffer* prev = nullptr;
         Buffer* next = nullptr;
         Buffer* qnext = nullptr;
+
+        Buffer() = default;
+        Buffer(const Buffer&) = delete;
+        Buffer& operator=(const Buffer&) = delete;
     };
+
+    namespace detail {
+        void ReleaseBuffer(Buffer& buf);
+    }
+
+    struct BufferDeref {
+        void operator()(Buffer* bio) { detail::ReleaseBuffer(*bio); }
+    };
+    using BufferRef = std::unique_ptr<Buffer, BufferDeref>;
 
     void Initialize();
     void RegisterDevice(int device, uint64_t first_lba);
 
-    Buffer& bread(int dev, BlockNumber blockNumber);
-    void bwrite(Buffer& buf);
-    void brelse(Buffer& buf);
+    BufferRef ReadBlock(int dev, BlockNumber blockNumber);
+    void WriteBlock(BufferRef buf);
 
 } // namespace bio
