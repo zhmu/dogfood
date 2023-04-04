@@ -13,10 +13,10 @@ namespace file
     File* Allocate(process::Process& proc)
     {
         for (auto& file : proc.files) {
-            if (file.f_refcount != 0)
+            if (file.f_in_use)
                 continue;
             file = File{};
-            ++file.f_refcount;
+            file.f_in_use = true;
             return &file;
         }
         return nullptr;
@@ -24,9 +24,7 @@ namespace file
 
     void Free(File& file)
     {
-        assert(file.f_refcount > 0);
-        if (--file.f_refcount > 0)
-            return;
+        if (!file.f_in_use) return;
 
         if (file.f_inode != nullptr)
             fs::iput(*file.f_inode);
@@ -47,7 +45,7 @@ namespace file
 
     void Dup(const File& source, File& dest)
     {
-        assert(dest.f_refcount == 0);
+        Free(dest);
         dest = source;
         if (dest.f_inode != nullptr)
             fs::iref(*dest.f_inode);
@@ -64,7 +62,7 @@ namespace file
     {
         for (int n = 0; n < process::maxFiles; ++n) {
             const auto& parentFile = parent.files[n];
-            if (parentFile.f_refcount == 0)
+            if (!parentFile.f_in_use)
                 continue;
             if ((parentFile.f_flags & O_CLOEXEC) != 0)
                 continue;
@@ -126,7 +124,7 @@ namespace file
         if (fd < 0 || fd >= process::maxFiles)
             return nullptr;
         File& file = proc.files[fd];
-        if (file.f_refcount == 0)
+        if (!file.f_in_use)
             return nullptr;
         return &file;
     }
@@ -136,8 +134,7 @@ namespace file
         if (fd < 0 || fd >= process::maxFiles)
             return nullptr;
         File& file = proc.files[fd];
-        while (file.f_refcount > 0)
-            Free(file);
+        Free(file);
         return &file;
     }
 

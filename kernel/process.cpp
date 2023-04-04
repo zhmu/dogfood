@@ -219,8 +219,6 @@ namespace process
             panic("init exiting?");
 
         for (auto& file : current->files) {
-            if (file.f_refcount == 0)
-                continue;
             file::Free(file);
         }
 

@@ -18,7 +18,7 @@ namespace pipe
 namespace file
 {
     struct File {
-        int f_refcount = 0;
+        bool f_in_use = false;
         int f_flags = 0;
         bool f_console = false;
         fs::Inode* f_inode = nullptr;
