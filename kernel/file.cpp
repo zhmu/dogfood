@@ -36,7 +36,6 @@ namespace file
                 --file.f_pipe->p_num_writers;
             else
                 assert(0);
-            Print("closing pipe, flags ", print::Hex{file.f_flags}, " p_num_readers ", file.f_pipe->p_num_readers, " p_num_writers ", file.f_pipe->p_num_writers, "\n");
             process::Wakeup(file.f_pipe);
         }
 

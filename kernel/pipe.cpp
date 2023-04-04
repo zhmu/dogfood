@@ -3,20 +3,11 @@
 #include "syscall.h"
 #include "lib.h"
 #include <dogfood/fcntl.h>
+#include "debug.h"
 
 namespace pipe
 {
-    constexpr auto inline DEBUG_PIPE = false;
-
-    namespace {
-        template<typename... Args>
-        void Debug(Args&&... args)
-        {
-            if constexpr (DEBUG_PIPE) {
-                Print(std::forward<Args>(args)...);
-            }
-        }
-    }
+    constexpr debug::Trace<false> Debug;
 
     int Pipe::Read(void* buf, int len, const bool nonblock)
     {

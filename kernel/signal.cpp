@@ -7,6 +7,7 @@
 #include <bit>
 #include <limits>
 #include <utility>
+#include "debug.h"
 
 /*
  * POSIX-like signal processing: the idea is that we'll deliver any pending
@@ -59,7 +60,7 @@
 namespace signal {
     namespace
     {
-        constexpr auto inline DEBUG_SIGNAL = false;
+        constexpr debug::Trace<false> Debug;
 
         std::optional<int> SignalNumberToIndex(const int sig)
         {
@@ -120,16 +121,7 @@ namespace signal {
             }
             return DefaultAction::Terminate;
         }
-
-        template<typename... Args>
-        void Debug(Args&&... args)
-        {
-            if constexpr (DEBUG_SIGNAL) {
-                Print(std::forward<Args>(args)...);
-            }
-        }
     }
-
 
     Action::Action(const struct sigaction& sa)
         : mask(sa.sa_mask), flags(sa.sa_flags), restorer(sa.sa_restorer)

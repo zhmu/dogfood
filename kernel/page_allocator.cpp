@@ -13,6 +13,7 @@
 
 #include <array>
 #include <numeric>
+#include "debug.h"
 #include "vm.h"
 #include "lib.h"
 #include "page_allocator.h"
@@ -20,7 +21,11 @@
 
 namespace page_allocator
 {
-    constexpr auto inline DEBUG_PAGE_ALLOC = false;
+    namespace
+    {
+        constexpr debug::Trace<false> Debug;
+    }
+
     constexpr auto inline MaxOrders = 10;
 
     using PageList = util::intrusive_list<Page>;
@@ -55,14 +60,6 @@ namespace page_allocator
     namespace
     {
         util::intrusive_list<PageZone> zones;
-
-        template<typename... Args>
-        void Debug(Args&&... args)
-        {
-            if constexpr (DEBUG_PAGE_ALLOC) {
-                Print(std::forward<Args>(args)...);
-            }
-        }
 
         int IsPageInUse(uint8_t* map, int bit) { return (map[bit / 8] & (1 << (bit & 7))) != 0; }
 
