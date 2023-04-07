@@ -16,6 +16,7 @@
 #include <grp.h>
 #include <pwd.h>
 #include <pwd.h>
+#include <dogfood/device.h>
 #include <dogfood/fcntl.h>
 #include <dogfood/utsname.h>
 #include <dogfood/vmop.h>
@@ -230,6 +231,7 @@ SYSCALL2(setregid, int, gid_t, gid_t);
 SYSCALL1(sigpending, int, sigset_t*);
 SYSCALL2(sigwait, int, const sigset_t*, int*);
 SYSCALL1(pipe, int, int*);
+SYSCALL3(mknod, int, const char*, mode_t, dev_t);
 
 int killpg(pid_t pgrp, int sig)
 {
@@ -532,3 +534,19 @@ int seteuid(uid_t uid) { return setreuid(-1, uid); }
 int setegid(gid_t gid) { return setregid(-1, gid); }
 int setuid(uid_t uid) { return setreuid(uid, -1); }
 int setgid(gid_t gid) { return setregid(gid, -1); }
+
+dev_t makedev(unsigned int major, unsigned int minor)
+{
+    return (((major & DOGFOOD_DEV_MAJOR_MASK) << DOGFOOD_DEV_MAJOR_SHIFT) |
+            ((minor & DOGFOOD_DEV_MINOR_MASK) << DOGFOOD_DEV_MINOR_SHIFT));
+}
+
+unsigned int major(dev_t dev)
+{
+    return (dev >> DOGFOOD_DEV_MAJOR_SHIFT) & DOGFOOD_DEV_MAJOR_MASK;
+}
+
+unsigned int minor(dev_t dev)
+{
+    return (dev >> DOGFOOD_DEV_MINOR_SHIFT) & DOGFOOD_DEV_MINOR_MASK;
+}

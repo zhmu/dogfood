@@ -128,3 +128,5 @@
 // Result pipe(int* fds)
 #define SYS_select 74
 // Result select(int nfds, fd_set* readfds, fd_set* writefds, fd_set* exceptfds, struct timeval* tv)
+#define SYS_mknod 75
+// Result mknod(const char* pathname, mode_t mode, dev_t dev)

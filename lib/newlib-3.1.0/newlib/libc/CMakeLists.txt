@@ -833,6 +833,7 @@ set(HEADERS_SYS
     include/sys/stdio.h
     include/sys/string.h
     include/sys/syslimits.h
+    include/sys/sysmacros.h
     include/sys/time.h
     include/sys/timeb.h
     include/sys/times.h

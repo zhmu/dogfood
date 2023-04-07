@@ -1,6 +1,7 @@
 project(kernel-headers C)
 
 set(HEADERS_DOGFOOD
+    include/dogfood/device.h
     include/dogfood/errno.h
     include/dogfood/fcntl.h
     include/dogfood/procinfo.h
