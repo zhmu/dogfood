@@ -306,7 +306,7 @@ if [ "$BUILD_TARGET" -ne "0" -o \( "${ONLY_REQUESTED_TARGETS}" -eq "0" -a ! -f "
 fi
 
 if [ "$BUILD_TARGET" -ne "0" -o \( "${ONLY_REQUESTED_TARGETS}" -eq "0" -a ! -f "${OUTDIR_EXT2}/usr/bin/make" \) ]; then
-    echo "*** Building make(target)"
+    echo "*** Building make (target)"
     rm -rf build/make-target
     mkdir -p build/make-target
     cd build/make-target
@@ -317,11 +317,24 @@ if [ "$BUILD_TARGET" -ne "0" -o \( "${ONLY_REQUESTED_TARGETS}" -eq "0" -a ! -f "
     TARGET_DIRTY=1
 fi
 
+if [ "$BUILD_TARGET" -ne "0" -o \( "${ONLY_REQUESTED_TARGETS}" -eq "0" -a ! -f "${OUTDIR_EXT2}/usr/bin/sed" \) ]; then
+    echo "*** Building sed (target)"
+    rm -rf build/sed-target
+    mkdir -p build/sed-target
+    cd build/sed-target
+    CFLAGS="--sysroot ${SYSROOT}" ../../userland/sed-${SED_VERSION}/configure --host=${TARGET} --target=${TARGET} --prefix=/usr
+    make ${MAKE_ARGS}
+    make ${MAKE_ARGS} install DESTDIR=${OUTDIR_EXT2}
+    cd ../..
+    TARGET_DIRTY=1
+fi
+
 if [ "$TARGET_DIRTY" -ne "0" -o \( "${ONLY_REQUESTED_TARGETS}" -eq "0" -a ! -f "${OUTDIR_IMAGES}/ext2.img" \) ]; then
     echo "*** Creating ext2 image..."
     rm -f ${OUTDIR_IMAGES}/ext2.img
-    mkfs.ext2 -d ${OUTDIR_EXT2} ${OUTDIR_IMAGES}/ext2.img 768m
+    mkfs.ext2 -d ${OUTDIR_EXT2} ${OUTDIR_IMAGES}/ext2.img 1g
     IMAGE_DIRTY=1
+    TARGET_DIRTY=1
 fi
 
 if [ "$LOADER_DIRTY" -ne "0" -o \( "${ONLY_REQUESTED_TARGETS}" -eq "0" -a ! -f "${OUTDIR_IMAGES}/efi.img" \) ]; then
@@ -336,7 +349,7 @@ fi
 if [ "$IMAGE_DIRTY" -ne "0" -o \( "${ONLY_REQUESTED_TARGETS}" -eq "0" -a ! -f "${OUTDIR_IMAGES}/dogfood.img" \) ]; then
     echo "*** Creating Dogfood image..."
     if [ ! -f "${OUTDIR_IMAGES}/dogfood.img" ]; then
-        dd if=/dev/zero of=${OUTDIR_IMAGES}/dogfood.img bs=1M count=1024
+        dd if=/dev/zero of=${OUTDIR_IMAGES}/dogfood.img bs=1M count=2048
         # new gpt schema, make 2 partition, first is 32MB, change first partition to EFI system
         echo 'g\nn\n1\n2048\n+32M\nn\n2\n\n\nt\n1\n1\nw\n'|fdisk ${OUTDIR_IMAGES}/dogfood.img
     fi
