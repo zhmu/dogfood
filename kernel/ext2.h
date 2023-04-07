@@ -27,93 +27,95 @@ namespace ext2
             inline constexpr uint32_t GoodOld = 0;
             inline constexpr uint32_t DynamicRevision = 1;
         } // namespace revision_level
-    }     // namespace constants
+    } // namespace constants
 
-    struct Superblock {
-        uint32_t s_inodes_count;
-        uint32_t s_blocks_count;
-        uint32_t s_r_blocks_count;
-        uint32_t s_free_blocks_count;
-        uint32_t s_free_inodes_count;
-        uint32_t s_first_data_block;
-        uint32_t s_log_block_size;
-        uint32_t s_log_frag_size;
-        uint32_t s_blocks_per_group;
-        uint32_t s_frags_per_group;
-        uint32_t s_inodes_per_group;
-        uint32_t s_mtime;
-        uint32_t s_wtime;
-        uint16_t s_mnt_count;
-        uint16_t s_max_mnt_count;
-        uint16_t s_magic;
-        uint16_t s_state;
-        uint16_t s_errors;
-        uint16_t s_minor_rev_level;
-        uint32_t s_lastcheck;
-        uint32_t s_checkinterval;
-        uint32_t s_creator_os;
-        uint32_t s_rev_level;
-        uint16_t s_def_resuid;
-        uint16_t s_def_resgid;
-        // Note: next fields do not exist in the good old revision
-        uint32_t s_first_ino;
-        uint16_t s_inode_size;
-        uint16_t s_block_group_nr;
-        uint32_t s_feature_compat;
+    namespace on_disk
+    {
+        struct Superblock {
+            uint32_t s_inodes_count;
+            uint32_t s_blocks_count;
+            uint32_t s_r_blocks_count;
+            uint32_t s_free_blocks_count;
+            uint32_t s_free_inodes_count;
+            uint32_t s_first_data_block;
+            uint32_t s_log_block_size;
+            uint32_t s_log_frag_size;
+            uint32_t s_blocks_per_group;
+            uint32_t s_frags_per_group;
+            uint32_t s_inodes_per_group;
+            uint32_t s_mtime;
+            uint32_t s_wtime;
+            uint16_t s_mnt_count;
+            uint16_t s_max_mnt_count;
+            uint16_t s_magic;
+            uint16_t s_state;
+            uint16_t s_errors;
+            uint16_t s_minor_rev_level;
+            uint32_t s_lastcheck;
+            uint32_t s_checkinterval;
+            uint32_t s_creator_os;
+            uint32_t s_rev_level;
+            uint16_t s_def_resuid;
+            uint16_t s_def_resgid;
+            // Note: next fields do not exist in the good old revision
+            uint32_t s_first_ino;
+            uint16_t s_inode_size;
+            uint16_t s_block_group_nr;
+            uint32_t s_feature_compat;
 #define EXT2_FEATURE_COMPAT_DIR_PREALLIC 0x0001
 #define EXT2_FEATURE_COMPAT_IMAGIC_INPODES 0x0002
 #define EXT2_FEATURE_COMPAT_HAS_JOURNAL 0x0004
 #define EXT2_FEATURE_COMPAT_EXT_ATTR 0x0008
 #define EXT2_FEATURE_COMPAT_RESIZE_INO 0x0010
 #define EXT2_FEATURE_COMPAT_DIR_INDEX 0x0020
-        uint32_t s_feature_incompat;
+            uint32_t s_feature_incompat;
 #define EXT2_FEATURE_INCOMPAT_COMPRESSION 0x0001
 #define EXT2_FEATURE_INCOMPAT_FILETYPE 0x0002
 #define EXT2_FEATURE_INCOMPAT_RECOVER 0x0004
 #define EXT2_FEATURE_INCOMPAT_JOURNAL_DEV 0x0008
 #define EXT2_FEATURE_INCOMPAT_META_BG 0x0010
-        uint32_t s_feature_ro_compat;
+            uint32_t s_feature_ro_compat;
 #define EXT2_FEATURE_RO_COMPAT_SPARSE_SUPER 0x0001
 #define EXT2_FEATURE_RO_COMPAT_LARGE_FILE 0x0002
 #define EXT2_FEATURE_RO_COMPAT_BTREE_DIR 0x0004
-        uint8_t s_uuid[16];
-        uint8_t s_volume_name[16];
-        uint8_t s_last_mounted[64];
-        uint32_t s_algo_bitmap;
+            uint8_t s_uuid[16];
+            uint8_t s_volume_name[16];
+            uint8_t s_last_mounted[64];
+            uint32_t s_algo_bitmap;
 #define EXT2_LZV1_ALG 0x0001
 #define EXT2_LZRW3A_ALG 0x0002
 #define EXT2_GZIP_ALG 0x0004
 #define EXT2_BZIP2_ALG 0x0008
 #define EXT2_LZO_ALG 0x0010
-        uint8_t s_prealloc_blocks;
-        uint8_t s_prealloc_dir_blocks;
-        uint16_t _padding0;
-        uint8_t s_journal_uuid[16];
-        uint32_t s_journal_inum;
-        uint32_t s_journal_dev;
-        uint32_t s_last_orphan;
-        uint32_t s_hash_seed[4];
-        uint8_t s_def_hash_version;
-        uint8_t _padding1[3];
-        uint32_t s_default_mount_options;
-        uint32_t s_first_meta_bg;
-        uint8_t _reserved[760];
-    } __attribute__((packed));
-    static_assert(sizeof(Superblock) == 1024);
+            uint8_t s_prealloc_blocks;
+            uint8_t s_prealloc_dir_blocks;
+            uint16_t _padding0;
+            uint8_t s_journal_uuid[16];
+            uint32_t s_journal_inum;
+            uint32_t s_journal_dev;
+            uint32_t s_last_orphan;
+            uint32_t s_hash_seed[4];
+            uint8_t s_def_hash_version;
+            uint8_t _padding1[3];
+            uint32_t s_default_mount_options;
+            uint32_t s_first_meta_bg;
+            uint8_t _reserved[760];
+        } __attribute__((packed));
+        static_assert(sizeof(Superblock) == 1024);
 
-    struct BlockGroup {
-        uint32_t bg_block_bitmap;
-        uint32_t bg_inode_bitmap;
-        uint32_t bg_inode_table;
-        uint16_t bg_free_blocks_count;
-        uint16_t bg_free_inodes_count;
-        uint16_t bg_used_dirs_count;
-        uint16_t bg_pad;
-        uint8_t bg_reserved[12];
-    } __attribute__((packed));
+        struct BlockGroup {
+            uint32_t bg_block_bitmap;
+            uint32_t bg_inode_bitmap;
+            uint32_t bg_inode_table;
+            uint16_t bg_free_blocks_count;
+            uint16_t bg_free_inodes_count;
+            uint16_t bg_used_dirs_count;
+            uint16_t bg_pad;
+            uint8_t bg_reserved[12];
+        } __attribute__((packed));
 
-    struct Inode {
-        uint16_t i_mode;
+        struct Inode {
+            uint16_t i_mode;
 #define EXT2_S_IFMASK 0xf000
 #define EXT2_S_IFSOCK 0xc000
 #define EXT2_S_IFLNK 0xa000
@@ -134,16 +136,16 @@ namespace ext2
 #define EXT2_S_IROTH 0x0004
 #define EXT2_S_IWOTH 0x0002
 #define EXT2_S_IXOTH 0x0001
-        uint16_t i_uid;
-        uint32_t i_size;
-        uint32_t i_atime;
-        uint32_t i_ctime;
-        uint32_t i_mtime;
-        uint32_t i_dtime;
-        uint16_t i_gid;
-        uint16_t i_links_count;
-        uint32_t i_blocks;
-        uint32_t i_flags;
+            uint16_t i_uid;
+            uint32_t i_size;
+            uint32_t i_atime;
+            uint32_t i_ctime;
+            uint32_t i_mtime;
+            uint32_t i_dtime;
+            uint16_t i_gid;
+            uint16_t i_links_count;
+            uint32_t i_blocks;
+            uint32_t i_flags;
 #define EXT2_SECRM_FL 0x00000001
 #define EXT2_UNRM_FL 0x00000002
 #define EXT2_COMPR_FL 0x00000004
@@ -162,15 +164,15 @@ namespace ext2
 #define EXT2_JOURNAL_DATA_FL 0x00040000
 #define EXT2_RESERVED_FL 0x80000000
 
-        uint32_t i_osd1;
+            uint32_t i_osd1;
 #define EXT2_INODE_BLOCKS 15
-        uint32_t i_block[EXT2_INODE_BLOCKS];
-        uint32_t i_generation;
-        uint32_t i_file_acl;
-        uint32_t i_dir_acl;
-        uint32_t i_faddr;
-        uint8_t i_osd2[12];
-    } __attribute__((packed));
+            uint32_t i_block[EXT2_INODE_BLOCKS];
+            uint32_t i_generation;
+            uint32_t i_file_acl;
+            uint32_t i_dir_acl;
+            uint32_t i_faddr;
+            uint8_t i_osd2[12];
+        } __attribute__((packed));
 
 #define EXT2_BAD_INO 1
 #define EXT2_ROOT_INO 2
@@ -179,11 +181,11 @@ namespace ext2
 #define EXT2_BOOT_LOADER_INO 5
 #define EXT2_UNDEL_DIR_INO 6
 
-    struct DirectoryEntry {
-        uint32_t inode;
-        uint16_t rec_len;
-        uint8_t name_len;
-        uint8_t file_type;
+        struct DirectoryEntry {
+            uint32_t inode;
+            uint16_t rec_len;
+            uint8_t name_len;
+            uint8_t file_type;
 #define EXT2_FT_UNKNOWN 0
 #define EXT2_FT_REG_FILE 1
 #define EXT2_FT_DIR 2
@@ -192,14 +194,15 @@ namespace ext2
 #define EXT2_FT_FIFO 5
 #define EXT2_FT_SOCK 6
 #define EXT2_FT_SYMLINK 7
-        uint8_t name[0];
-    } __attribute__((packed));
+            uint8_t name[0];
+        } __attribute__((packed));
+    }
 
 /* Values for old filesystems (that have the good old revision) */
 #define EXT2_GOOD_OLD_INODE_SIZE 128
 
     fs::Inode* Mount(fs::Device dev);
-    void ReadInode(fs::Device dev, fs::InodeNumber inum, Inode& inode);
+    void ReadInode(fs::Device dev, fs::InodeNumber inum, on_disk::Inode& inode);
     void WriteInode(fs::Inode& inode);
     uint32_t bmap(fs::Inode& inode, unsigned int inodeBlockNr, bool createIfNecessary);
     bool ReadDirectory(fs::Inode& dirInode, off_t& offset, fs::DEntry& dentry);

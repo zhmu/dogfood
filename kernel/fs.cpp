@@ -18,7 +18,7 @@ namespace fs
         {
             inline constexpr unsigned int NumberOfInodes = 40;
             Inode inode[NumberOfInodes];
-            ext2::Inode ext2inode[NumberOfInodes];
+            ext2::on_disk::Inode ext2inode[NumberOfInodes];
         } // namespace cache
 
         Inode* rootInode = nullptr;

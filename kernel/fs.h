@@ -4,7 +4,7 @@
 
 struct stat;
 
-namespace ext2
+namespace ext2::on_disk
 {
     struct Inode;
 }
@@ -26,7 +26,7 @@ namespace fs
         InodeNumber inum = 0;
         int refcount = 0;
         bool dirty = false;
-        ext2::Inode* ext2inode = nullptr;
+        ext2::on_disk::Inode* ext2inode = nullptr;
     };
 
     struct DEntry {
