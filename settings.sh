@@ -6,6 +6,7 @@ MPFR_VERSION=4.1.0
 MPC_VERSION=1.2.1
 GDB_VERSION=12.1
 MAKE_VERSION=4.4
+SED_VERSION=4.9
 
 TOOLCHAIN_FILE=/opt/dogfood-toolchain/${TARGET}.txt
 TOOLCHAIN=/opt/dogfood-toolchain # where toolchain items get written
