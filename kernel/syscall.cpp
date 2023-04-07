@@ -67,13 +67,13 @@ namespace
                 if (file == nullptr)
                     return -ENFILE;
 
-                fs::Inode* inode;
-                if (int result = fs::Open(path.get(), flags, mode & mask, inode); result != 0) {
+                const auto result = fs::Open(path.get(), flags, mode & mask);
+                if (!result) {
                     file::Free(*file);
-                    return -result;
+                    return -result.error();
                 }
 
-                file->f_inode = inode;
+                file->f_inode = *result;
                 file->f_flags = flags;
                 return file - &current.files[0];
             }

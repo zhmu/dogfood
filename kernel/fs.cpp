@@ -22,6 +22,128 @@ namespace fs
         } // namespace cache
 
         Inode* rootInode = nullptr;
+
+        int FollowSymLink(Inode*& parent, Inode*& inode, int& depth);
+
+        bool IsolatePathComponent(const char*& path, char component[MaxDirectoryEntryNameLength])
+        {
+            while (*path == '/')
+                ++path;
+            if (*path == '\0')
+                return false;
+
+            auto componentBegin = path;
+            while (*path != '/' && *path != '\0')
+                ++path;
+            int len = path - componentBegin;
+            memcpy(component, componentBegin, len);
+            component[len] = '\0';
+            return true;
+        }
+
+        bool IsDirectoryEmpty(fs::Inode& inode)
+        {
+            off_t offset = 0;
+            fs::DEntry dentry;
+            while (ext2::ReadDirectory(inode, offset, dentry)) {
+                if (strcmp(dentry.d_name, ".") != 0 && strcmp(dentry.d_name, "..") != 0)
+                    return false;
+            }
+            return true;
+        }
+
+        bool IsSymLink(const Inode& inode)
+        {
+            return (inode.ext2inode->i_mode & EXT2_S_IFMASK) == EXT2_S_IFLNK;
+        }
+
+        Inode* LookupInDirectory(Inode& inode, const char* item)
+        {
+            off_t offset = 0;
+            fs::DEntry dentry;
+            while (ext2::ReadDirectory(inode, offset, dentry)) {
+                if (strcmp(dentry.d_name, item) == 0)
+                    return iget(inode.dev, dentry.d_ino);
+            }
+            return nullptr;
+        }
+
+        Inode* Lookup(Inode* current_inode, const char* path, const bool follow, Inode*& parent, char* component, int& depth)
+        {
+            iref(*current_inode);
+
+            parent = nullptr;
+            while (IsolatePathComponent(path, component)) {
+                if (FollowSymLink(parent, current_inode, depth) != 0) {
+                    return nullptr;
+                }
+                auto new_inode = LookupInDirectory(*current_inode, component);
+                if (new_inode == nullptr) {
+                    if (strchr(path, '/') == nullptr) {
+                        parent = current_inode;
+                    } else
+                        iput(*current_inode); // not final piece
+                    return nullptr;
+                }
+                if (parent != nullptr)
+                    iput(*parent);
+                parent = current_inode;
+                current_inode = new_inode;
+            }
+
+            if (follow && IsSymLink(*current_inode)) {
+                if (auto result = FollowSymLink(parent, current_inode, depth); result != 0)
+                    return nullptr;
+            }
+
+            return current_inode;
+        }
+
+        int FollowSymLink(Inode*& parent, Inode*& inode, int& depth)
+        {
+            if (!IsSymLink(*inode)) return 0;
+            ++depth;
+            if (depth == maxSymLinkDepth) return ELOOP;
+
+            char symlink[MaxPathLength];
+            const auto n = fs::Read(*inode, symlink, 0, sizeof(symlink) - 1);
+            if (n <= 0) return EIO;
+            symlink[n] = '\0';
+
+            char component[MaxPathLength];
+            Inode* newParent = nullptr;
+            auto next = Lookup(parent, symlink, true, newParent, component, depth);
+            if (next == nullptr) return ENOENT;
+            iput(*parent);
+            parent= newParent;
+            inode = next;
+            return 0;
+        }
+
+        Inode* namei2(const char* path, const bool follow, Inode*& parent, char* component, fs::Inode* lookup_root = nullptr)
+        {
+            if (path[0] == '/')
+                lookup_root = rootInode;
+            else if (lookup_root == nullptr)
+                lookup_root = process::GetCurrent().cwd;
+            int depth = 0;
+            return Lookup(lookup_root, path, follow, parent, component, depth);
+        }
+
+        bool LookupInodeByNumber(Inode& inode, ino_t inum, fs::DEntry& dentry)
+        {
+            off_t offset = 0;
+            while (ext2::ReadDirectory(inode, offset, dentry)) {
+                if (strcmp(dentry.d_name, ".") == 0)
+                    continue;
+                if (strcmp(dentry.d_name, "..") == 0)
+                    continue;
+                if (dentry.d_ino == inum)
+                    return true;
+            }
+            return false;
+        }
+
     } // namespace
 
     void Initialize()
@@ -148,102 +270,6 @@ namespace fs
         return s - reinterpret_cast<const char*>(src);
     }
 
-    bool IsolatePathComponent(const char*& path, char component[MaxDirectoryEntryNameLength])
-    {
-        while (*path == '/')
-            ++path;
-        if (*path == '\0')
-            return false;
-
-        auto componentBegin = path;
-        while (*path != '/' && *path != '\0')
-            ++path;
-        int len = path - componentBegin;
-        memcpy(component, componentBegin, len);
-        component[len] = '\0';
-        return true;
-    }
-
-    Inode* LookupInDirectory(Inode& inode, const char* item)
-    {
-        off_t offset = 0;
-        fs::DEntry dentry;
-        while (ext2::ReadDirectory(inode, offset, dentry)) {
-            if (strcmp(dentry.d_name, item) == 0)
-                return iget(inode.dev, dentry.d_ino);
-        }
-        return nullptr;
-    }
-
-    Inode* Lookup(Inode* root, const char* path, const bool follow, Inode*& parent, char* component, int& depth);
-
-    bool IsSymLink(const Inode& inode)
-    {
-        return (inode.ext2inode->i_mode & EXT2_S_IFMASK) == EXT2_S_IFLNK;
-    }
-
-    int FollowSymLink(Inode*& parent, Inode*& inode, int& depth)
-    {
-        if (!IsSymLink(*inode)) return 0;
-        ++depth;
-        if (depth == maxSymLinkDepth) return ELOOP;
-
-        char symlink[MaxPathLength];
-        const auto n = fs::Read(*inode, symlink, 0, sizeof(symlink) - 1);
-        if (n <= 0) return EIO;
-        symlink[n] = '\0';
-
-        char component[MaxPathLength];
-        Inode* newParent = nullptr;
-        auto next = Lookup(parent, symlink, true, newParent, component, depth);
-        if (next == nullptr) return ENOENT;
-        iput(*parent);
-        parent= newParent;
-        inode = next;
-        return 0;
-    }
-
-    Inode* Lookup(Inode* current_inode, const char* path, const bool follow, Inode*& parent, char* component, int& depth)
-    {
-        iref(*current_inode);
-
-        parent = nullptr;
-        while (IsolatePathComponent(path, component)) {
-            if (FollowSymLink(parent, current_inode, depth) != 0) {
-                return nullptr;
-            }
-            auto new_inode = LookupInDirectory(*current_inode, component);
-            if (new_inode == nullptr) {
-                if (strchr(path, '/') == nullptr) {
-                    parent = current_inode;
-                } else
-                    iput(*current_inode); // not final piece
-                return nullptr;
-            }
-            if (parent != nullptr)
-                iput(*parent);
-            parent = current_inode;
-            current_inode = new_inode;
-        }
-
-        if (follow && IsSymLink(*current_inode)) {
-            if (auto result = FollowSymLink(parent, current_inode, depth); result != 0)
-                return nullptr;
-        }
-
-        return current_inode;
-    }
-
-    Inode* namei2(const char* path, const bool follow, Inode*& parent, char* component, fs::Inode* lookup_root = nullptr)
-    {
-        if (path[0] == '/')
-            lookup_root = rootInode;
-        else if (lookup_root == nullptr)
-            lookup_root = process::GetCurrent().cwd;
-        int depth = 0;
-        return Lookup(lookup_root, path, follow, parent, component, depth);
-    }
-
     Inode* namei(const char* path, const bool follow, fs::Inode* parent_inode)
     {
         Inode* parent;
@@ -256,35 +282,35 @@ namespace fs
         return nullptr;
     }
 
-    int Open(const char* path, int flags, int mode, Inode*& inode)
+    std::expected<Inode*, int> Open(const char* path, int flags, int mode)
     {
         Inode* parent;
         char component[MaxPathLength];
-        inode = namei2(path, false /* ? */, parent, component);
+        auto inode = namei2(path, false /* ? */, parent, component);
         if (inode != nullptr) {
             if (parent != nullptr)
                 fs::iput(*parent);
             if ((flags & (O_CREAT | O_EXCL)) == (O_CREAT | O_EXCL))
-                return EEXIST;
+                return std::unexpected(EEXIST);
             if (flags & O_TRUNC) {
                 ext2::Truncate(*inode);
             }
-            return 0;
+            return inode;
         }
         if (parent == nullptr)
-            return ENOENT;
+            return std::unexpected(ENOENT);
         if ((flags & O_CREAT) == 0)
-            return ENOENT;
+            return std::unexpected(ENOENT);
 
         auto inum = ext2::AllocateInode(*parent);
         if (inum == 0)
-            return ENOSPC;
+            return std::unexpected(ENOSPC);
 
         auto newInode = fs::iget(parent->dev, inum);
         assert(newInode != nullptr);
         {
             auto& e2i = *newInode->ext2inode;
-            memset(&e2i, 0, sizeof(e2i));
+            e2i = {};
             e2i.i_mode = EXT2_S_IFREG | mode;
             e2i.i_links_count = 1;
         }
@@ -292,13 +318,11 @@ namespace fs
 
         if (!ext2::AddEntryToDirectory(*parent, inum, EXT2_FT_REG_FILE, component)) {
             // TODO deallocate inode
-            return ENOSPC;
+            return std::unexpected(ENOSPC);
         }
         fs::idirty(*parent);
         fs::iput(*parent);
-
-        inode = newInode;
-        return 0;
+        return newInode;
     }
 
     int Unlink(const char* path)
@@ -375,7 +399,7 @@ namespace fs
         assert(newInode != nullptr);
         {
             auto& e2i = *newInode->ext2inode;
-            memset(&e2i, 0, sizeof(e2i));
+            e2i = {};
             e2i.i_mode = EXT2_S_IFLNK | 0777;
             e2i.i_links_count = 1;
         }
@@ -414,17 +438,6 @@ namespace fs
         return -r;
     }
 
-    bool IsDirectoryEmpty(fs::Inode& inode)
-    {
-        off_t offset = 0;
-        fs::DEntry dentry;
-        while (ext2::ReadDirectory(inode, offset, dentry)) {
-            if (strcmp(dentry.d_name, ".") != 0 && strcmp(dentry.d_name, "..") != 0)
-                return false;
-        }
-        return true;
-    }
-
     int RemoveDirectory(const char* path)
     {
         Inode* parent;
@@ -457,20 +470,6 @@ namespace fs
         fs::idirty(*parent);
         fs::iput(*parent);
         return ext2::RemoveDirectory(*inode);
-    }
-
-    bool LookupInodeByNumber(Inode& inode, ino_t inum, fs::DEntry& dentry)
-    {
-        off_t offset = 0;
-        while (ext2::ReadDirectory(inode, offset, dentry)) {
-            if (strcmp(dentry.d_name, ".") == 0)
-                continue;
-            if (strcmp(dentry.d_name, "..") == 0)
-                continue;
-            if (dentry.d_ino == inum)
-                return true;
-        }
-        return false;
     }
 
     int ResolveDirectoryName(Inode& inode, char* buffer, int bufferSize)

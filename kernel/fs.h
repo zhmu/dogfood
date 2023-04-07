@@ -1,6 +1,7 @@
 #pragma once
 
 #include "types.h"
+#include <expected>
 
 struct stat;
 
@@ -49,7 +50,7 @@ namespace fs
     int Link(const char* source, const char* dest);
     int SymLink(const char* source, const char* dest);
 
-    int Open(const char* path, int flags, int mode, Inode*& inode);
+    std::expected<Inode*, int> Open(const char* path, int flags, int mode);
     int MakeDirectory(const char* path, int mode);
     int RemoveDirectory(const char* path);
     int Unlink(const char* path);
