@@ -305,6 +305,18 @@ if [ "$BUILD_TARGET" -ne "0" -o \( "${ONLY_REQUESTED_TARGETS}" -eq "0" -a ! -f "
     TARGET_DIRTY=1
 fi
 
+if [ "$BUILD_TARGET" -ne "0" -o \( "${ONLY_REQUESTED_TARGETS}" -eq "0" -a ! -f "${OUTDIR_EXT2}/usr/bin/make" \) ]; then
+    echo "*** Building make(target)"
+    rm -rf build/make-target
+    mkdir -p build/make-target
+    cd build/make-target
+    CFLAGS="--sysroot ${SYSROOT}" ../../userland/make-${MAKE_VERSION}/configure --host=${TARGET} --target=${TARGET} --prefix=/usr
+    make ${MAKE_ARGS}
+    make ${MAKE_ARGS} install DESTDIR=${OUTDIR_EXT2}
+    cd ../..
+    TARGET_DIRTY=1
+fi
+
 if [ "$TARGET_DIRTY" -ne "0" -o \( "${ONLY_REQUESTED_TARGETS}" -eq "0" -a ! -f "${OUTDIR_IMAGES}/ext2.img" \) ]; then
     echo "*** Creating ext2 image..."
     rm -f ${OUTDIR_IMAGES}/ext2.img
