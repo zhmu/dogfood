@@ -3,10 +3,12 @@
 #include "fs.h"
 #include "pipe.h"
 #include "lib.h"
+#include <dogfood/device.h>
 #include <dogfood/errno.h>
 #include <dogfood/fcntl.h>
 
-#include "hw/console.h"
+#include "device.h"
+#include "ext2.h"
 
 namespace file
 {
@@ -20,6 +22,15 @@ namespace file
             return &file;
         }
         return nullptr;
+    }
+
+    File* AllocateConsole(process::Process& proc)
+    {
+        auto file = Allocate(proc);
+        if (file != nullptr) {
+            file->f_chardev = device::LookupConsole();
+        }
+        return file;
     }
 
     void Free(File& file)
@@ -73,8 +84,8 @@ namespace file
 
     int Write(File& file, const void* buf, int len)
     {
-        if (file.f_console)
-            return console::Write(buf, len);
+        if (file.f_chardev)
+            return file.f_chardev->Write(buf, len);
         if (file.f_pipe)
             return file.f_pipe->Write(buf, len);
 
@@ -85,8 +96,8 @@ namespace file
 
     int Read(File& file, void* buf, int len)
     {
-        if (file.f_console)
-            return console::Read(buf, len);
+        if (file.f_chardev)
+            return file.f_chardev->Read(buf, len);
         if (file.f_pipe)
             return file.f_pipe->Read(buf, len, (file.f_flags & O_NONBLOCK) != 0);
 
@@ -99,8 +110,8 @@ namespace file
     {
         if (file.f_pipe)
             return file.f_pipe->CanRead();
-        if (file.f_console)
-            return console::CanRead();
+        if (file.f_chardev)
+            return file.f_chardev->CanRead();
         return false;
     }
 
@@ -108,8 +119,8 @@ namespace file
     {
         if (file.f_pipe)
             return file.f_pipe->CanWrite();
-        if (file.f_console)
-            return console::CanWrite();
+        if (file.f_chardev)
+            return file.f_chardev->CanWrite();
         return false;
     }
 
@@ -135,6 +146,34 @@ namespace file
         File& file = proc.files[fd];
         Free(file);
         return &file;
+    }
+
+    int Open(process::Process& proc, fs::Inode& inode, int flags)
+    {
+        auto file = file::Allocate(proc);
+        if (file == nullptr)
+            return -ENFILE;
+
+        const auto type = inode.ext2inode->i_mode & EXT2_S_IFMASK;
+        switch(type) {
+            case EXT2_S_IFBLK:
+                file::Free(*file);
+                return -ENODEV;
+            case EXT2_S_IFCHR: {
+                const auto dev = inode.ext2inode->i_block[0];
+                file::Free(*file);
+                auto char_dev = device::LookupCharacterDevice(dev);
+                if (!char_dev) return -ENODEV;
+                file->f_chardev = char_dev;
+                break;
+            }
+            default:
+                file->f_inode = &inode;
+                fs::iref(inode);
+                break;
+        }
+        file->f_flags = flags;
+        return file - &proc.files[0];
     }
 
 } // namespace file

@@ -63,19 +63,15 @@ namespace
 
                 auto& current = process::GetCurrent();
                 const auto mask = (~current.umask) & modeMask;
-                auto file = file::Allocate(current);
-                if (file == nullptr)
-                    return -ENFILE;
 
                 const auto result = fs::Open(path.get(), flags, mode & mask);
                 if (!result) {
-                    file::Free(*file);
                     return -result.error();
                 }
-
-                file->f_inode = *result;
-                file->f_flags = flags;
-                return file - &current.files[0];
+                auto inode = *result;
+                int r = file::Open(current, *inode, flags);
+                fs::iput(*inode);
+                return r;
             }
             case SYS_close: {
                 const auto file = file::FindByIndex(process::GetCurrent(), syscall::GetArgument<1>(*tf));

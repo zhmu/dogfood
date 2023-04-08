@@ -24,13 +24,6 @@ namespace process
         amd64::Context* cpu_context = nullptr;
         int next_pid = 1;
 
-        void AllocateConsoleFile(Process& proc)
-        {
-            auto file = file::Allocate(proc);
-            assert(file != nullptr);
-            file->f_console = true;
-        }
-
         Process* AllocateProcess()
         {
             for (auto& proc : process) {
@@ -280,9 +273,9 @@ namespace process
         assert(init->pid == 1);
 
         init->cwd = fs::namei("/", true);
-        AllocateConsoleFile(*init); // 0, stdin
-        AllocateConsoleFile(*init); // 1, stdout
-        AllocateConsoleFile(*init); // 2, stderr
+        file::AllocateConsole(*init); // 0, stdin
+        file::AllocateConsole(*init); // 1, stdout
+        file::AllocateConsole(*init); // 2, stderr
         vm::SetupForInitProcess(init->vmspace, *init->trapFrame);
 
         init->state = State::Runnable;
