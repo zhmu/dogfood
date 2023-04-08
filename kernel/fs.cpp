@@ -538,4 +538,29 @@ namespace fs
         sbuf.st_blocks = e2i.i_blocks;
         return true;
     }
+
+    int Mknod(const char* path, mode_t mode, dev_t dev)
+    {
+        Inode* parent;
+        char component[MaxPathLength];
+        if (auto inode = namei2(path, true, parent, component); inode != nullptr) {
+            fs::iput(*parent);
+            fs::iput(*inode);
+            return EEXIST;
+        }
+        if (parent == nullptr)
+            return ENOENT;
+
+        const auto type = mode & EXT2_S_IFMASK;
+        if (type != EXT2_S_IFBLK && type != EXT2_S_IFCHR)
+            return EINVAL;
+
+        const auto result = ext2::CreateSpecial(*parent, component, mode, dev);
+        fs::iput(*parent);
+        if (result) {
+            fs::iput(**result);
+            return 0;
+        }
+        return -result.error();
+    }
 } // namespace fs

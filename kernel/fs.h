@@ -49,6 +49,7 @@ namespace fs
     int ResolveDirectoryName(Inode& inode, char* buffer, int bufferSize);
     int Link(const char* source, const char* dest);
     int SymLink(const char* source, const char* dest);
+    int Mknod(const char* path, mode_t mode, dev_t dev);
 
     std::expected<Inode*, int> Open(const char* path, int flags, int mode);
     int MakeDirectory(const char* path, int mode);

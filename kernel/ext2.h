@@ -8,6 +8,7 @@
 
 #include "types.h"
 #include "fs.h"
+#include <expected>
 
 namespace fs
 {
@@ -214,5 +215,6 @@ namespace ext2
     int RemoveDirectory(fs::Inode& inode);
     void Unlink(fs::Inode& inode);
     void Truncate(fs::Inode& inode);
+    std::expected<fs::Inode*, int> CreateSpecial(fs::Inode& parent, const char* name, int mode, dev_t dev);
 
 } // namespace ext2

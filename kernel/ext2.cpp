@@ -636,6 +636,38 @@ namespace ext2
         return 0;
     }
 
+    std::expected<fs::Inode*, int> CreateSpecial(fs::Inode& parent, const char* name, int mode, dev_t dev)
+    {
+        auto inum = ext2::AllocateInode(parent);
+        if (inum == 0)
+            return std::unexpected(ENOSPC);
+
+        int ft = 0;
+        switch(mode & EXT2_S_IFMASK) {
+            case EXT2_S_IFBLK: ft = EXT2_FT_BLKDEV; break;
+            case EXT2_S_IFCHR: ft = EXT2_FT_CHRDEV; break;
+            default: return std::unexpected(EINVAL);
+        }
+
+        auto newInode = fs::iget(parent.dev, inum);
+        assert(newInode != nullptr);
+        {
+            auto& e2i = *newInode->ext2inode;
+            e2i = {};
+            e2i.i_mode = mode;
+            e2i.i_links_count = 1;
+            e2i.i_block[0] = dev;
+        }
+        fs::idirty(*newInode);
+
+        if (!ext2::AddEntryToDirectory(parent, inum, ft, name)) {
+            FreeInode(*newInode);
+            return std::unexpected(ENOSPC);
+        }
+        fs::idirty(parent);
+        return newInode;
+    }
+
     fs::Inode* Mount(fs::Device dev)
     {
         // Piece the superblock together

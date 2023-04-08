@@ -401,6 +401,12 @@ namespace
             case SYS_select: {
                 return select::Select(*tf);
             }
+            case SYS_mknod: {
+                const auto path = syscall::GetArgument<1, const char*>(*tf);
+                const auto mode = syscall::GetArgument<2, mode_t>(*tf);
+                const auto dev = syscall::GetArgument<3, dev_t>(*tf);
+                return -fs::Mknod(path.get(), mode, dev);
+            }
         }
         Print("[", process::GetCurrent().pid, "] unsupported syscall ",
             syscall::GetNumber(*tf), " " , syscall::GetArgument<1>(*tf),
