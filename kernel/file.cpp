@@ -148,22 +148,22 @@ namespace file
         return &file;
     }
 
-    int Open(process::Process& proc, fs::Inode& inode, int flags)
+    std::expected<int, error::Code> Open(process::Process& proc, fs::Inode& inode, int flags)
     {
         auto file = file::Allocate(proc);
         if (file == nullptr)
-            return -ENFILE;
+            return std::unexpected(error::Code::NoFile);
 
         const auto type = inode.ext2inode->i_mode & EXT2_S_IFMASK;
         switch(type) {
             case EXT2_S_IFBLK:
                 file::Free(*file);
-                return -ENODEV;
+                return std::unexpected(error::Code::NoDevice);
             case EXT2_S_IFCHR: {
                 const auto dev = inode.ext2inode->i_block[0];
                 file::Free(*file);
                 auto char_dev = device::LookupCharacterDevice(dev);
-                if (!char_dev) return -ENODEV;
+                if (!char_dev) return std::unexpected(error::Code::NoDevice);
                 file->f_chardev = char_dev;
                 break;
             }

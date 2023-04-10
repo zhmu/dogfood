@@ -1,6 +1,8 @@
 #pragma once
 
 #include "types.h"
+#include "error.h"
+#include <expected>
 
 namespace fs
 {
@@ -39,7 +41,7 @@ namespace file
     File* AllocateByIndex(process::Process& proc, int fd);
     void Dup(const File& source, File& dest);
 
-    int Open(process::Process& proc, fs::Inode& inode, int flags);
+    std::expected<int, error::Code> Open(process::Process& proc, fs::Inode& inode, int flags);
 
     int Write(File& file, const void* buf, int len);
     int Read(File& file, void* buf, int len);

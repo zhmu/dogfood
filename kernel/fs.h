@@ -1,6 +1,7 @@
 #pragma once
 
 #include "types.h"
+#include "error.h"
 #include <expected>
 
 struct stat;
@@ -46,15 +47,15 @@ namespace fs
     void idirty(Inode& inode);
     Inode* namei(const char* path, const bool follow, fs::Inode* parent_inode = nullptr);
     bool Stat(Inode& inode, stat& sbuf);
-    int ResolveDirectoryName(Inode& inode, char* buffer, int bufferSize);
-    int Link(const char* source, const char* dest);
-    int SymLink(const char* source, const char* dest);
-    int Mknod(const char* path, mode_t mode, dev_t dev);
+    std::expected<int, error::Code> ResolveDirectoryName(Inode& inode, char* buffer, int bufferSize);
+    std::expected<int, error::Code> Link(const char* source, const char* dest);
+    std::expected<int, error::Code> SymLink(const char* source, const char* dest);
+    std::expected<int, error::Code> Mknod(const char* path, mode_t mode, dev_t dev);
 
-    std::expected<Inode*, int> Open(const char* path, int flags, int mode);
-    int MakeDirectory(const char* path, int mode);
-    int RemoveDirectory(const char* path);
-    int Unlink(const char* path);
+    std::expected<Inode*, error::Code> Open(const char* path, int flags, int mode);
+    std::expected<int, error::Code> MakeDirectory(const char* path, int mode);
+    std::expected<int, error::Code> RemoveDirectory(const char* path);
+    std::expected<int, error::Code> Unlink(const char* path);
 
     void CloneTable(const process::Process& parent, process::Process& child);
 } // namespace fs

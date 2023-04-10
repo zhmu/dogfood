@@ -3,6 +3,7 @@
 #include "syscall.h"
 #include "exec.h"
 #include "file.h"
+#include "error.h"
 #include "ext2.h"
 #include "pipe.h"
 #include "process.h"
@@ -11,7 +12,6 @@
 #include "signal.h"
 #include "lib.h"
 #include "vm.h"
-#include <dogfood/errno.h>
 #include <dogfood/fcntl.h>
 #include <dogfood/stat.h>
 #include <dogfood/syscall.h>
@@ -23,14 +23,26 @@ namespace {
 
 namespace
 {
-    int DupFD(file::File& file)
+    std::expected<int, error::Code> DupFD(file::File& file)
     {
         auto& current = process::GetCurrent();
         auto file2 = file::Allocate(current);
         if (file2 == nullptr)
-            return -ENFILE;
+            return std::unexpected(error::Code::NoFile);
         file::Dup(file, *file2);
         return file2 - &current.files[0];
+    }
+
+    template<typename T>
+    uint64_t MapError(const std::expected<T, error::Code> result)
+    {
+        assert(!result.has_value());
+        return -static_cast<int>(result.error());
+    }
+
+    uint64_t MapResult(const std::expected<int, error::Code> result)
+    {
+        return result ? *result : MapError(result);
     }
 
     uint64_t DoSyscall(amd64::TrapFrame* tf)
@@ -66,12 +78,12 @@ namespace
 
                 const auto result = fs::Open(path.get(), flags, mode & mask);
                 if (!result) {
-                    return -result.error();
+                    return MapError(result);
                 }
                 auto inode = *result;
-                int r = file::Open(current, *inode, flags);
+                const auto r = file::Open(current, *inode, flags);
                 fs::iput(*inode);
-                return r;
+                return MapResult(r);
             }
             case SYS_close: {
                 const auto file = file::FindByIndex(process::GetCurrent(), syscall::GetArgument<1>(*tf));
@@ -164,7 +176,7 @@ namespace
                 const auto file = file::FindByIndex(process::GetCurrent(), syscall::GetArgument<1>(*tf));
                 if (file == nullptr)
                     return -EBADF;
-                return DupFD(*file);
+                return MapResult(DupFD(*file));
             }
             case SYS_dup2: {
                 const auto sourceFd = syscall::GetArgument<1>(*tf);
@@ -188,7 +200,7 @@ namespace
                 const auto arg = syscall::GetArgument<3>(*tf);
                 switch (op) {
                     case F_DUPFD:
-                        return DupFD(*file);
+                        return MapResult(DupFD(*file));
                     case F_GETFD: {
                         int flags = 0;
                         if (file->f_flags & O_CLOEXEC)
@@ -218,7 +230,7 @@ namespace
                 auto buf = syscall::GetArgument<1, char*>(*tf);
                 const auto len = syscall::GetArgument<2>(*tf);
                 auto& current = process::GetCurrent();
-                return -fs::ResolveDirectoryName(*current.cwd, buf.get(), len);
+                return MapResult(fs::ResolveDirectoryName(*current.cwd, buf.get(), len));
             }
             case SYS_chdir: {
                 const auto buf = syscall::GetArgument<1, char*>(*tf);
@@ -251,7 +263,7 @@ namespace
             case SYS_vmop:
                 return vm::VmOp(*tf);
             case SYS_kill:
-                return signal::kill(*tf);
+                return MapResult(signal::kill(*tf));
             case SYS_clone:
                 return process::Fork(*tf);
             case SYS_waitpid:
@@ -269,9 +281,9 @@ namespace
             case SYS_getppid:
                 return process::GetCurrent().parent->pid;
             case SYS_sigaction:
-                return signal::sigaction(*tf);
+                return MapResult(signal::sigaction(*tf));
             case SYS_sigreturn:
-                return signal::sigreturn(*tf);
+                return MapResult(signal::sigreturn(*tf));
             case SYS_clock_gettime:
                 return -ENOSYS;
             case SYS_chown: {
@@ -309,17 +321,17 @@ namespace
             }
             case SYS_unlink: {
                 const auto path = syscall::GetArgument<1, const char*>(*tf);
-                return -fs::Unlink(path.get());
+                return MapResult(fs::Unlink(path.get()));
             }
             case SYS_mkdir: {
                 const auto mask = (~process::GetCurrent().umask) & modeMask;
                 const auto path = syscall::GetArgument<1, const char*>(*tf);
                 const auto mode = syscall::GetArgument<2, int>(*tf);
-                return -fs::MakeDirectory(path.get(), mode & mask);
+                return MapResult(fs::MakeDirectory(path.get(), mode & mask));
             }
             case SYS_rmdir: {
                 const auto path = syscall::GetArgument<1, const char*>(*tf);
-                return -fs::RemoveDirectory(path.get());
+                return MapResult(fs::RemoveDirectory(path.get()));
             }
             case SYS_fchown: {
                 const auto file = file::FindByIndex(process::GetCurrent(), syscall::GetArgument<1>(*tf));
@@ -350,7 +362,7 @@ namespace
             case SYS_link: {
                 const auto oldPath = syscall::GetArgument<1, const char*>(*tf);
                 const auto newPath = syscall::GetArgument<2, const char*>(*tf);
-                return -fs::Link(oldPath.get(), newPath.get());
+                return MapResult(fs::Link(oldPath.get(), newPath.get()));
             }
             case SYS_readlink: {
                 const auto path = syscall::GetArgument<1, const char*>(*tf);
@@ -370,7 +382,7 @@ namespace
             case SYS_symlink: {
                 const auto oldPath = syscall::GetArgument<1, const char*>(*tf);
                 const auto newPath = syscall::GetArgument<2, const char*>(*tf);
-                return -fs::SymLink(oldPath.get(), newPath.get());
+                return MapResult(fs::SymLink(oldPath.get(), newPath.get()));
             }
             case SYS_procinfo: {
                 return process::ProcInfo(*tf);
@@ -389,7 +401,7 @@ namespace
                 return ptrace::PTrace(*tf);
             }
             case SYS_sigprocmask: {
-                return signal::sigprocmask(*tf);
+                return MapResult(signal::sigprocmask(*tf));
             }
             case SYS_pipe: {
                 return pipe::pipe(*tf);
@@ -401,7 +413,7 @@ namespace
                 const auto path = syscall::GetArgument<1, const char*>(*tf);
                 const auto mode = syscall::GetArgument<2, mode_t>(*tf);
                 const auto dev = syscall::GetArgument<3, dev_t>(*tf);
-                return -fs::Mknod(path.get(), mode, dev);
+                return MapResult(fs::Mknod(path.get(), mode, dev));
             }
         }
         Print("[", process::GetCurrent().pid, "] unsupported syscall ",

@@ -30,8 +30,8 @@ namespace signal {
     };
 
     bool Send(process::Process&, int signo);
-    int kill(amd64::TrapFrame& tf);
-    int sigaction(amd64::TrapFrame& tf);
-    int sigreturn(amd64::TrapFrame& tf);
-    int sigprocmask(amd64::TrapFrame& tf);
+    std::expected<int, error::Code> kill(amd64::TrapFrame& tf);
+    std::expected<int, error::Code> sigaction(amd64::TrapFrame& tf);
+    std::expected<int, error::Code> sigprocmask(amd64::TrapFrame& tf);
+    std::expected<int, error::Code> sigreturn(amd64::TrapFrame& tf);
 }

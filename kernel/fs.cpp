@@ -23,7 +23,7 @@ namespace fs
 
         Inode* rootInode = nullptr;
 
-        int FollowSymLink(Inode*& parent, Inode*& inode, int& depth);
+        std::expected<int, error::Code> FollowSymLink(Inode*& parent, Inode*& inode, int& depth);
 
         bool IsolatePathComponent(const char*& path, char component[MaxDirectoryEntryNameLength])
         {
@@ -99,21 +99,21 @@ namespace fs
             return current_inode;
         }
 
-        int FollowSymLink(Inode*& parent, Inode*& inode, int& depth)
+        std::expected<int, error::Code> FollowSymLink(Inode*& parent, Inode*& inode, int& depth)
         {
             if (!IsSymLink(*inode)) return 0;
             ++depth;
-            if (depth == maxSymLinkDepth) return ELOOP;
+            if (depth == maxSymLinkDepth) return std::unexpected(error::Code::LoopDetected);
 
             char symlink[MaxPathLength];
             const auto n = fs::Read(*inode, symlink, 0, sizeof(symlink) - 1);
-            if (n <= 0) return EIO;
+            if (n <= 0) return std::unexpected(error::Code::IOError);
             symlink[n] = '\0';
 
             char component[MaxPathLength];
             Inode* newParent = nullptr;
             auto next = Lookup(parent, symlink, true, newParent, component, depth);
-            if (next == nullptr) return ENOENT;
+            if (next == nullptr) return std::unexpected(error::Code::NoEntry);
             iput(*parent);
             parent= newParent;
             inode = next;
@@ -282,7 +282,7 @@ namespace fs
         return nullptr;
     }
 
-    std::expected<Inode*, int> Open(const char* path, int flags, int mode)
+    std::expected<Inode*, error::Code> Open(const char* path, int flags, int mode)
     {
         Inode* parent;
         char component[MaxPathLength];
@@ -291,20 +291,20 @@ namespace fs
             if (parent != nullptr)
                 fs::iput(*parent);
             if ((flags & (O_CREAT | O_EXCL)) == (O_CREAT | O_EXCL))
-                return std::unexpected(EEXIST);
+                return std::unexpected(error::Code::AlreadyExists);
             if (flags & O_TRUNC) {
                 ext2::Truncate(*inode);
             }
             return inode;
         }
         if (parent == nullptr)
-            return std::unexpected(ENOENT);
+            return std::unexpected(error::Code::NoEntry);
         if ((flags & O_CREAT) == 0)
-            return std::unexpected(ENOENT);
+            return std::unexpected(error::Code::NoEntry);
 
         auto inum = ext2::AllocateInode(*parent);
         if (inum == 0)
-            return std::unexpected(ENOSPC);
+            return std::unexpected(error::Code::OutOfSpace);
 
         auto newInode = fs::iget(parent->dev, inum);
         assert(newInode != nullptr);
@@ -318,14 +318,14 @@ namespace fs
 
         if (!ext2::AddEntryToDirectory(*parent, inum, EXT2_FT_REG_FILE, component)) {
             // TODO deallocate inode
-            return std::unexpected(ENOSPC);
+            return std::unexpected(error::Code::OutOfSpace);
         }
         fs::idirty(*parent);
         fs::iput(*parent);
         return newInode;
     }
 
-    int Unlink(const char* path)
+    std::expected<int, error::Code> Unlink(const char* path)
     {
         Inode* parent;
         char component[MaxPathLength];
@@ -333,44 +333,44 @@ namespace fs
         if (inode == nullptr) {
             if (parent != nullptr)
                 fs::iput(*parent);
-            return ENOENT;
+            return std::unexpected(error::Code::NoEntry);
         }
 
         if ((inode->ext2inode->i_mode & EXT2_S_IFMASK) == EXT2_S_IFDIR) {
             fs::iput(*parent);
             fs::iput(*inode);
-            return EPERM;
+            return std::unexpected(error::Code::PermissionDenied);
         }
 
         if (!ext2::RemoveEntryFromDirectory(*parent, component)) {
             fs::iput(*parent);
             fs::iput(*inode);
-            return EIO;
+            return std::unexpected(error::Code::IOError);
         }
         fs::iput(*parent);
         ext2::Unlink(*inode);
         return 0;
     }
 
-    int Link(const char* source, const char* dest)
+    std::expected<int, error::Code> Link(const char* source, const char* dest)
     {
         auto sourceInode = namei(source, true);
         if (sourceInode == nullptr)
-            return ENOENT;
+            return std::unexpected(error::Code::NoEntry);
 
         Inode* parent;
         char component[MaxPathLength];
         if (auto inode = namei2(dest, true, parent, component); inode != nullptr) {
             if (parent != nullptr)
                 fs::iput(*parent);
-            return EEXIST;
+            return std::unexpected(error::Code::AlreadyExists);
         }
         if (parent == nullptr)
-            return ENOENT;
+            return std::unexpected(error::Code::NoEntry);
 
         // XXX EXT2_FT_REG_FILE should be looked up
         if (!ext2::AddEntryToDirectory(*parent, sourceInode->inum, EXT2_FT_REG_FILE, component)) {
-            return ENOSPC;
+            return std::unexpected(error::Code::OutOfSpace);
         }
         ++sourceInode->ext2inode->i_links_count;
         fs::idirty(*sourceInode);
@@ -379,21 +379,21 @@ namespace fs
         return 0;
     }
 
-    int SymLink(const char* source, const char* dest)
+    std::expected<int, error::Code> SymLink(const char* source, const char* dest)
     {
         Inode* parent;
         char component[MaxPathLength];
         if (auto inode = namei2(dest, true, parent, component); inode != nullptr) {
             if (parent != nullptr)
                 fs::iput(*parent);
-            return EEXIST;
+            return std::unexpected(error::Code::AlreadyExists);
         }
         if (parent == nullptr)
-            return ENOENT;
+            return std::unexpected(error::Code::NoEntry);
 
         auto inum = ext2::AllocateInode(*parent);
         if (inum == 0)
-            return ENOSPC;
+            return std::unexpected(error::Code::OutOfSpace);
 
         auto newInode = fs::iget(parent->dev, inum);
         assert(newInode != nullptr);
@@ -408,37 +408,37 @@ namespace fs
             // XXX undo damage
             fs::iput(*newInode);
             fs::iput(*parent);
-            return EIO;
+            return std::unexpected(error::Code::IOError);
         }
         fs::iput(*newInode);
 
         if (!ext2::AddEntryToDirectory(*parent, inum, EXT2_FT_SYMLINK, component)) {
             // TODO deallocate inode
-            return ENOSPC;
+            return std::unexpected(error::Code::OutOfSpace);
         }
         fs::idirty(*parent);
         fs::iput(*parent);
         return 0;
     }
 
-    int MakeDirectory(const char* path, int mode)
+    std::expected<int, error::Code> MakeDirectory(const char* path, int mode)
     {
         Inode* parent;
         char component[MaxPathLength];
         if (auto inode = namei2(path, true, parent, component); inode != nullptr) {
             fs::iput(*parent);
             fs::iput(*inode);
-            return EEXIST;
+            return std::unexpected(error::Code::AlreadyExists);
         }
         if (parent == nullptr)
-            return ENOENT;
+            return std::unexpected(error::Code::NoEntry);
 
         auto r = ext2::CreateDirectory(*parent, component, mode);
         fs::iput(*parent);
         return -r;
     }
 
-    int RemoveDirectory(const char* path)
+    std::expected<int, error::Code> RemoveDirectory(const char* path)
     {
         Inode* parent;
         char component[MaxPathLength];
@@ -446,25 +446,25 @@ namespace fs
         if (inode == nullptr) {
             if (parent != nullptr)
                 fs::iput(*parent);
-            return ENOENT;
+            return std::unexpected(error::Code::NoEntry);
         }
 
         if ((inode->ext2inode->i_mode & EXT2_S_IFMASK) != EXT2_S_IFDIR) {
             fs::iput(*parent);
             fs::iput(*inode);
-            return ENOTDIR;
+            return std::unexpected(error::Code::NotADirectory);
         }
 
         if (!IsDirectoryEmpty(*inode)) {
             fs::iput(*parent);
             fs::iput(*inode);
-            return ENOTEMPTY;
+            return std::unexpected(error::Code::NotEmpty);
         }
 
         if (!ext2::RemoveEntryFromDirectory(*parent, component)) {
             fs::iput(*parent);
             fs::iput(*inode);
-            return EIO;
+            return std::unexpected(error::Code::IOError);
         }
         --parent->ext2inode->i_links_count;
         fs::idirty(*parent);
@@ -472,12 +472,12 @@ namespace fs
         return ext2::RemoveDirectory(*inode);
     }
 
-    int ResolveDirectoryName(Inode& inode, char* buffer, int bufferSize)
+    std::expected<int, error::Code> ResolveDirectoryName(Inode& inode, char* buffer, int bufferSize)
     {
         if (inode.ext2inode == nullptr || (inode.ext2inode->i_mode & EXT2_S_IFDIR) == 0)
-            return ENOTDIR;
+            return std::unexpected(error::Code::NotADirectory);
         if (bufferSize < 2)
-            return ENAMETOOLONG;
+            return std::unexpected(error::Code::NameTooLong);
         Inode* current = &inode;
         iref(*current);
 
@@ -493,14 +493,14 @@ namespace fs
             if (!LookupInodeByNumber(*parent, current->inum, dentry)) {
                 fs::iput(*parent);
                 fs::iput(*current);
-                return ENOENT;
+                return std::unexpected(error::Code::NoEntry);
             }
 
             const int entryLength = strlen(dentry.d_name);
             if (currentPosition - entryLength <= 0) {
                 fs::iput(*parent);
                 fs::iput(*current);
-                return ENAMETOOLONG;
+                return std::unexpected(error::Code::NameTooLong);
             }
             memcpy(buffer + currentPosition - entryLength, dentry.d_name, entryLength);
             buffer[currentPosition - entryLength - 1] = '/';
@@ -539,21 +539,21 @@ namespace fs
         return true;
     }
 
-    int Mknod(const char* path, mode_t mode, dev_t dev)
+    std::expected<int, error::Code> Mknod(const char* path, mode_t mode, dev_t dev)
     {
         Inode* parent;
         char component[MaxPathLength];
         if (auto inode = namei2(path, true, parent, component); inode != nullptr) {
             fs::iput(*parent);
             fs::iput(*inode);
-            return EEXIST;
+            return std::unexpected(error::Code::AlreadyExists);
         }
         if (parent == nullptr)
-            return ENOENT;
+            return std::unexpected(error::Code::NoEntry);
 
         const auto type = mode & EXT2_S_IFMASK;
         if (type != EXT2_S_IFBLK && type != EXT2_S_IFCHR)
-            return EINVAL;
+            return std::unexpected(error::Code::InvalidArgument);
 
         const auto result = ext2::CreateSpecial(*parent, component, mode, dev);
         fs::iput(*parent);
@@ -561,6 +561,6 @@ namespace fs
             fs::iput(**result);
             return 0;
         }
-        return -result.error();
+        return result.error();
     }
 } // namespace fs
