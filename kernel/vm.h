@@ -2,6 +2,8 @@
 
 #include <atomic>
 #include <vector>
+#include <expected>
+#include "error.h"
 #include "page_allocator.h"
 #include "types.h"
 
@@ -70,7 +72,7 @@ namespace vm
     void FreeMappings(VMSpace&);
     void Clone(VMSpace&);
 
-    long VmOp(amd64::TrapFrame& tf);
+    std::expected<int, error::Code> VmOp(amd64::TrapFrame& tf);
     bool HandlePageFault(uint64_t va, int errnum);
 
     void Dump(VMSpace&);

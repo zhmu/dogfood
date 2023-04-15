@@ -4,6 +4,8 @@
 #include "x86_64/amd64.h"
 #include <optional>
 #include <type_traits>
+#include <expected>
+#include "error.h"
 
 namespace userspace {
     template<typename T>
@@ -18,9 +20,9 @@ namespace userspace {
             return value;
         }
 
-        bool Set(const T& value) {
+        std::expected<int, error::Code> Set(const T& value) {
             *p = value; // TODO check if this fails
-            return true;
+            return 0;
         }
 
         T* get() { return p; }

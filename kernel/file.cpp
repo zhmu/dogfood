@@ -82,28 +82,28 @@ namespace file
         }
     }
 
-    int Write(File& file, const void* buf, int len)
+    std::expected<int, error::Code> Write(File& file, const void* buf, int len)
     {
         if (file.f_chardev)
             return file.f_chardev->Write(buf, len);
         if (file.f_pipe)
             return file.f_pipe->Write(buf, len);
 
-        const auto count = fs::Write(*file.f_inode, buf, file.f_offset, len);
-        file.f_offset += count;
-        return count;
+        const auto result = fs::Write(*file.f_inode, buf, file.f_offset, len);
+        if (result) file.f_offset += *result;
+        return result;
     }
 
-    int Read(File& file, void* buf, int len)
+    std::expected<int, error::Code> Read(File& file, void* buf, int len)
     {
         if (file.f_chardev)
             return file.f_chardev->Read(buf, len);
         if (file.f_pipe)
             return file.f_pipe->Read(buf, len, (file.f_flags & O_NONBLOCK) != 0);
 
-        const auto count = fs::Read(*file.f_inode, buf, file.f_offset, len);
-        file.f_offset += count;
-        return count;
+        const auto result = fs::Read(*file.f_inode, buf, file.f_offset, len);
+        if (result) file.f_offset += *result;
+        return result;
     }
 
     bool CanRead(File& file)

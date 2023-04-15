@@ -57,18 +57,19 @@ namespace fs
             return (inode.ext2inode->i_mode & EXT2_S_IFMASK) == EXT2_S_IFLNK;
         }
 
-        Inode* LookupInDirectory(Inode& inode, const char* item)
+        std::expected<Inode*, error::Code> LookupInDirectory(Inode& inode, const char* item)
         {
             off_t offset = 0;
             fs::DEntry dentry;
             while (ext2::ReadDirectory(inode, offset, dentry)) {
-                if (strcmp(dentry.d_name, item) == 0)
+                if (strcmp(dentry.d_name, item) == 0) {
                     return iget(inode.dev, dentry.d_ino);
+                }
             }
-            return nullptr;
+            return std::unexpected(error::Code::NoEntry);
         }
 
-        Inode* Lookup(Inode* current_inode, const char* path, const bool follow, Inode*& parent, char* component, int& depth)
+        Inode* Lookup(Inode* current_inode, const char* path, const Follow follow, Inode*& parent, char* component, int& depth)
         {
             iref(*current_inode);
 
@@ -77,8 +78,8 @@ namespace fs
                 if (FollowSymLink(parent, current_inode, depth) != 0) {
                     return nullptr;
                 }
-                auto new_inode = LookupInDirectory(*current_inode, component);
-                if (new_inode == nullptr) {
+                auto lookup_inode = LookupInDirectory(*current_inode, component);
+                if (!lookup_inode) {
                     if (strchr(path, '/') == nullptr) {
                         parent = current_inode;
                     } else
@@ -88,10 +89,10 @@ namespace fs
                 if (parent != nullptr)
                     iput(*parent);
                 parent = current_inode;
-                current_inode = new_inode;
+                current_inode = *lookup_inode;
             }
 
-            if (follow && IsSymLink(*current_inode)) {
+            if (follow == Follow::Yes && IsSymLink(*current_inode)) {
                 if (auto result = FollowSymLink(parent, current_inode, depth); result != 0)
                     return nullptr;
             }
@@ -106,13 +107,13 @@ namespace fs
             if (depth == maxSymLinkDepth) return std::unexpected(error::Code::LoopDetected);
 
             char symlink[MaxPathLength];
-            const auto n = fs::Read(*inode, symlink, 0, sizeof(symlink) - 1);
-            if (n <= 0) return std::unexpected(error::Code::IOError);
-            symlink[n] = '\0';
+            const auto result = fs::Read(*inode, symlink, 0, sizeof(symlink) - 1);
+            if (!result || *result == 0) return std::unexpected(error::Code::IOError);
+            symlink[*result] = '\0';
 
             char component[MaxPathLength];
             Inode* newParent = nullptr;
-            auto next = Lookup(parent, symlink, true, newParent, component, depth);
+            auto next = Lookup(parent, symlink, Follow::Yes, newParent, component, depth);
             if (next == nullptr) return std::unexpected(error::Code::NoEntry);
             iput(*parent);
             parent= newParent;
@@ -120,7 +121,7 @@ namespace fs
             return 0;
         }
 
-        Inode* namei2(const char* path, const bool follow, Inode*& parent, char* component, fs::Inode* lookup_root = nullptr)
+        Inode* namei2(const char* path, const Follow follow, Inode*& parent, char* component, fs::Inode* lookup_root = nullptr)
         {
             if (path[0] == '/')
                 lookup_root = rootInode;
@@ -155,12 +156,13 @@ namespace fs
 
     void MountRootFileSystem()
     {
-        rootInode = ext2::Mount(rootDeviceNumber);
-        if (rootInode == nullptr)
+        auto inode = ext2::Mount(rootDeviceNumber);
+        if (!inode)
             panic("cannot mount root filesystem");
+        rootInode = *inode;
     }
 
-    Inode* iget(Device dev, InodeNumber inum)
+    std::expected<Inode*, error::Code> iget(Device dev, InodeNumber inum)
     {
         Inode* available = nullptr;
         for (auto& inode : cache::inode) {
@@ -175,7 +177,8 @@ namespace fs
             return &inode;
         }
 
-        assert(available != nullptr);
+        if (available == nullptr)
+            return std::unexpected(error::Code::OutOfFiles);
         available->dev = dev;
         available->inum = inum;
         available->refcount = 1;
@@ -205,10 +208,10 @@ namespace fs
         ext2::WriteInode(inode);
     }
 
-    int Read(fs::Inode& inode, void* dst, off_t offset, unsigned int count)
+    std::expected<int, error::Code> Read(fs::Inode& inode, void* dst, off_t offset, unsigned int count)
     {
         if (offset > inode.ext2inode->i_size || offset + count < offset)
-            return -1;
+            return 0;
         if (offset + count > inode.ext2inode->i_size) {
             count = inode.ext2inode->i_size - offset;
         }
@@ -238,7 +241,7 @@ namespace fs
         return d - reinterpret_cast<char*>(dst);
     }
 
-    int Write(fs::Inode& inode, const void* src, off_t offset, unsigned int count)
+    std::expected<int, error::Code> Write(fs::Inode& inode, const void* src, off_t offset, unsigned int count)
     {
         const auto newSize = offset + count;
         auto s = reinterpret_cast<const char*>(src);
@@ -270,7 +273,7 @@ namespace fs
         return s - reinterpret_cast<const char*>(src);
     }
 
-    Inode* namei(const char* path, const bool follow, fs::Inode* parent_inode)
+    Inode* namei(const char* path, const Follow follow, fs::Inode* parent_inode)
     {
         Inode* parent;
         char component[MaxPathLength];
@@ -286,7 +289,7 @@ namespace fs
     {
         Inode* parent;
         char component[MaxPathLength];
-        auto inode = namei2(path, false /* ? */, parent, component);
+        auto inode = namei2(path, Follow::No /* ? */, parent, component);
         if (inode != nullptr) {
             if (parent != nullptr)
                 fs::iput(*parent);
@@ -306,8 +309,10 @@ namespace fs
         if (inum == 0)
             return std::unexpected(error::Code::OutOfSpace);
 
-        auto newInode = fs::iget(parent->dev, inum);
-        assert(newInode != nullptr);
+        auto result = fs::iget(parent->dev, inum);
+        if (!result)
+            return std::unexpected(result.error());
+        auto newInode = *result;
         {
             auto& e2i = *newInode->ext2inode;
             e2i = {};
@@ -329,7 +334,7 @@ namespace fs
     {
         Inode* parent;
         char component[MaxPathLength];
-        Inode* inode = namei2(path, false, parent, component);
+        Inode* inode = namei2(path, Follow::No, parent, component);
         if (inode == nullptr) {
             if (parent != nullptr)
                 fs::iput(*parent);
@@ -354,13 +359,13 @@ namespace fs
 
     std::expected<int, error::Code> Link(const char* source, const char* dest)
     {
-        auto sourceInode = namei(source, true);
+        auto sourceInode = namei(source, Follow::Yes);
         if (sourceInode == nullptr)
             return std::unexpected(error::Code::NoEntry);
 
         Inode* parent;
         char component[MaxPathLength];
-        if (auto inode = namei2(dest, true, parent, component); inode != nullptr) {
+        if (auto inode = namei2(dest, Follow::Yes, parent, component); inode != nullptr) {
             if (parent != nullptr)
                 fs::iput(*parent);
             return std::unexpected(error::Code::AlreadyExists);
@@ -383,7 +388,7 @@ namespace fs
     {
         Inode* parent;
         char component[MaxPathLength];
-        if (auto inode = namei2(dest, true, parent, component); inode != nullptr) {
+        if (auto inode = namei2(dest, Follow::Yes, parent, component); inode != nullptr) {
             if (parent != nullptr)
                 fs::iput(*parent);
             return std::unexpected(error::Code::AlreadyExists);
@@ -395,8 +400,10 @@ namespace fs
         if (inum == 0)
             return std::unexpected(error::Code::OutOfSpace);
 
-        auto newInode = fs::iget(parent->dev, inum);
-        assert(newInode != nullptr);
+        auto result = fs::iget(parent->dev, inum);
+        if (!result)
+            return std::unexpected(result.error());
+        auto newInode = *result;
         {
             auto& e2i = *newInode->ext2inode;
             e2i = {};
@@ -425,7 +432,7 @@ namespace fs
     {
         Inode* parent;
         char component[MaxPathLength];
-        if (auto inode = namei2(path, true, parent, component); inode != nullptr) {
+        if (auto inode = namei2(path, Follow::Yes, parent, component); inode != nullptr) {
             fs::iput(*parent);
             fs::iput(*inode);
             return std::unexpected(error::Code::AlreadyExists);
@@ -435,14 +442,14 @@ namespace fs
 
         auto r = ext2::CreateDirectory(*parent, component, mode);
         fs::iput(*parent);
-        return -r;
+        return r;
     }
 
     std::expected<int, error::Code> RemoveDirectory(const char* path)
     {
         Inode* parent;
         char component[MaxPathLength];
-        Inode* inode = namei2(path, true, parent, component);
+        Inode* inode = namei2(path, Follow::Yes, parent, component);
         if (inode == nullptr) {
             if (parent != nullptr)
                 fs::iput(*parent);
@@ -484,9 +491,9 @@ namespace fs
         int currentPosition = bufferSize - 1;
         buffer[currentPosition] = '\0';
         while (current != rootInode) {
-            Inode* parent = LookupInDirectory(*current, "..");
-            if (parent == nullptr)
-                break;
+            auto lookup_inode = LookupInDirectory(*current, "..");
+            if (!lookup_inode) break;
+            auto parent = *lookup_inode;
 
             // Find the current inode's name
             fs::DEntry dentry;
@@ -543,7 +550,7 @@ namespace fs
     {
         Inode* parent;
         char component[MaxPathLength];
-        if (auto inode = namei2(path, true, parent, component); inode != nullptr) {
+        if (auto inode = namei2(path, Follow::Yes, parent, component); inode != nullptr) {
             fs::iput(*parent);
             fs::iput(*inode);
             return std::unexpected(error::Code::AlreadyExists);

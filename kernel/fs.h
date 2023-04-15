@@ -36,16 +36,18 @@ namespace fs
         char d_name[MaxDirectoryEntryNameLength] = {};
     };
 
+    enum class Follow { No, Yes };
+
     void Initialize();
     void MountRootFileSystem();
-    int Read(Inode& inode, void* dst, off_t offset, unsigned int count);
-    int Write(fs::Inode& inode, const void* dst, off_t offset, unsigned int count);
+    std::expected<int, error::Code> Read(Inode& inode, void* dst, off_t offset, unsigned int count);
+    std::expected<int, error::Code> Write(fs::Inode& inode, const void* dst, off_t offset, unsigned int count);
 
-    Inode* iget(Device dev, InodeNumber inum);
+    std::expected<Inode*, error::Code> iget(Device dev, InodeNumber inum);
     void iput(Inode& inode);
     void iref(Inode& inode);
     void idirty(Inode& inode);
-    Inode* namei(const char* path, const bool follow, fs::Inode* parent_inode = nullptr);
+    Inode* namei(const char* path, const Follow follow, fs::Inode* parent_inode = nullptr);
     bool Stat(Inode& inode, stat& sbuf);
     std::expected<int, error::Code> ResolveDirectoryName(Inode& inode, char* buffer, int bufferSize);
     std::expected<int, error::Code> Link(const char* source, const char* dest);

@@ -25,5 +25,14 @@ namespace error {
         NotEmpty = ENOTEMPTY,
         PermissionDenied = EPERM,
         NotFound = ESRCH,
+        OutOfFiles = EMFILE,
+        NotAnExecutable = ENOEXEC,
+        BadFileHandle = EBADF,
+        BadSystemCall = ENOSYS,
+        InvalidSeek = ESPIPE,
+        BrokenPipe = EPIPE,
+        NoChild = ECHILD,
+        ResultTooLarge = ERANGE,
+        OutOfMemory = ENOMEM,
     };
 }

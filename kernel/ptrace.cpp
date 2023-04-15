@@ -40,31 +40,31 @@
  */
 namespace ptrace
 {
-    long PTrace(amd64::TrapFrame& tf)
+    std::expected<int, error::Code> PTrace(amd64::TrapFrame& tf)
     {
         const auto req = syscall::GetArgument<1, int>(tf);
 
         if (req == PTRACE_TRACEME) {
             auto& current = process::GetCurrent();
-            if (current.ptrace.traced) return -EPERM;
+            if (current.ptrace.traced) return std::unexpected(error::Code::PermissionDenied);
             current.ptrace.traced = true;
             return 0;
         }
 
         const auto pid = syscall::GetArgument<2, pid_t>(tf);
         auto proc = process::FindProcessByPID(pid);
-        if (!proc) return -ESRCH;
+        if (!proc) return std::unexpected(error::Code::NotFound);
 
         if (req == PTRACE_ATTACH) {
             auto& current = process::GetCurrent();
-            if (&current == proc) return -EPERM; // can't trace self
+            if (&current == proc) return std::unexpected(error::Code::PermissionDenied); // can't trace self
             // TODO: maybe change parent?
             proc->ptrace.traced = true;
             return 0;
         }
 
-        if (!proc->ptrace.traced) return -ESRCH;
-        if (proc->state != process::State::Stopped) return -ESRCH;
+        if (!proc->ptrace.traced) return std::unexpected(error::Code::NotFound);
+        if (proc->state != process::State::Stopped) return std::unexpected(error::Code::NotFound);
 
         //auto addr = syscall::GetArgument<3, uint8_t*>(tf);
         switch(req) {
@@ -104,13 +104,12 @@ namespace ptrace
                 ur.es = static_cast<uint16_t>(amd64::Selector::UserData) + 3;
                 ur.fs = 0;
                 ur.gs = 0;
-                return regsPtr.Set(ur) ? 0 : -EFAULT;
+                return regsPtr.Set(ur);
             }
             case PTRACE_PEEK:
-                return -EINVAL;
+                return std::unexpected(error::Code::InvalidArgument);
 
         }
-        return -EINVAL;
+        return std::unexpected(error::Code::InvalidArgument);
     }
-
 }

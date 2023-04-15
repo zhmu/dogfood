@@ -3,6 +3,8 @@
 #include "types.h"
 #include <array>
 #include <deque>
+#include <expected>
+#include "error.h"
 
 namespace amd64 { struct TrapFrame; }
 
@@ -18,8 +20,8 @@ namespace pipe
         size_t p_buffer_readpos{};
         size_t p_buffer_writepos{};
 
-        int Read(void* buf, int len, const bool nonblock);
-        int Write(const void* buf, int len);
+        std::expected<int, error::Code> Read(void* buf, int len, const bool nonblock);
+        std::expected<int, error::Code> Write(const void* buf, int len);
 
         bool CanRead();
         bool CanWrite();
@@ -27,5 +29,5 @@ namespace pipe
         size_t DetermineMaximumWriteSize() const;
     };
 
-    int pipe(amd64::TrapFrame& context);
+    std::expected<int, error::Code> pipe(amd64::TrapFrame& tf);
 }

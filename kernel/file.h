@@ -43,8 +43,8 @@ namespace file
 
     std::expected<int, error::Code> Open(process::Process& proc, fs::Inode& inode, int flags);
 
-    int Write(File& file, const void* buf, int len);
-    int Read(File& file, void* buf, int len);
+    std::expected<int, error::Code> Write(File& file, const void* buf, int len);
+    std::expected<int, error::Code> Read(File& file, void* buf, int len);
 
     bool CanRead(File& file);
     bool CanWrite(File& file);

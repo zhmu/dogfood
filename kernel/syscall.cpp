@@ -45,7 +45,7 @@ namespace
         return result ? *result : MapError(result);
     }
 
-    uint64_t DoSyscall(amd64::TrapFrame* tf)
+    std::expected<int, error::Code> DoSyscall(amd64::TrapFrame* tf)
     {
         const auto num = syscall::GetNumber(*tf);
         switch (num) {
@@ -54,7 +54,7 @@ namespace
             case SYS_write: {
                 const auto file = file::FindByIndex(process::GetCurrent(), syscall::GetArgument<1>(*tf));
                 if (file == nullptr)
-                    return -EBADF;
+                    return std::unexpected(error::Code::BadFileHandle);
                 const auto buf = syscall::GetArgument<2, const char*>(*tf);
                 const auto len = syscall::GetArgument<3>(*tf);
                 return file::Write(*file, buf.get(), len);
@@ -62,7 +62,7 @@ namespace
             case SYS_read: {
                 const auto file = file::FindByIndex(process::GetCurrent(), syscall::GetArgument<1>(*tf));
                 if (file == nullptr)
-                    return -EBADF;
+                    return std::unexpected(error::Code::BadFileHandle);
                 auto buf = syscall::GetArgument<2, char*>(*tf);
                 const auto len = syscall::GetArgument<3>(*tf);
                 return file::Read(*file, buf.get(), len);
@@ -71,7 +71,8 @@ namespace
                 const auto path = syscall::GetArgument<1, const char*>(*tf);
                 const auto flags = syscall::GetArgument<2, int>(*tf);
                 const auto mode = syscall::GetArgument<3, int>(*tf);
-                if (flags & (O_RDONLY | O_WRONLY | O_RDWR) == 0) return -EINVAL;
+                if (flags & (O_RDONLY | O_WRONLY | O_RDWR) == 0)
+                    return std::unexpected(error::Code::InvalidArgument);
 
                 auto& current = process::GetCurrent();
                 const auto mask = (~current.umask) & modeMask;
@@ -83,12 +84,12 @@ namespace
                 auto inode = *result;
                 const auto r = file::Open(current, *inode, flags);
                 fs::iput(*inode);
-                return MapResult(r);
+                return r;
             }
             case SYS_close: {
                 const auto file = file::FindByIndex(process::GetCurrent(), syscall::GetArgument<1>(*tf));
                 if (file == nullptr)
-                    return -EBADF;
+                    return std::unexpected(error::Code::BadFileHandle);
                 file::Free(*file);
                 return 0;
             }
@@ -96,16 +97,17 @@ namespace
                 const auto file = file::FindByIndex(process::GetCurrent(), syscall::GetArgument<1>(*tf));
                 auto statBuf = syscall::GetArgument<2, stat*>(*tf);
                 if (file == nullptr)
-                    return -EBADF;
+                    return std::unexpected(error::Code::BadFileHandle);
 
                 stat st{};
                 if (file->f_inode == nullptr) {
                     // Assume this is the console
                     st.st_mode = EXT2_S_IFCHR | 0666;
                 } else {
-                    if (!fs::Stat(*file->f_inode, st)) return -EIO;
+                    if (!fs::Stat(*file->f_inode, st))
+                        return std::unexpected(error::Code::IOError);
                 }
-                return statBuf.Set(st) ? 0 : -EFAULT;
+                return statBuf.Set(st);
             }
             case SYS_fstatat: {
                 const auto path = syscall::GetArgument<2, const char*>(*tf);
@@ -118,21 +120,21 @@ namespace
                     base_inode = process::GetCurrent().cwd;
                 } else {
                     const auto file = file::FindByIndex(process::GetCurrent(), fd);
-                    if (file == nullptr) return -EBADF;
+                    if (file == nullptr) return std::unexpected(error::Code::BadFileHandle);
                     base_inode = file->f_inode;
                 }
 
-                const auto follow = (flags & AT_SYMLINK_NOFOLLOW) == 0;
+                const auto follow = (flags & AT_SYMLINK_NOFOLLOW) ? fs::Follow::No : fs::Follow::Yes;
                 auto inode = fs::namei(path.get(), follow, base_inode);
                 if (inode == nullptr)
-                    return -ENOENT;
+                    return std::unexpected(error::Code::NoEntry);
 
-                int ret = 0;
+                std::expected<int, error::Code> ret = 0;
                 stat st{};
                 if (fs::Stat(*inode, st)) {
-                    if (!statBuf.Set(st)) ret = -EFAULT;
+                    if (!statBuf.Set(st)) ret = std::unexpected(error::Code::MemoryFault);
                 } else {
-                    ret = -EIO;
+                    ret = std::unexpected(error::Code::IOError);
                 }
                 fs::iput(*inode);
                 return ret;
@@ -142,12 +144,12 @@ namespace
                 auto offsetPtr = syscall::GetArgument<2, long*>(*tf);
                 const auto whence = syscall::GetArgument<3>(*tf);
                 if (file == nullptr)
-                    return -EBADF;
+                    return std::unexpected(error::Code::BadFileHandle);
                 if (file->f_inode == nullptr || file->f_inode->ext2inode == nullptr)
-                    return -ESPIPE;
+                    return std::unexpected(error::Code::InvalidSeek);
                 auto offsetArg = *offsetPtr;
                 if (!offsetArg)
-                    return -EFAULT;
+                    return std::unexpected(error::Code::MemoryFault);
 
                 long new_offset = file->f_offset;
                 auto file_size = file->f_inode->ext2inode->i_size;
@@ -164,7 +166,7 @@ namespace
                 }
                 if (new_offset < 0)
                     new_offset = 0;
-                if (!offsetPtr.Set(new_offset)) return -EFAULT;
+                if (!offsetPtr.Set(new_offset)) return std::unexpected(error::Code::MemoryFault);
                 // Do not limit offset here; writing past the end of the file should be okay
                 // TODO check this and make it proper
                 /*if (new_offset > file_size)
@@ -175,32 +177,32 @@ namespace
             case SYS_dup: {
                 const auto file = file::FindByIndex(process::GetCurrent(), syscall::GetArgument<1>(*tf));
                 if (file == nullptr)
-                    return -EBADF;
-                return MapResult(DupFD(*file));
+                    return std::unexpected(error::Code::BadFileHandle);
+                return DupFD(*file);
             }
             case SYS_dup2: {
                 const auto sourceFd = syscall::GetArgument<1>(*tf);
                 const auto file = file::FindByIndex(process::GetCurrent(), sourceFd);
                 if (file == nullptr)
-                    return -EBADF;
+                    return std::unexpected(error::Code::BadFileHandle);
                 const auto newFd = syscall::GetArgument<2>(*tf);
                 if (sourceFd == newFd) return newFd;
                 auto& current = process::GetCurrent();
                 auto file2 = file::AllocateByIndex(current, newFd);
                 if (file2 == nullptr)
-                    return -ENFILE;
+                    return std::unexpected(error::Code::NoFile);
                 file::Dup(*file, *file2);
                 return file2 - &current.files[0];
             }
             case SYS_fcntl: {
                 const auto file = file::FindByIndex(process::GetCurrent(), syscall::GetArgument<1>(*tf));
                 if (file == nullptr)
-                    return -EBADF;
+                    return std::unexpected(error::Code::BadFileHandle);
                 const auto op = syscall::GetArgument<2>(*tf);
                 const auto arg = syscall::GetArgument<3>(*tf);
                 switch (op) {
                     case F_DUPFD:
-                        return MapResult(DupFD(*file));
+                        return DupFD(*file);
                     case F_GETFD: {
                         int flags = 0;
                         if (file->f_flags & O_CLOEXEC)
@@ -217,12 +219,13 @@ namespace
                     case F_GETFL:
                         return file->f_flags;
                     case F_SETFL:
-                        if (arg != O_NONBLOCK) return -EINVAL;
+                        if (arg != O_NONBLOCK)
+                            return std::unexpected(error::Code::InvalidArgument);
                         file->f_flags |= O_NONBLOCK;
                         return 0;
                     default:
                         Print("fcntl(): op ", op, " not supported\n");
-                        return -EINVAL;
+                        return std::unexpected(error::Code::InvalidArgument);
                 }
                 return 0;
             }
@@ -230,17 +233,17 @@ namespace
                 auto buf = syscall::GetArgument<1, char*>(*tf);
                 const auto len = syscall::GetArgument<2>(*tf);
                 auto& current = process::GetCurrent();
-                return MapResult(fs::ResolveDirectoryName(*current.cwd, buf.get(), len));
+                return fs::ResolveDirectoryName(*current.cwd, buf.get(), len);
             }
             case SYS_chdir: {
                 const auto buf = syscall::GetArgument<1, char*>(*tf);
                 auto& current = process::GetCurrent();
-                auto inode = fs::namei(buf.get(), true);
+                auto inode = fs::namei(buf.get(), fs::Follow::Yes);
                 if (inode == nullptr)
-                    return -ENOENT;
+                    return std::unexpected(error::Code::NoEntry);
                 if ((inode->ext2inode->i_mode & EXT2_S_IFDIR) == 0) {
                     fs::iput(*inode);
-                    return -ENOTDIR;
+                    return std::unexpected(error::Code::NotADirectory);
                 }
 
                 fs::iput(*current.cwd);
@@ -250,9 +253,9 @@ namespace
             case SYS_fchdir: {
                 const auto file = file::FindByIndex(process::GetCurrent(), syscall::GetArgument<1>(*tf));
                 if (file == nullptr)
-                    return -EBADF;
+                    return std::unexpected(error::Code::BadFileHandle);
                 if ((file->f_inode->ext2inode->i_mode & EXT2_S_IFDIR) == 0)
-                    return -ENOTDIR;
+                    return std::unexpected(error::Code::NotADirectory);
 
                 auto& current = process::GetCurrent();
                 fs::iput(*current.cwd);
@@ -263,7 +266,7 @@ namespace
             case SYS_vmop:
                 return vm::VmOp(*tf);
             case SYS_kill:
-                return MapResult(signal::kill(*tf));
+                return signal::kill(*tf);
             case SYS_clone:
                 return process::Fork(*tf);
             case SYS_waitpid:
@@ -281,18 +284,18 @@ namespace
             case SYS_getppid:
                 return process::GetCurrent().parent->pid;
             case SYS_sigaction:
-                return MapResult(signal::sigaction(*tf));
+                return signal::sigaction(*tf);
             case SYS_sigreturn:
-                return MapResult(signal::sigreturn(*tf));
+                return signal::sigreturn(*tf);
             case SYS_clock_gettime:
-                return -ENOSYS;
+                return std::unexpected(error::Code::BadSystemCall);
             case SYS_chown: {
                 const auto path = syscall::GetArgument<1, const char*>(*tf);
                 const auto uid = syscall::GetArgument<2, int>(*tf);
                 const auto gid = syscall::GetArgument<3, int>(*tf);
-                const auto inode = fs::namei(path.get(), true);
+                const auto inode = fs::namei(path.get(), fs::Follow::Yes);
                 if (inode == nullptr)
-                    return -ENOENT;
+                    return std::unexpected(error::Code::NoEntry);
 
                 inode->ext2inode->i_uid = uid;
                 inode->ext2inode->i_gid = gid;
@@ -310,9 +313,9 @@ namespace
             case SYS_chmod: {
                 const auto path = syscall::GetArgument<1, const char*>(*tf);
                 auto mode = syscall::GetArgument<2, int>(*tf);
-                auto inode = fs::namei(path.get(), true);
+                auto inode = fs::namei(path.get(), fs::Follow::Yes);
                 if (inode == nullptr)
-                    return -ENOENT;
+                    return std::unexpected(error::Code::NoEntry);
                 mode &= modeMask;
                 inode->ext2inode->i_mode = (inode->ext2inode->i_mode & ~modeMask) | mode;
                 fs::idirty(*inode);
@@ -321,24 +324,24 @@ namespace
             }
             case SYS_unlink: {
                 const auto path = syscall::GetArgument<1, const char*>(*tf);
-                return MapResult(fs::Unlink(path.get()));
+                return fs::Unlink(path.get());
             }
             case SYS_mkdir: {
                 const auto mask = (~process::GetCurrent().umask) & modeMask;
                 const auto path = syscall::GetArgument<1, const char*>(*tf);
                 const auto mode = syscall::GetArgument<2, int>(*tf);
-                return MapResult(fs::MakeDirectory(path.get(), mode & mask));
+                return fs::MakeDirectory(path.get(), mode & mask);
             }
             case SYS_rmdir: {
                 const auto path = syscall::GetArgument<1, const char*>(*tf);
-                return MapResult(fs::RemoveDirectory(path.get()));
+                return fs::RemoveDirectory(path.get());
             }
             case SYS_fchown: {
                 const auto file = file::FindByIndex(process::GetCurrent(), syscall::GetArgument<1>(*tf));
                 if (file == nullptr)
-                    return -EBADF;
+                    return std::unexpected(error::Code::BadFileHandle);
                 if (file->f_inode == nullptr || file->f_inode->ext2inode == nullptr)
-                    return -ENOENT;
+                    return std::unexpected(error::Code::NoEntry);
                 const auto uid = syscall::GetArgument<2, int>(*tf);
                 const auto gid = syscall::GetArgument<3, int>(*tf);
                 file->f_inode->ext2inode->i_uid = uid;
@@ -349,9 +352,9 @@ namespace
             case SYS_fchmod: {
                 const auto file = file::FindByIndex(process::GetCurrent(), syscall::GetArgument<1>(*tf));
                 if (file == nullptr)
-                    return -EBADF;
+                    return std::unexpected(error::Code::BadFileHandle);
                 if (file->f_inode == nullptr || file->f_inode->ext2inode == nullptr)
-                    return -ENOENT;
+                    return std::unexpected(error::Code::NoEntry);
                 auto mode = syscall::GetArgument<2, int>(*tf);
                 mode &= modeMask;
                 file->f_inode->ext2inode->i_mode =
@@ -362,18 +365,18 @@ namespace
             case SYS_link: {
                 const auto oldPath = syscall::GetArgument<1, const char*>(*tf);
                 const auto newPath = syscall::GetArgument<2, const char*>(*tf);
-                return MapResult(fs::Link(oldPath.get(), newPath.get()));
+                return fs::Link(oldPath.get(), newPath.get());
             }
             case SYS_readlink: {
                 const auto path = syscall::GetArgument<1, const char*>(*tf);
                 auto buf = syscall::GetArgument<2, char*>(*tf);
                 const auto size = syscall::GetArgument<3, size_t>(*tf);
-                auto inode = fs::namei(path.get(), false);
+                auto inode = fs::namei(path.get(), fs::Follow::No);
                 if (inode == nullptr)
-                    return -ENOENT;
+                    return std::unexpected(error::Code::NoEntry);
                 if ((inode->ext2inode->i_mode & EXT2_S_IFMASK) != EXT2_S_IFLNK) {
                     fs::iput(*inode);
-                    return -EINVAL;
+                    return std::unexpected(error::Code::InvalidArgument);
                 }
                 const auto numBytesRead = fs::Read(*inode, buf.get(), 0, size);
                 fs::iput(*inode);
@@ -382,7 +385,7 @@ namespace
             case SYS_symlink: {
                 const auto oldPath = syscall::GetArgument<1, const char*>(*tf);
                 const auto newPath = syscall::GetArgument<2, const char*>(*tf);
-                return MapResult(fs::SymLink(oldPath.get(), newPath.get()));
+                return fs::SymLink(oldPath.get(), newPath.get());
             }
             case SYS_procinfo: {
                 return process::ProcInfo(*tf);
@@ -395,13 +398,13 @@ namespace
                 strlcpy(uts.release, "[git hash here]", sizeof(uts.release));
                 strlcpy(uts.version, "0.2", sizeof(uts.version));
                 strlcpy(uts.machine, "x86_64", sizeof(uts.machine));
-                return utsBuf.Set(uts) ? 0 : -EFAULT;
+                return utsBuf.Set(uts);
             }
             case SYS_ptrace: {
                 return ptrace::PTrace(*tf);
             }
             case SYS_sigprocmask: {
-                return MapResult(signal::sigprocmask(*tf));
+                return signal::sigprocmask(*tf);
             }
             case SYS_pipe: {
                 return pipe::pipe(*tf);
@@ -413,7 +416,7 @@ namespace
                 const auto path = syscall::GetArgument<1, const char*>(*tf);
                 const auto mode = syscall::GetArgument<2, mode_t>(*tf);
                 const auto dev = syscall::GetArgument<3, dev_t>(*tf);
-                return MapResult(fs::Mknod(path.get(), mode, dev));
+                return fs::Mknod(path.get(), mode, dev);
             }
         }
         Print("[", process::GetCurrent().pid, "] unsupported syscall ",
@@ -421,7 +424,7 @@ namespace
             " [ ", syscall::GetArgument<2>(*tf), " ", syscall::GetArgument<3>(*tf),
             " ", syscall::GetArgument<4>(*tf), " ", syscall::GetArgument<5>(*tf),
             " ", syscall::GetArgument<6>(*tf), "]\n");
-        return -1;
+        return std::unexpected(error::Code::BadSystemCall);
     }
 } // namespace
 
@@ -435,7 +438,7 @@ extern "C" uint64_t perform_syscall(amd64::TrapFrame* tf)
         process::Yield();
     }
 
-    const auto result = DoSyscall(tf);
+    const auto result = MapResult(DoSyscall(tf));
     if (current.ptrace.traced && current.ptrace.traceSyscall) {
         tf->rax = result; // so that the tracer can see it
 

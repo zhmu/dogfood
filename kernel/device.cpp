@@ -8,15 +8,15 @@ namespace device
     namespace
     {
         struct NullDevice : CharacterDevice {
-            int Write(const void* buf, int len) override { return len; }
-            int Read(void* buf, int len) override { return 0; };
+            std::expected<int, error::Code> Write(const void* buf, int len) override { return len; }
+            std::expected<int, error::Code> Read(void* buf, int len) override { return 0; }
             bool CanRead() override { return false; }
             bool CanWrite() override { return true; }
         } nullDevice;
 
         struct ConsoleDevice : CharacterDevice {
-            int Write(const void* buf, int len) override { return console::Write(buf, len); }
-            int Read(void* buf, int len) override { return console::Read(buf, len); }
+            std::expected<int, error::Code> Write(const void* buf, int len) override { return console::Write(buf, len); }
+            std::expected<int, error::Code> Read(void* buf, int len) override { return console::Read(buf, len); }
             bool CanRead() override { return console::CanRead(); }
             bool CanWrite() override { return console::CanWrite(); }
         } consoleDevice;

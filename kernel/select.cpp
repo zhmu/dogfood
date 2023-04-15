@@ -17,12 +17,12 @@ namespace select {
     using SelectVector = std::vector<SelectItem>;
 
     namespace {
-        long ConvertFdsPtrToFdSet(userspace::Pointer<fd_set>& p, SelectVector& v)
+        std::expected<int, error::Code> ConvertFdsPtrToFdSet(userspace::Pointer<fd_set>& p, SelectVector& v)
         {
             if (!p) return 0;
 
             auto content = *p;
-            if (!content) return -EFAULT;
+            if (!content) return std::unexpected(error::Code::MemoryFault);
 
             const auto fds = *content;
             constexpr auto fdsLength = sizeof(fd_set::fds_bits) / sizeof(fd_set::fds_bits[0]);
@@ -30,7 +30,7 @@ namespace select {
                 if (!FD_ISSET(n, &fds)) continue;
 
                 const auto file = file::FindByIndex(process::GetCurrent(), n);
-                if (file == nullptr) return -EBADF;
+                if (file == nullptr) return std::unexpected(error::Code::BadFileHandle);
                 v.push_back({ n, file });
             }
 
@@ -51,7 +51,7 @@ namespace select {
         }
     }
 
-    long Select(amd64::TrapFrame& tf)
+    std::expected<int, error::Code> Select(amd64::TrapFrame& tf)
     {
         const auto nr = syscall::GetArgument<1>(tf);
         auto readfdsPtr = syscall::GetArgument<2, fd_set*>(tf);
@@ -60,11 +60,11 @@ namespace select {
         auto timeoutPtr = syscall::GetArgument<5, timeval*>(tf);
 
         SelectVector readSv, writeSv, exceptSv;
-        if (const auto result = ConvertFdsPtrToFdSet(readfdsPtr, readSv); result != 0)
+        if (const auto result = ConvertFdsPtrToFdSet(readfdsPtr, readSv); !result)
             return result;
-        if (const auto result = ConvertFdsPtrToFdSet(writefdsPtr, writeSv); result != 0)
+        if (const auto result = ConvertFdsPtrToFdSet(writefdsPtr, writeSv); !result)
             return result;
-        if (const auto result = ConvertFdsPtrToFdSet(exceptfdsPtr, exceptSv); result != 0)
+        if (const auto result = ConvertFdsPtrToFdSet(exceptfdsPtr, exceptSv); !result)
             return result;
 
         fd_set readFds, writeFds, exceptFds;
@@ -90,9 +90,9 @@ namespace select {
             //process::Yield();
         }
 
-        if (readfdsPtr && !readfdsPtr.Set(readFds)) return -EFAULT;
-        if (writefdsPtr && !writefdsPtr.Set(writeFds)) return -EFAULT;
-        if (exceptfdsPtr && !exceptfdsPtr.Set(exceptFds)) return -EFAULT;
+        if (readfdsPtr && !readfdsPtr.Set(readFds)) return std::unexpected(error::Code::MemoryFault);
+        if (writefdsPtr && !writefdsPtr.Set(writeFds)) return std::unexpected(error::Code::MemoryFault);
+        if (exceptfdsPtr && !exceptfdsPtr.Set(exceptFds)) return std::unexpected(error::Code::MemoryFault);
         return result;
     }
 }

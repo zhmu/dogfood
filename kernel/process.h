@@ -6,6 +6,8 @@
 #include "ptrace.h"
 #include "signal.h"
 #include "vm.h"
+#include <expected>
+#include "error.h"
 
 namespace amd64
 {
@@ -49,10 +51,10 @@ namespace process
     void Sleep(WaitChannel);
     void Wakeup(WaitChannel);
 
-    int Exit(amd64::TrapFrame& context);
-    int Fork(amd64::TrapFrame& context);
-    int WaitPID(amd64::TrapFrame& context);
-    int ProcInfo(amd64::TrapFrame&);
+    std::expected<int, error::Code> Exit(amd64::TrapFrame& context);
+    std::expected<int, error::Code> Fork(amd64::TrapFrame& context);
+    std::expected<int, error::Code> WaitPID(amd64::TrapFrame& context);
+    std::expected<int, error::Code> ProcInfo(amd64::TrapFrame&);
 
     Process* FindProcessByPID(int pid);
 } // namespace process

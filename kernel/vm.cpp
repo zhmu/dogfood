@@ -9,6 +9,7 @@
 #include <dogfood/errno.h>
 
 #include <algorithm>
+#include <utility>
 
 static constexpr inline auto DEBUG_VM = false;
 static constexpr inline uint64_t initCodeBase = 0x8000000;
@@ -219,11 +220,11 @@ namespace vm
         }
     }
 
-    long VmOp(amd64::TrapFrame& tf)
+    std::expected<int, error::Code> VmOp(amd64::TrapFrame& tf)
     {
         auto vmopArg = syscall::GetArgument<1, VMOP_OPTIONS*>(tf);
         auto vmop = *vmopArg;
-        if (!vmop) { return -EFAULT; }
+        if (!vmop) { return std::unexpected(error::Code::MemoryFault); }
 
         auto& vs = GetCurrent();
         switch (vmop->vo_op) {
@@ -231,37 +232,35 @@ namespace vm
                 // XXX no inode-based mappings just yet
                 if ((vmop->vo_flags & (VMOP_FLAG_PRIVATE | VMOP_FLAG_FD | VMOP_FLAG_FIXED)) !=
                     VMOP_FLAG_PRIVATE)
-                    return -EINVAL;
+                    return std::unexpected(error::Code::InvalidArgument);
 
                 // TODO search/overwrite mappings etc
                 auto& mapping = Map(vs, vs.nextMmapAddress, ConvertVmopFlags(vmop->vo_flags), vmop->vo_len);
                 vs.nextMmapAddress = mapping.va_end;
 
                 vmop->vo_addr = reinterpret_cast<void*>(mapping.va_start);
-                if (!vmopArg.Set(*vmop)) return -EFAULT;
-                return 0;
+                return vmopArg.Set(*vmop);
             }
             case OP_UNMAP: {
                 auto va = reinterpret_cast<uint64_t>(vmop->vo_addr);
                 if (va < vm::userland::mmapBase)
-                    return -EINVAL;
+                    return std::unexpected(error::Code::InvalidArgument);
                 if (va >= vs.nextMmapAddress)
-                    return -EINVAL;
+                    return std::unexpected(error::Code::InvalidArgument);
                 if ((va & ~(vm::PageSize - 1)) != 0)
-                    return -EINVAL;
-
+                    return std::unexpected(error::Code::InvalidArgument);
 
                 // TODO search/overwrite mappings etc
                 Print("todo OP_UNMAP\n");
-                return -EINVAL;
+                return std::unexpected(error::Code::InvalidArgument);
             }
             default:
                 Print(
                     "vmop: unimplemented op ", vmop->vo_op, " addr ", vmop->vo_addr,
                     " len ", print::Hex{vmop->vo_len}, "\n");
-                return -ENODEV;
+                return std::unexpected(error::Code::InvalidArgument);
         }
-        return -1;
+        std::unreachable();
     }
 
     bool HandlePageFault(uint64_t va, int errnum)

@@ -75,6 +75,21 @@ namespace ext2
             WriteBlocks(dev, 2, sizeof(on_disk::Superblock) / bio::BlockSize, &superblock);
         }
 
+        std::expected<int, error::Code> ReadExact(fs::Inode& inode, void* dst, off_t offset, unsigned int count)
+        {
+            auto result = fs::Read(inode, dst, offset, count);
+            if (!result) return result;
+            if (*result != count) return std::unexpected(error::Code::IOError);
+            return 0;
+        }
+
+        std::expected<int, error::Code> WriteExact(fs::Inode& inode, const void* dst, off_t offset, unsigned int count)
+        {
+            auto result = fs::Write(inode, dst, offset, count);
+            if (!result) return result;
+            if (*result != count) return std::unexpected(error::Code::IOError);
+            return 0;
+        }
     } // namespace
 
     void ReadInode(fs::Device dev, fs::InodeNumber inum, on_disk::Inode& inode)
@@ -423,11 +438,12 @@ namespace ext2
         } u;
 
         while (offset < dirInode.ext2inode->i_size) {
-            int n = fs::Read(
+            auto result = fs::Read(
                 dirInode, reinterpret_cast<void*>(&u.block), offset,
                 sizeof(on_disk::DirectoryEntry) + fs::MaxDirectoryEntryNameLength);
-            if (n <= 0)
+            if (!result || !*result)
                 return false;
+            int n = *result;
 
             const auto& de = u.de;
             if (de.name_len >= fs::MaxDirectoryEntryNameLength) {
@@ -457,7 +473,7 @@ namespace ext2
         return value;
     }
 
-    bool WriteDirectoryEntry(
+    std::expected<int, error::Code> WriteDirectoryEntry(
         fs::Inode& dirInode, off_t offset, fs::InodeNumber inum, uint16_t newEntryRecordLength,
         int type, const char* name)
     {
@@ -471,20 +487,19 @@ namespace ext2
         newEntry.de.file_type = type;
         memcpy(newEntry.de.name, name, newEntry.de.name_len);
         const auto entryLength = sizeof(on_disk::DirectoryEntry) + newEntry.de.name_len;
-        return fs::Write(dirInode, reinterpret_cast<void*>(&newEntry), offset, entryLength) ==
-               entryLength;
+        return WriteExact(dirInode, reinterpret_cast<void*>(&newEntry), offset, entryLength);
     }
 
-    bool AddEntryToDirectory(fs::Inode& dirInode, fs::InodeNumber inum, int type, const char* name)
+    std::expected<int, error::Code> AddEntryToDirectory(fs::Inode& dirInode, fs::InodeNumber inum, int type, const char* name)
     {
         const auto newEntryLength = RoundUpToMultipleOf4(sizeof(on_disk::DirectoryEntry) + strlen(name));
         off_t offset = 0;
         while (offset < dirInode.ext2inode->i_size) {
             on_disk::DirectoryEntry dentry;
-            int n = fs::Read(
+            auto result = fs::Read(
                 dirInode, reinterpret_cast<void*>(&dentry), offset, sizeof(on_disk::DirectoryEntry));
-            if (n <= 0)
-                break;
+            if (!result) return result;
+            if (!*result) break; // out of directory entries
 
             const auto currentEntryLength =
                 dentry.inode != 0
@@ -501,23 +516,20 @@ namespace ext2
             const auto newEntryRecordLength = dentry.rec_len - currentEntryLength;
             if (currentEntryLength > 0) {
                 dentry.rec_len = currentEntryLength;
-                if (fs::Write(
-                        dirInode, reinterpret_cast<void*>(&dentry), offset,
-                        sizeof(on_disk::DirectoryEntry)) != sizeof(on_disk::DirectoryEntry))
-                    return false;
+                auto result = WriteExact(dirInode, reinterpret_cast<void*>(&dentry), offset, sizeof(on_disk::DirectoryEntry));
+                if (!result) return result;
                 offset += dentry.rec_len;
             }
 
-            if (!WriteDirectoryEntry(dirInode, offset, inum, newEntryRecordLength, type, name))
-                return false; // TODO undo previous changes
-            return true;
+            // TODO undo previous changes on failure
+            return WriteDirectoryEntry(dirInode, offset, inum, newEntryRecordLength, type, name);
         }
 
         const auto newEntryRecordLength = blockSize;
         return WriteDirectoryEntry(dirInode, offset, inum, newEntryRecordLength, type, name);
     }
 
-    bool RemoveEntryFromDirectory(fs::Inode& dirInode, const char* name)
+    std::expected<int, error::Code> RemoveEntryFromDirectory(fs::Inode& dirInode, const char* name)
     {
         const auto nameLength = strlen(name);
         off_t offset = 0;
@@ -526,15 +538,10 @@ namespace ext2
         while (offset < dirInode.ext2inode->i_size) {
             on_disk::DirectoryEntry dentry;
             char component[fs::MaxPathLength];
-            if (fs::Read(
-                    dirInode, reinterpret_cast<void*>(&dentry), offset, sizeof(on_disk::DirectoryEntry)) !=
-                sizeof(on_disk::DirectoryEntry))
-                return false;
-            if (fs::Read(
-                    dirInode, reinterpret_cast<void*>(component), offset + sizeof(on_disk::DirectoryEntry),
-                    dentry.name_len) != dentry.name_len) {
-                return false;
-            }
+            if (auto result = ReadExact(dirInode, reinterpret_cast<void*>(&dentry), offset, sizeof(on_disk::DirectoryEntry)); !result) return result;
+
+            if (auto result = ReadExact(dirInode, reinterpret_cast<void*>(component), offset + sizeof(on_disk::DirectoryEntry), dentry.name_len); !result) return result;
+
             if (dentry.name_len != nameLength || memcmp(component, name, nameLength) != 0) {
                 previousOffset = offset;
                 previousEntry = dentry;
@@ -544,27 +551,35 @@ namespace ext2
 
             if (previousEntry.rec_len > 0) {
                 previousEntry.rec_len += dentry.rec_len;
-                return fs::Write(
+                auto result = fs::Write(
                            dirInode, reinterpret_cast<void*>(&previousEntry), previousOffset,
-                           sizeof(on_disk::DirectoryEntry)) == sizeof(on_disk::DirectoryEntry);
+                           sizeof(on_disk::DirectoryEntry));
+                if (!result) return result;
+                if (*result == sizeof(on_disk::DirectoryEntry)) return 0;
+                return std::unexpected(error::Code::IOError);
             }
 
             dentry.inode = 0;
-            return fs::Write(
+            auto result = fs::Write(
                        dirInode, reinterpret_cast<void*>(&dentry), offset,
-                       sizeof(on_disk::DirectoryEntry)) == sizeof(on_disk::DirectoryEntry);
+                       sizeof(on_disk::DirectoryEntry)) ;
+            if (!result) return result;
+            if (*result == sizeof(on_disk::DirectoryEntry)) return 0;
+            return std::unexpected(error::Code::IOError);
         }
         return false;
     }
 
-    int CreateDirectory(fs::Inode& parent, const char* name, int mode)
+    std::expected<int, error::Code> CreateDirectory(fs::Inode& parent, const char* name, int mode)
     {
         auto inum = ext2::AllocateInode(parent);
         if (inum == 0)
-            return ENOSPC;
+            return std::unexpected(error::Code::OutOfSpace);
 
-        auto newInode = fs::iget(parent.dev, inum);
-        assert(newInode != nullptr);
+        auto result = fs::iget(parent.dev, inum);
+        if (!result)
+            return std::unexpected(result.error());
+        auto newInode = *result;
         {
             auto& e2i = *newInode->ext2inode;
             memset(&e2i, 0, sizeof(e2i));
@@ -574,24 +589,22 @@ namespace ext2
 
         if (!ext2::AddEntryToDirectory(parent, inum, EXT2_FT_DIR, name)) {
             // TODO deallocate inode
-            return ENOSPC;
+            return std::unexpected(error::Code::OutOfSpace);
         }
 
         {
             ext2::on_disk::DirectoryEntry dirEntry{};
             dirEntry.rec_len = blockSize;
             if (fs::Write(*newInode, &dirEntry, 0, sizeof(dirEntry)) != sizeof(dirEntry))
-                return ENOSPC; // TODO undo damage
+                return std::unexpected(error::Code::OutOfSpace); // TODO undo damage
             newInode->ext2inode->i_size = blockSize;
         }
 
         if (!ext2::AddEntryToDirectory(*newInode, inum, EXT2_FT_DIR, ".")) {
-            // TODO deallocate inode
-            return ENOSPC;
+            return std::unexpected(error::Code::OutOfSpace); // TODO deallocate inode
         }
         if (!ext2::AddEntryToDirectory(*newInode, parent.inum, EXT2_FT_DIR, "..")) {
-            // TODO deallocate inode
-            return ENOSPC;
+            return std::unexpected(error::Code::OutOfSpace); // TODO deallocate inode
         }
         ++parent.ext2inode->i_links_count;
         fs::idirty(parent);
@@ -623,12 +636,12 @@ namespace ext2
         FreeDataBlocks(inode);
     }
 
-    int RemoveDirectory(fs::Inode& inode)
+    std::expected<int, error::Code> RemoveDirectory(fs::Inode& inode)
     {
         if (!ext2::RemoveEntryFromDirectory(inode, ".."))
-            return EIO;
+            return std::unexpected(error::Code::IOError);
         if (!ext2::RemoveEntryFromDirectory(inode, "."))
-            return EIO;
+            return std::unexpected(error::Code::IOError);
         UpdateInodeBlockGroup(inode.dev, inode.inum, [](auto& bg) { --bg.bg_used_dirs_count; });
 
         FreeDataBlocks(inode);
@@ -649,8 +662,10 @@ namespace ext2
             default: return std::unexpected(EINVAL);
         }
 
-        auto newInode = fs::iget(parent.dev, inum);
-        assert(newInode != nullptr);
+        auto result = fs::iget(parent.dev, inum);
+        if (!result)
+            return std::unexpected(static_cast<int>(result.error()));
+        auto newInode = *result;
         {
             auto& e2i = *newInode->ext2inode;
             e2i = {};
@@ -668,12 +683,12 @@ namespace ext2
         return newInode;
     }
 
-    fs::Inode* Mount(fs::Device dev)
+    std::expected<fs::Inode*, error::Code> Mount(fs::Device dev)
     {
         // Piece the superblock together
         ReadBlocks(dev, 2, sizeof(on_disk::Superblock) / bio::BlockSize, &superblock);
         if (superblock.s_magic != constants::magic::Magic)
-            return nullptr;
+            return std::unexpected(error::Code::InvalidArgument);
         blockSize = 1024L << superblock.s_log_block_size;
         biosPerBlock = blockSize / bio::BlockSize;
         numberOfBlockGroups = (superblock.s_blocks_count - superblock.s_first_data_block) /
