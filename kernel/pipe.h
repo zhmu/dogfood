@@ -2,6 +2,7 @@
 
 #include "types.h"
 #include <array>
+#include <deque>
 
 namespace amd64 { struct TrapFrame; }
 
@@ -13,7 +14,7 @@ namespace pipe
     {
         int p_num_readers{};
         int p_num_writers{};
-        std::array<uint8_t, PipeBufferSize> p_buffer{};
+        std::deque<uint8_t> p_deque{};
         size_t p_buffer_readpos{};
         size_t p_buffer_writepos{};
 
@@ -22,6 +23,8 @@ namespace pipe
 
         bool CanRead();
         bool CanWrite();
+
+        size_t DetermineMaximumWriteSize() const;
     };
 
     int pipe(amd64::TrapFrame& context);
