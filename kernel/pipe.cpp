@@ -79,14 +79,14 @@ namespace pipe
                 p_deque.push_back(*in);
                 ++in;
             }
+            if (chunk_size > 0)
+                process::Wakeup(this);
 
             total_written += chunk_size;
             left -= chunk_size;
         }
 
         Debug("Pipe::Write -> ", total_written, " write size, available space ", DetermineMaximumWriteSize(), "\n");
-        if (total_written > 0)
-            process::Wakeup(this);
         interrupts::Restore(state);
         return total_written;
     }
