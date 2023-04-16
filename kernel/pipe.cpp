@@ -8,9 +8,13 @@
 
 namespace pipe
 {
-    constexpr debug::Trace<false> Debug;
+    namespace
+    {
+        constexpr debug::Trace<false> Debug;
+        constexpr static auto inline PipeBufferSize = 1024;
+    }
 
-    std::expected<int, error::Code> Pipe::Read(void* buf, int len, const bool nonblock)
+    result::MaybeInt Pipe::Read(void* buf, int len, const bool nonblock)
     {
         Debug("Pipe::Read ", p_num_readers, " ", p_num_writers, "\n");
         assert(p_num_readers > 0);
@@ -48,7 +52,7 @@ namespace pipe
         return total_read;
     }
 
-    std::expected<int, error::Code> Pipe::Write(const void* buf, int len)
+    result::MaybeInt Pipe::Write(const void* buf, int len)
     {
         Debug("Pipe::Write\n");
         assert(p_num_writers > 0);
@@ -57,7 +61,7 @@ namespace pipe
         if (p_num_readers == 0) {
             interrupts::Restore(state);
             Debug("TODO handle SIGPIPE\n");
-            return std::unexpected(error::Code::BrokenPipe);
+            return result::Error(error::Code::BrokenPipe);
         }
 
         auto in = static_cast<const uint8_t*>(buf);
@@ -115,18 +119,18 @@ namespace pipe
         return result;
     }
 
-    std::expected<int, error::Code> pipe(amd64::TrapFrame& tf)
+    result::MaybeInt pipe(amd64::TrapFrame& tf)
     {
         auto fdsPtr = syscall::GetArgument<1, int*>(tf);
-        if (!fdsPtr) return std::unexpected(error::Code::MemoryFault);
+        if (!fdsPtr) return result::Error(error::Code::MemoryFault);
 
         auto& current = process::GetCurrent();
         auto file1 = file::Allocate(current);
-        if (!file1) return std::unexpected(error::Code::NoFile);
+        if (!file1) return result::Error(error::Code::NoFile);
         auto file2 = file::Allocate(current);
         if (!file2) {
             file::Free(*file1);
-            return std::unexpected(error::Code::NoFile);
+            return result::Error(error::Code::NoFile);
         }
         const auto fd1 = file1 - &current.files[0];
         const auto fd2 = file2 - &current.files[0];

@@ -166,26 +166,26 @@ namespace signal {
         return true;
     }
 
-    std::expected<int, error::Code> kill(amd64::TrapFrame& tf)
+    result::MaybeInt kill(amd64::TrapFrame& tf)
     {
         const auto pid = syscall::GetArgument<1, int>(tf);
         const auto signal = syscall::GetArgument<2, int>(tf);
         if (pid < 0)
-            return std::unexpected(error::Code::PermissionDenied);
+            return result::Error(error::Code::PermissionDenied);
         const auto index = SignalNumberToIndex(signal);
         if (!index)
-            return std::unexpected(error::Code::InvalidArgument);
+            return result::Error(error::Code::InvalidArgument);
 
         auto proc = process::FindProcessByPID(pid);
         if (proc == nullptr)
-            return std::unexpected(error::Code::NotFound);
+            return result::Error(error::Code::NotFound);
 
         if (Send(*proc, signal))
             return 0;
-        return std::unexpected(error::Code::InvalidArgument);
+        return result::Error(error::Code::InvalidArgument);
     }
 
-    std::expected<int, error::Code> sigaction(amd64::TrapFrame& tf)
+    result::MaybeInt sigaction(amd64::TrapFrame& tf)
     {
         const auto signum = syscall::GetArgument<1>(tf);
         const auto act = syscall::GetArgument<2, struct sigaction*>(tf);
@@ -195,28 +195,28 @@ namespace signal {
 
         const auto index = SignalNumberToIndex(signum);
         if (!index)
-            return std::unexpected(error::Code::InvalidArgument);
+            return result::Error(error::Code::InvalidArgument);
 
         auto& action = process::GetCurrent().signal.action[*index];
         if (oldact && !oldact.Set(action.ToSigAction()))
-            return std::unexpected(error::Code::MemoryFault);
+            return result::Error(error::Code::MemoryFault);
 
         if (act) {
             const auto new_action = *act;
-            if (!new_action) return std::unexpected(error::Code::MemoryFault);
+            if (!new_action) return result::Error(error::Code::MemoryFault);
             action = *new_action;
         }
         return 0;
     }
 
-    std::expected<int, error::Code> sigprocmask(amd64::TrapFrame& tf)
+    result::MaybeInt sigprocmask(amd64::TrapFrame& tf)
     {
         const auto how = syscall::GetArgument<1>(tf);
         auto set = syscall::GetArgument<2, sigset_t*>(tf);
         auto oset = syscall::GetArgument<3, sigset_t*>(tf);
         auto& mask = process::GetCurrent().signal.mask;
 
-        if (oset && !oset.Set(mask)) return std::unexpected(error::Code::MemoryFault);
+        if (oset && !oset.Set(mask)) return result::Error(error::Code::MemoryFault);
 
         switch(how) {
             case SIG_BLOCK:
@@ -230,13 +230,13 @@ namespace signal {
                 mask = set;
                 break;
             default:
-                return std::unexpected(error::Code::InvalidArgument);
+                return result::Error(error::Code::InvalidArgument);
         }
 
         return 0;
     }
 
-    std::expected<int, error::Code> sigreturn(amd64::TrapFrame& tf)
+    result::MaybeInt sigreturn(amd64::TrapFrame& tf)
     {
         auto& proc = process::GetCurrent();
         Debug(">> sigreturn: rsp ", &tf, " proc.TrapFrame ", proc.trapFrame, "\n");

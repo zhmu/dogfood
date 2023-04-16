@@ -220,11 +220,11 @@ namespace vm
         }
     }
 
-    std::expected<int, error::Code> VmOp(amd64::TrapFrame& tf)
+    result::MaybeInt VmOp(amd64::TrapFrame& tf)
     {
         auto vmopArg = syscall::GetArgument<1, VMOP_OPTIONS*>(tf);
         auto vmop = *vmopArg;
-        if (!vmop) { return std::unexpected(error::Code::MemoryFault); }
+        if (!vmop) { return result::Error(error::Code::MemoryFault); }
 
         auto& vs = GetCurrent();
         switch (vmop->vo_op) {
@@ -232,7 +232,7 @@ namespace vm
                 // XXX no inode-based mappings just yet
                 if ((vmop->vo_flags & (VMOP_FLAG_PRIVATE | VMOP_FLAG_FD | VMOP_FLAG_FIXED)) !=
                     VMOP_FLAG_PRIVATE)
-                    return std::unexpected(error::Code::InvalidArgument);
+                    return result::Error(error::Code::InvalidArgument);
 
                 // TODO search/overwrite mappings etc
                 auto& mapping = Map(vs, vs.nextMmapAddress, ConvertVmopFlags(vmop->vo_flags), vmop->vo_len);
@@ -244,21 +244,21 @@ namespace vm
             case OP_UNMAP: {
                 auto va = reinterpret_cast<uint64_t>(vmop->vo_addr);
                 if (va < vm::userland::mmapBase)
-                    return std::unexpected(error::Code::InvalidArgument);
+                    return result::Error(error::Code::InvalidArgument);
                 if (va >= vs.nextMmapAddress)
-                    return std::unexpected(error::Code::InvalidArgument);
+                    return result::Error(error::Code::InvalidArgument);
                 if ((va & ~(vm::PageSize - 1)) != 0)
-                    return std::unexpected(error::Code::InvalidArgument);
+                    return result::Error(error::Code::InvalidArgument);
 
                 // TODO search/overwrite mappings etc
                 Print("todo OP_UNMAP\n");
-                return std::unexpected(error::Code::InvalidArgument);
+                return result::Error(error::Code::InvalidArgument);
             }
             default:
                 Print(
                     "vmop: unimplemented op ", vmop->vo_op, " addr ", vmop->vo_addr,
                     " len ", print::Hex{vmop->vo_len}, "\n");
-                return std::unexpected(error::Code::InvalidArgument);
+                return result::Error(error::Code::InvalidArgument);
         }
         std::unreachable();
     }

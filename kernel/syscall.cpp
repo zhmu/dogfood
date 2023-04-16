@@ -23,29 +23,29 @@ namespace {
 
 namespace
 {
-    std::expected<int, error::Code> DupFD(file::File& file)
+    result::MaybeInt DupFD(file::File& file)
     {
         auto& current = process::GetCurrent();
         auto file2 = file::Allocate(current);
         if (file2 == nullptr)
-            return std::unexpected(error::Code::NoFile);
+            return result::Error(error::Code::NoFile);
         file::Dup(file, *file2);
         return file2 - &current.files[0];
     }
 
     template<typename T>
-    uint64_t MapError(const std::expected<T, error::Code> result)
+    uint64_t MapError(const result::Maybe<T>& result)
     {
         assert(!result.has_value());
         return -static_cast<int>(result.error());
     }
 
-    uint64_t MapResult(const std::expected<int, error::Code> result)
+    uint64_t MapResult(const result::MaybeInt result)
     {
         return result ? *result : MapError(result);
     }
 
-    std::expected<int, error::Code> DoSyscall(amd64::TrapFrame* tf)
+    result::MaybeInt DoSyscall(amd64::TrapFrame* tf)
     {
         const auto num = syscall::GetNumber(*tf);
         switch (num) {
@@ -54,7 +54,7 @@ namespace
             case SYS_write: {
                 const auto file = file::FindByIndex(process::GetCurrent(), syscall::GetArgument<1>(*tf));
                 if (file == nullptr)
-                    return std::unexpected(error::Code::BadFileHandle);
+                    return result::Error(error::Code::BadFileHandle);
                 const auto buf = syscall::GetArgument<2, const char*>(*tf);
                 const auto len = syscall::GetArgument<3>(*tf);
                 return file::Write(*file, buf.get(), len);
@@ -62,7 +62,7 @@ namespace
             case SYS_read: {
                 const auto file = file::FindByIndex(process::GetCurrent(), syscall::GetArgument<1>(*tf));
                 if (file == nullptr)
-                    return std::unexpected(error::Code::BadFileHandle);
+                    return result::Error(error::Code::BadFileHandle);
                 auto buf = syscall::GetArgument<2, char*>(*tf);
                 const auto len = syscall::GetArgument<3>(*tf);
                 return file::Read(*file, buf.get(), len);
@@ -72,7 +72,7 @@ namespace
                 const auto flags = syscall::GetArgument<2, int>(*tf);
                 const auto mode = syscall::GetArgument<3, int>(*tf);
                 if (flags & (O_RDONLY | O_WRONLY | O_RDWR) == 0)
-                    return std::unexpected(error::Code::InvalidArgument);
+                    return result::Error(error::Code::InvalidArgument);
 
                 auto& current = process::GetCurrent();
                 const auto mask = (~current.umask) & modeMask;
@@ -89,7 +89,7 @@ namespace
             case SYS_close: {
                 const auto file = file::FindByIndex(process::GetCurrent(), syscall::GetArgument<1>(*tf));
                 if (file == nullptr)
-                    return std::unexpected(error::Code::BadFileHandle);
+                    return result::Error(error::Code::BadFileHandle);
                 file::Free(*file);
                 return 0;
             }
@@ -97,7 +97,7 @@ namespace
                 const auto file = file::FindByIndex(process::GetCurrent(), syscall::GetArgument<1>(*tf));
                 auto statBuf = syscall::GetArgument<2, stat*>(*tf);
                 if (file == nullptr)
-                    return std::unexpected(error::Code::BadFileHandle);
+                    return result::Error(error::Code::BadFileHandle);
 
                 stat st{};
                 if (file->f_inode == nullptr) {
@@ -105,7 +105,7 @@ namespace
                     st.st_mode = EXT2_S_IFCHR | 0666;
                 } else {
                     if (!fs::Stat(*file->f_inode, st))
-                        return std::unexpected(error::Code::IOError);
+                        return result::Error(error::Code::IOError);
                 }
                 return statBuf.Set(st);
             }
@@ -120,21 +120,21 @@ namespace
                     base_inode = process::GetCurrent().cwd;
                 } else {
                     const auto file = file::FindByIndex(process::GetCurrent(), fd);
-                    if (file == nullptr) return std::unexpected(error::Code::BadFileHandle);
+                    if (file == nullptr) return result::Error(error::Code::BadFileHandle);
                     base_inode = file->f_inode;
                 }
 
                 const auto follow = (flags & AT_SYMLINK_NOFOLLOW) ? fs::Follow::No : fs::Follow::Yes;
                 auto inode = fs::namei(path.get(), follow, base_inode);
                 if (inode == nullptr)
-                    return std::unexpected(error::Code::NoEntry);
+                    return result::Error(error::Code::NoEntry);
 
-                std::expected<int, error::Code> ret = 0;
+                result::MaybeInt ret = 0;
                 stat st{};
                 if (fs::Stat(*inode, st)) {
-                    if (!statBuf.Set(st)) ret = std::unexpected(error::Code::MemoryFault);
+                    if (!statBuf.Set(st)) ret = result::Error(error::Code::MemoryFault);
                 } else {
-                    ret = std::unexpected(error::Code::IOError);
+                    ret = result::Error(error::Code::IOError);
                 }
                 fs::iput(*inode);
                 return ret;
@@ -144,12 +144,12 @@ namespace
                 auto offsetPtr = syscall::GetArgument<2, long*>(*tf);
                 const auto whence = syscall::GetArgument<3>(*tf);
                 if (file == nullptr)
-                    return std::unexpected(error::Code::BadFileHandle);
+                    return result::Error(error::Code::BadFileHandle);
                 if (file->f_inode == nullptr || file->f_inode->ext2inode == nullptr)
-                    return std::unexpected(error::Code::InvalidSeek);
+                    return result::Error(error::Code::InvalidSeek);
                 auto offsetArg = *offsetPtr;
                 if (!offsetArg)
-                    return std::unexpected(error::Code::MemoryFault);
+                    return result::Error(error::Code::MemoryFault);
 
                 long new_offset = file->f_offset;
                 auto file_size = file->f_inode->ext2inode->i_size;
@@ -166,7 +166,7 @@ namespace
                 }
                 if (new_offset < 0)
                     new_offset = 0;
-                if (!offsetPtr.Set(new_offset)) return std::unexpected(error::Code::MemoryFault);
+                if (!offsetPtr.Set(new_offset)) return result::Error(error::Code::MemoryFault);
                 // Do not limit offset here; writing past the end of the file should be okay
                 // TODO check this and make it proper
                 /*if (new_offset > file_size)
@@ -177,27 +177,27 @@ namespace
             case SYS_dup: {
                 const auto file = file::FindByIndex(process::GetCurrent(), syscall::GetArgument<1>(*tf));
                 if (file == nullptr)
-                    return std::unexpected(error::Code::BadFileHandle);
+                    return result::Error(error::Code::BadFileHandle);
                 return DupFD(*file);
             }
             case SYS_dup2: {
                 const auto sourceFd = syscall::GetArgument<1>(*tf);
                 const auto file = file::FindByIndex(process::GetCurrent(), sourceFd);
                 if (file == nullptr)
-                    return std::unexpected(error::Code::BadFileHandle);
+                    return result::Error(error::Code::BadFileHandle);
                 const auto newFd = syscall::GetArgument<2>(*tf);
                 if (sourceFd == newFd) return newFd;
                 auto& current = process::GetCurrent();
                 auto file2 = file::AllocateByIndex(current, newFd);
                 if (file2 == nullptr)
-                    return std::unexpected(error::Code::NoFile);
+                    return result::Error(error::Code::NoFile);
                 file::Dup(*file, *file2);
                 return file2 - &current.files[0];
             }
             case SYS_fcntl: {
                 const auto file = file::FindByIndex(process::GetCurrent(), syscall::GetArgument<1>(*tf));
                 if (file == nullptr)
-                    return std::unexpected(error::Code::BadFileHandle);
+                    return result::Error(error::Code::BadFileHandle);
                 const auto op = syscall::GetArgument<2>(*tf);
                 const auto arg = syscall::GetArgument<3>(*tf);
                 switch (op) {
@@ -220,12 +220,12 @@ namespace
                         return file->f_flags;
                     case F_SETFL:
                         if (arg != O_NONBLOCK)
-                            return std::unexpected(error::Code::InvalidArgument);
+                            return result::Error(error::Code::InvalidArgument);
                         file->f_flags |= O_NONBLOCK;
                         return 0;
                     default:
                         Print("fcntl(): op ", op, " not supported\n");
-                        return std::unexpected(error::Code::InvalidArgument);
+                        return result::Error(error::Code::InvalidArgument);
                 }
                 return 0;
             }
@@ -240,10 +240,10 @@ namespace
                 auto& current = process::GetCurrent();
                 auto inode = fs::namei(buf.get(), fs::Follow::Yes);
                 if (inode == nullptr)
-                    return std::unexpected(error::Code::NoEntry);
+                    return result::Error(error::Code::NoEntry);
                 if ((inode->ext2inode->i_mode & EXT2_S_IFDIR) == 0) {
                     fs::iput(*inode);
-                    return std::unexpected(error::Code::NotADirectory);
+                    return result::Error(error::Code::NotADirectory);
                 }
 
                 fs::iput(*current.cwd);
@@ -253,9 +253,9 @@ namespace
             case SYS_fchdir: {
                 const auto file = file::FindByIndex(process::GetCurrent(), syscall::GetArgument<1>(*tf));
                 if (file == nullptr)
-                    return std::unexpected(error::Code::BadFileHandle);
+                    return result::Error(error::Code::BadFileHandle);
                 if ((file->f_inode->ext2inode->i_mode & EXT2_S_IFDIR) == 0)
-                    return std::unexpected(error::Code::NotADirectory);
+                    return result::Error(error::Code::NotADirectory);
 
                 auto& current = process::GetCurrent();
                 fs::iput(*current.cwd);
@@ -288,14 +288,14 @@ namespace
             case SYS_sigreturn:
                 return signal::sigreturn(*tf);
             case SYS_clock_gettime:
-                return std::unexpected(error::Code::BadSystemCall);
+                return result::Error(error::Code::BadSystemCall);
             case SYS_chown: {
                 const auto path = syscall::GetArgument<1, const char*>(*tf);
                 const auto uid = syscall::GetArgument<2, int>(*tf);
                 const auto gid = syscall::GetArgument<3, int>(*tf);
                 const auto inode = fs::namei(path.get(), fs::Follow::Yes);
                 if (inode == nullptr)
-                    return std::unexpected(error::Code::NoEntry);
+                    return result::Error(error::Code::NoEntry);
 
                 inode->ext2inode->i_uid = uid;
                 inode->ext2inode->i_gid = gid;
@@ -315,7 +315,7 @@ namespace
                 auto mode = syscall::GetArgument<2, int>(*tf);
                 auto inode = fs::namei(path.get(), fs::Follow::Yes);
                 if (inode == nullptr)
-                    return std::unexpected(error::Code::NoEntry);
+                    return result::Error(error::Code::NoEntry);
                 mode &= modeMask;
                 inode->ext2inode->i_mode = (inode->ext2inode->i_mode & ~modeMask) | mode;
                 fs::idirty(*inode);
@@ -339,9 +339,9 @@ namespace
             case SYS_fchown: {
                 const auto file = file::FindByIndex(process::GetCurrent(), syscall::GetArgument<1>(*tf));
                 if (file == nullptr)
-                    return std::unexpected(error::Code::BadFileHandle);
+                    return result::Error(error::Code::BadFileHandle);
                 if (file->f_inode == nullptr || file->f_inode->ext2inode == nullptr)
-                    return std::unexpected(error::Code::NoEntry);
+                    return result::Error(error::Code::NoEntry);
                 const auto uid = syscall::GetArgument<2, int>(*tf);
                 const auto gid = syscall::GetArgument<3, int>(*tf);
                 file->f_inode->ext2inode->i_uid = uid;
@@ -352,9 +352,9 @@ namespace
             case SYS_fchmod: {
                 const auto file = file::FindByIndex(process::GetCurrent(), syscall::GetArgument<1>(*tf));
                 if (file == nullptr)
-                    return std::unexpected(error::Code::BadFileHandle);
+                    return result::Error(error::Code::BadFileHandle);
                 if (file->f_inode == nullptr || file->f_inode->ext2inode == nullptr)
-                    return std::unexpected(error::Code::NoEntry);
+                    return result::Error(error::Code::NoEntry);
                 auto mode = syscall::GetArgument<2, int>(*tf);
                 mode &= modeMask;
                 file->f_inode->ext2inode->i_mode =
@@ -373,10 +373,10 @@ namespace
                 const auto size = syscall::GetArgument<3, size_t>(*tf);
                 auto inode = fs::namei(path.get(), fs::Follow::No);
                 if (inode == nullptr)
-                    return std::unexpected(error::Code::NoEntry);
+                    return result::Error(error::Code::NoEntry);
                 if ((inode->ext2inode->i_mode & EXT2_S_IFMASK) != EXT2_S_IFLNK) {
                     fs::iput(*inode);
-                    return std::unexpected(error::Code::InvalidArgument);
+                    return result::Error(error::Code::InvalidArgument);
                 }
                 const auto numBytesRead = fs::Read(*inode, buf.get(), 0, size);
                 fs::iput(*inode);
@@ -424,7 +424,7 @@ namespace
             " [ ", syscall::GetArgument<2>(*tf), " ", syscall::GetArgument<3>(*tf),
             " ", syscall::GetArgument<4>(*tf), " ", syscall::GetArgument<5>(*tf),
             " ", syscall::GetArgument<6>(*tf), "]\n");
-        return std::unexpected(error::Code::BadSystemCall);
+        return result::Error(error::Code::BadSystemCall);
     }
 } // namespace
 

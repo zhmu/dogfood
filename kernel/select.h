@@ -1,10 +1,9 @@
 #pragma once
 
-#include <expected>
-#include "error.h"
+#include "result.h"
 
 namespace amd64 { struct TrapFrame; }
 
 namespace select{
-    std::expected<int, error::Code> Select(amd64::TrapFrame&);
+    result::MaybeInt Select(amd64::TrapFrame&);
 }

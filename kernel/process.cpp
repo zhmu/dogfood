@@ -125,11 +125,11 @@ namespace process
         interrupts::Restore(state);
     }
 
-    std::expected<int, error::Code> Fork(amd64::TrapFrame& tf)
+    result::MaybeInt Fork(amd64::TrapFrame& tf)
     {
         auto new_process = AllocateProcess();
         if (new_process == nullptr)
-            return std::unexpected(error::Code::OutOfSpace);
+            return result::Error(error::Code::OutOfSpace);
         new_process->parent = current;
         new_process->umask = current->umask;
         file::CloneTable(*current, *new_process);
@@ -160,7 +160,7 @@ namespace process
         return new_process->pid;
     }
 
-    std::expected<int, error::Code> WaitPID(amd64::TrapFrame& tf)
+    result::MaybeInt WaitPID(amd64::TrapFrame& tf)
     {
         const auto pid = syscall::GetArgument<1, int>(tf);
         auto statLocPtr = syscall::GetArgument<2, int*>(tf);
@@ -181,7 +181,7 @@ namespace process
                     proc.ptrace.signal = 0;
                     interrupts::Restore(state);
                     if (setOkay) return pid;
-                    return std::unexpected(error::Code::MemoryFault);
+                    return result::Error(error::Code::MemoryFault);
                 }
 
                 if (proc.state == State::Zombie) {
@@ -190,12 +190,12 @@ namespace process
                     DestroyZombieProcess(proc);
                     interrupts::Restore(state);
                     if (setOkay) return pid;
-                    return std::unexpected(error::Code::MemoryFault);
+                    return result::Error(error::Code::MemoryFault);
                 }
             }
             if (!have_children) {
                 interrupts::Restore(state);
-                return std::unexpected(error::Code::NoChild);
+                return result::Error(error::Code::NoChild);
             }
 
             if (options & WNOHANG) {
@@ -208,7 +208,7 @@ namespace process
         // NOTREACHED
     }
 
-    std::expected<int, error::Code> Exit(amd64::TrapFrame& tf)
+    result::MaybeInt Exit(amd64::TrapFrame& tf)
     {
         if (current->pid == 1)
             panic("init exiting?");
@@ -235,16 +235,16 @@ namespace process
         panic("Exit() returned");
     }
 
-    std::expected<int, error::Code> ProcInfo(amd64::TrapFrame& tf)
+    result::MaybeInt ProcInfo(amd64::TrapFrame& tf)
     {
         const auto pid = syscall::GetArgument<1, int>(tf);
         const auto pi_size = syscall::GetArgument<2, size_t>(tf);
         auto piPtr = syscall::GetArgument<3, PROCINFO*>(tf);
 
-        if (pi_size != sizeof(PROCINFO)) return std::unexpected(error::Code::ResultTooLarge);
+        if (pi_size != sizeof(PROCINFO)) return result::Error(error::Code::ResultTooLarge);
 
         auto proc = FindProcessByPID(pid);
-        if (proc == nullptr) return std::unexpected(error::Code::NotFound);
+        if (proc == nullptr) return result::Error(error::Code::NotFound);
 
         auto next = FindNextProcess(pid);
         PROCINFO pi{};

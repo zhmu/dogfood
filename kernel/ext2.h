@@ -8,8 +8,7 @@
 
 #include "types.h"
 #include "fs.h"
-#include <expected>
-#include "error.h"
+#include "result.h"
 
 namespace fs
 {
@@ -203,19 +202,19 @@ namespace ext2
 /* Values for old filesystems (that have the good old revision) */
 #define EXT2_GOOD_OLD_INODE_SIZE 128
 
-    std::expected<fs::Inode*, error::Code> Mount(fs::Device dev);
+    result::Maybe<fs::Inode*> Mount(fs::Device dev);
     void ReadInode(fs::Device dev, fs::InodeNumber inum, on_disk::Inode& inode);
     void WriteInode(fs::Inode& inode);
     uint32_t bmap(fs::Inode& inode, unsigned int inodeBlockNr, bool createIfNecessary);
     bool ReadDirectory(fs::Inode& dirInode, off_t& offset, fs::DEntry& dentry);
-    std::expected<int, error::Code> AddEntryToDirectory(fs::Inode& dirInode, fs::InodeNumber inum, int type, const char* name);
-    std::expected<int, error::Code> RemoveEntryFromDirectory(fs::Inode& dirInode, const char* name);
+    result::MaybeInt AddEntryToDirectory(fs::Inode& dirInode, fs::InodeNumber inum, int type, const char* name);
+    result::MaybeInt RemoveEntryFromDirectory(fs::Inode& dirInode, const char* name);
     uint32_t AllocateInode(fs::Inode& dirInode);
 
-    std::expected<int, error::Code> CreateDirectory(fs::Inode& parent, const char* name, int mode);
-    std::expected<int, error::Code> RemoveDirectory(fs::Inode& inode);
+    result::MaybeInt CreateDirectory(fs::Inode& parent, const char* name, int mode);
+    result::MaybeInt RemoveDirectory(fs::Inode& inode);
     void Unlink(fs::Inode& inode);
     void Truncate(fs::Inode& inode);
-    std::expected<fs::Inode*, int> CreateSpecial(fs::Inode& parent, const char* name, int mode, dev_t dev);
+    result::Maybe<fs::Inode*> CreateSpecial(fs::Inode& parent, const char* name, int mode, dev_t dev);
 
 } // namespace ext2

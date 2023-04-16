@@ -3,15 +3,12 @@
 #include "types.h"
 #include <array>
 #include <deque>
-#include <expected>
-#include "error.h"
+#include "result.h"
 
 namespace amd64 { struct TrapFrame; }
 
 namespace pipe
 {
-    constexpr static auto inline PipeBufferSize = 1024;
-
     struct Pipe
     {
         int p_num_readers{};
@@ -20,8 +17,8 @@ namespace pipe
         size_t p_buffer_readpos{};
         size_t p_buffer_writepos{};
 
-        std::expected<int, error::Code> Read(void* buf, int len, const bool nonblock);
-        std::expected<int, error::Code> Write(const void* buf, int len);
+        result::MaybeInt Read(void* buf, int len, const bool nonblock);
+        result::MaybeInt Write(const void* buf, int len);
 
         bool CanRead();
         bool CanWrite();
@@ -29,5 +26,5 @@ namespace pipe
         size_t DetermineMaximumWriteSize() const;
     };
 
-    std::expected<int, error::Code> pipe(amd64::TrapFrame& tf);
+    result::MaybeInt pipe(amd64::TrapFrame& tf);
 }

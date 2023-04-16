@@ -4,10 +4,9 @@
 #include "file.h"
 #include "fs.h"
 #include "ptrace.h"
+#include "result.h"
 #include "signal.h"
 #include "vm.h"
-#include <expected>
-#include "error.h"
 
 namespace amd64
 {
@@ -51,10 +50,10 @@ namespace process
     void Sleep(WaitChannel);
     void Wakeup(WaitChannel);
 
-    std::expected<int, error::Code> Exit(amd64::TrapFrame& context);
-    std::expected<int, error::Code> Fork(amd64::TrapFrame& context);
-    std::expected<int, error::Code> WaitPID(amd64::TrapFrame& context);
-    std::expected<int, error::Code> ProcInfo(amd64::TrapFrame&);
+    result::MaybeInt Exit(amd64::TrapFrame& context);
+    result::MaybeInt Fork(amd64::TrapFrame& context);
+    result::MaybeInt WaitPID(amd64::TrapFrame& context);
+    result::MaybeInt ProcInfo(amd64::TrapFrame&);
 
     Process* FindProcessByPID(int pid);
 } // namespace process

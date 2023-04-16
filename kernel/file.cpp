@@ -82,7 +82,7 @@ namespace file
         }
     }
 
-    std::expected<int, error::Code> Write(File& file, const void* buf, int len)
+    result::MaybeInt Write(File& file, const void* buf, int len)
     {
         if (file.f_chardev)
             return file.f_chardev->Write(buf, len);
@@ -94,7 +94,7 @@ namespace file
         return result;
     }
 
-    std::expected<int, error::Code> Read(File& file, void* buf, int len)
+    result::MaybeInt Read(File& file, void* buf, int len)
     {
         if (file.f_chardev)
             return file.f_chardev->Read(buf, len);
@@ -148,22 +148,22 @@ namespace file
         return &file;
     }
 
-    std::expected<int, error::Code> Open(process::Process& proc, fs::Inode& inode, int flags)
+    result::MaybeInt Open(process::Process& proc, fs::Inode& inode, int flags)
     {
         auto file = file::Allocate(proc);
         if (file == nullptr)
-            return std::unexpected(error::Code::NoFile);
+            return result::Error(error::Code::NoFile);
 
         const auto type = inode.ext2inode->i_mode & EXT2_S_IFMASK;
         switch(type) {
             case EXT2_S_IFBLK:
                 file::Free(*file);
-                return std::unexpected(error::Code::NoDevice);
+                return result::Error(error::Code::NoDevice);
             case EXT2_S_IFCHR: {
                 const auto dev = inode.ext2inode->i_block[0];
                 file::Free(*file);
                 auto char_dev = device::LookupCharacterDevice(dev);
-                if (!char_dev) return std::unexpected(error::Code::NoDevice);
+                if (!char_dev) return result::Error(error::Code::NoDevice);
                 file->f_chardev = char_dev;
                 break;
             }

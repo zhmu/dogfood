@@ -3,6 +3,7 @@
 #include <dogfood/signal.h>
 #include <array>
 #include <bitset>
+#include "result.h"
 
 namespace amd64 { struct TrapFrame; }
 
@@ -30,8 +31,8 @@ namespace signal {
     };
 
     bool Send(process::Process&, int signo);
-    std::expected<int, error::Code> kill(amd64::TrapFrame& tf);
-    std::expected<int, error::Code> sigaction(amd64::TrapFrame& tf);
-    std::expected<int, error::Code> sigprocmask(amd64::TrapFrame& tf);
-    std::expected<int, error::Code> sigreturn(amd64::TrapFrame& tf);
+    result::MaybeInt kill(amd64::TrapFrame& tf);
+    result::MaybeInt sigaction(amd64::TrapFrame& tf);
+    result::MaybeInt sigprocmask(amd64::TrapFrame& tf);
+    result::MaybeInt sigreturn(amd64::TrapFrame& tf);
 }

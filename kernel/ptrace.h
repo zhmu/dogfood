@@ -1,7 +1,6 @@
 #pragma once
 
-#include <expected>
-#include "error.h"
+#include "result.h"
 
 namespace amd64 { struct TrapFrame; }
 
@@ -12,5 +11,5 @@ namespace ptrace {
         int signal{};
     };
 
-    std::expected<int, error::Code> PTrace(amd64::TrapFrame&);
+    result::MaybeInt PTrace(amd64::TrapFrame&);
 }

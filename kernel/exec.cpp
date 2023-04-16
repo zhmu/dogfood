@@ -137,23 +137,23 @@ namespace exec
         }
     } // namespace
 
-    std::expected<int, error::Code> Exec(amd64::TrapFrame& tf)
+    result::MaybeInt Exec(amd64::TrapFrame& tf)
     {
         const auto path = syscall::GetArgument<1, const char*>(tf);
         const auto argv = syscall::GetArgument<2, const char**>(tf);
         const auto envp = syscall::GetArgument<3, const char**>(tf);
         auto inode = fs::namei(path.get(), fs::Follow::Yes);
         if (inode == nullptr)
-            return std::unexpected(error::Code::NoEntry);
+            return result::Error(error::Code::NoEntry);
 
         Elf64_Ehdr ehdr;
         if (fs::Read(*inode, reinterpret_cast<void*>(&ehdr), 0, sizeof(ehdr)) != sizeof(ehdr)) {
             fs::iput(*inode);
-            return std::unexpected(error::Code::NotAnExecutable);
+            return result::Error(error::Code::NotAnExecutable);
         }
         if (!VerifyHeader(ehdr)) {
             fs::iput(*inode);
-            return std::unexpected(error::Code::NotAnExecutable);
+            return result::Error(error::Code::NotAnExecutable);
         }
 
         // We must prepare the new userland stack with argc/argv/envp before
@@ -166,7 +166,7 @@ namespace exec
         fs::iput(*inode);
         if (!phLoaded) {
             // TODO need to kill the process here
-            return std::unexpected(error::Code::MemoryFault);
+            return result::Error(error::Code::MemoryFault);
         }
 
         MapUserlandStack(vs, std::move(ustack), tf);

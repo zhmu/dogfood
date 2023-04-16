@@ -17,12 +17,12 @@ namespace select {
     using SelectVector = std::vector<SelectItem>;
 
     namespace {
-        std::expected<int, error::Code> ConvertFdsPtrToFdSet(userspace::Pointer<fd_set>& p, SelectVector& v)
+        result::MaybeInt ConvertFdsPtrToFdSet(userspace::Pointer<fd_set>& p, SelectVector& v)
         {
             if (!p) return 0;
 
             auto content = *p;
-            if (!content) return std::unexpected(error::Code::MemoryFault);
+            if (!content) return result::Error(error::Code::MemoryFault);
 
             const auto fds = *content;
             constexpr auto fdsLength = sizeof(fd_set::fds_bits) / sizeof(fd_set::fds_bits[0]);
@@ -30,7 +30,7 @@ namespace select {
                 if (!FD_ISSET(n, &fds)) continue;
 
                 const auto file = file::FindByIndex(process::GetCurrent(), n);
-                if (file == nullptr) return std::unexpected(error::Code::BadFileHandle);
+                if (file == nullptr) return result::Error(error::Code::BadFileHandle);
                 v.push_back({ n, file });
             }
 
@@ -51,7 +51,7 @@ namespace select {
         }
     }
 
-    std::expected<int, error::Code> Select(amd64::TrapFrame& tf)
+    result::MaybeInt Select(amd64::TrapFrame& tf)
     {
         const auto nr = syscall::GetArgument<1>(tf);
         auto readfdsPtr = syscall::GetArgument<2, fd_set*>(tf);
@@ -90,9 +90,9 @@ namespace select {
             //process::Yield();
         }
 
-        if (readfdsPtr && !readfdsPtr.Set(readFds)) return std::unexpected(error::Code::MemoryFault);
-        if (writefdsPtr && !writefdsPtr.Set(writeFds)) return std::unexpected(error::Code::MemoryFault);
-        if (exceptfdsPtr && !exceptfdsPtr.Set(exceptFds)) return std::unexpected(error::Code::MemoryFault);
+        if (readfdsPtr && !readfdsPtr.Set(readFds)) return result::Error(error::Code::MemoryFault);
+        if (writefdsPtr && !writefdsPtr.Set(writeFds)) return result::Error(error::Code::MemoryFault);
+        if (exceptfdsPtr && !exceptfdsPtr.Set(exceptFds)) return result::Error(error::Code::MemoryFault);
         return result;
     }
 }

@@ -4,8 +4,7 @@
 #include "x86_64/amd64.h"
 #include <optional>
 #include <type_traits>
-#include <expected>
-#include "error.h"
+#include "result.h"
 
 namespace userspace {
     template<typename T>
@@ -20,7 +19,7 @@ namespace userspace {
             return value;
         }
 
-        std::expected<int, error::Code> Set(const T& value) {
+        result::MaybeInt Set(const T& value) {
             *p = value; // TODO check if this fails
             return 0;
         }
