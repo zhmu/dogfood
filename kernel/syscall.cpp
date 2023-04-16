@@ -126,17 +126,16 @@ namespace
 
                 const auto follow = (flags & AT_SYMLINK_NOFOLLOW) ? fs::Follow::No : fs::Follow::Yes;
                 auto inode = fs::namei(path.get(), follow, base_inode);
-                if (inode == nullptr)
-                    return result::Error(error::Code::NoEntry);
+                if (!inode) return result::Error(inode.error());
 
                 result::MaybeInt ret = 0;
                 stat st{};
-                if (fs::Stat(*inode, st)) {
+                if (fs::Stat(**inode, st)) {
                     if (!statBuf.Set(st)) ret = result::Error(error::Code::MemoryFault);
                 } else {
                     ret = result::Error(error::Code::IOError);
                 }
-                fs::iput(*inode);
+                fs::iput(**inode);
                 return ret;
             }
             case SYS_seek: {
@@ -239,15 +238,14 @@ namespace
                 const auto buf = syscall::GetArgument<1, char*>(*tf);
                 auto& current = process::GetCurrent();
                 auto inode = fs::namei(buf.get(), fs::Follow::Yes);
-                if (inode == nullptr)
-                    return result::Error(error::Code::NoEntry);
-                if ((inode->ext2inode->i_mode & EXT2_S_IFDIR) == 0) {
-                    fs::iput(*inode);
+                if (!inode) return result::Error(inode.error());
+                if (((*inode)->ext2inode->i_mode & EXT2_S_IFDIR) == 0) {
+                    fs::iput(**inode);
                     return result::Error(error::Code::NotADirectory);
                 }
 
                 fs::iput(*current.cwd);
-                current.cwd = inode;
+                current.cwd = *inode;
                 return 0;
             }
             case SYS_fchdir: {
@@ -294,13 +292,12 @@ namespace
                 const auto uid = syscall::GetArgument<2, int>(*tf);
                 const auto gid = syscall::GetArgument<3, int>(*tf);
                 const auto inode = fs::namei(path.get(), fs::Follow::Yes);
-                if (inode == nullptr)
-                    return result::Error(error::Code::NoEntry);
+                if (!inode) return result::Error(inode.error());
 
-                inode->ext2inode->i_uid = uid;
-                inode->ext2inode->i_gid = gid;
-                fs::idirty(*inode);
-                fs::iput(*inode);
+                (*inode)->ext2inode->i_uid = uid;
+                (*inode)->ext2inode->i_gid = gid;
+                fs::idirty(**inode);
+                fs::iput(**inode);
                 return 0;
             }
             case SYS_umask: {
@@ -314,12 +311,11 @@ namespace
                 const auto path = syscall::GetArgument<1, const char*>(*tf);
                 auto mode = syscall::GetArgument<2, int>(*tf);
                 auto inode = fs::namei(path.get(), fs::Follow::Yes);
-                if (inode == nullptr)
-                    return result::Error(error::Code::NoEntry);
+                if (!inode) return result::Error(inode.error());
                 mode &= modeMask;
-                inode->ext2inode->i_mode = (inode->ext2inode->i_mode & ~modeMask) | mode;
-                fs::idirty(*inode);
-                fs::iput(*inode);
+                (*inode)->ext2inode->i_mode = ((*inode)->ext2inode->i_mode & ~modeMask) | mode;
+                fs::idirty(**inode);
+                fs::iput(**inode);
                 return 0;
             }
             case SYS_unlink: {
@@ -372,14 +368,13 @@ namespace
                 auto buf = syscall::GetArgument<2, char*>(*tf);
                 const auto size = syscall::GetArgument<3, size_t>(*tf);
                 auto inode = fs::namei(path.get(), fs::Follow::No);
-                if (inode == nullptr)
-                    return result::Error(error::Code::NoEntry);
-                if ((inode->ext2inode->i_mode & EXT2_S_IFMASK) != EXT2_S_IFLNK) {
-                    fs::iput(*inode);
+                if (!inode) return result::Error(inode.error());
+                if (((*inode)->ext2inode->i_mode & EXT2_S_IFMASK) != EXT2_S_IFLNK) {
+                    fs::iput(**inode);
                     return result::Error(error::Code::InvalidArgument);
                 }
-                const auto numBytesRead = fs::Read(*inode, buf.get(), 0, size);
-                fs::iput(*inode);
+                const auto numBytesRead = fs::Read(**inode, buf.get(), 0, size);
+                fs::iput(**inode);
                 return numBytesRead;
             }
             case SYS_symlink: {

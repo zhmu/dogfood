@@ -46,7 +46,7 @@ namespace fs
     void iput(Inode& inode);
     void iref(Inode& inode);
     void idirty(Inode& inode);
-    Inode* namei(const char* path, const Follow follow, fs::Inode* parent_inode = nullptr);
+    result::Maybe<Inode*> namei(const char* path, const Follow follow, fs::Inode* parent_inode = nullptr);
     bool Stat(Inode& inode, stat& sbuf);
     result::MaybeInt ResolveDirectoryName(Inode& inode, char* buffer, int bufferSize);
     result::MaybeInt Link(const char* source, const char* dest);

@@ -143,16 +143,15 @@ namespace exec
         const auto argv = syscall::GetArgument<2, const char**>(tf);
         const auto envp = syscall::GetArgument<3, const char**>(tf);
         auto inode = fs::namei(path.get(), fs::Follow::Yes);
-        if (inode == nullptr)
-            return result::Error(error::Code::NoEntry);
+        if (!inode) return result::Error(inode.error());
 
         Elf64_Ehdr ehdr;
-        if (fs::Read(*inode, reinterpret_cast<void*>(&ehdr), 0, sizeof(ehdr)) != sizeof(ehdr)) {
-            fs::iput(*inode);
+        if (fs::Read(**inode, reinterpret_cast<void*>(&ehdr), 0, sizeof(ehdr)) != sizeof(ehdr)) {
+            fs::iput(**inode);
             return result::Error(error::Code::NotAnExecutable);
         }
         if (!VerifyHeader(ehdr)) {
-            fs::iput(*inode);
+            fs::iput(**inode);
             return result::Error(error::Code::NotAnExecutable);
         }
 
@@ -162,8 +161,8 @@ namespace exec
         auto ustack = PrepareNewUserlandStack(argv.get(), envp.get());
         vm::FreeMappings(vs);
 
-        const auto phLoaded = LoadProgramHeaders(vs, *inode, ehdr);
-        fs::iput(*inode);
+        const auto phLoaded = LoadProgramHeaders(vs, **inode, ehdr);
+        fs::iput(**inode);
         if (!phLoaded) {
             // TODO need to kill the process here
             return result::Error(error::Code::MemoryFault);

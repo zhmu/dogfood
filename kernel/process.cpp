@@ -273,7 +273,7 @@ namespace process
         assert(init != nullptr);
         assert(init->pid == 1);
 
-        init->cwd = fs::namei("/", fs::Follow::Yes);
+        init->cwd = fs::namei("/", fs::Follow::Yes).value_or(nullptr);
         file::AllocateConsole(*init); // 0, stdin
         file::AllocateConsole(*init); // 1, stdout
         file::AllocateConsole(*init); // 2, stderr

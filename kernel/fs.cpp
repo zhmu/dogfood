@@ -25,7 +25,7 @@ namespace fs
 
         result::MaybeInt FollowSymLink(Inode*& parent, Inode*& inode, int& depth);
 
-        bool IsolatePathComponent(const char*& path, char component[MaxDirectoryEntryNameLength])
+        bool IsolatePathComponent(const char*& path, std::array<char, MaxDirectoryEntryNameLength>& component)
         {
             while (*path == '/')
                 ++path;
@@ -35,8 +35,9 @@ namespace fs
             auto componentBegin = path;
             while (*path != '/' && *path != '\0')
                 ++path;
-            int len = path - componentBegin;
-            memcpy(component, componentBegin, len);
+            const auto len = path - componentBegin;
+            assert(len + 1 < component.size());
+            memcpy(component.data(), componentBegin, len);
             component[len] = '\0';
             return true;
         }
@@ -69,35 +70,42 @@ namespace fs
             return result::Error(error::Code::NoEntry);
         }
 
-        Inode* Lookup(Inode* current_inode, const char* path, const Follow follow, Inode*& parent, char* component, int& depth)
+        struct LookupResult {
+            Inode* inode{};
+            Inode* parent{};
+            std::array<char, MaxDirectoryEntryNameLength> component{};
+        };
+
+        result::Maybe<LookupResult> Lookup(Inode* current_inode, const char* path, const Follow follow, int& depth)
         {
             iref(*current_inode);
 
-            parent = nullptr;
-            while (IsolatePathComponent(path, component)) {
-                if (FollowSymLink(parent, current_inode, depth) != 0) {
-                    return nullptr;
+            LookupResult result;
+            while (IsolatePathComponent(path, result.component)) {
+                if (const auto r = FollowSymLink(result.parent, current_inode, depth); !r) {
+                    return result::Error(r.error());
                 }
-                auto lookup_inode = LookupInDirectory(*current_inode, component);
+                auto lookup_inode = LookupInDirectory(*current_inode, result.component.data());
                 if (!lookup_inode) {
                     if (strchr(path, '/') == nullptr) {
-                        parent = current_inode;
+                        result.parent = current_inode;
                     } else
                         iput(*current_inode); // not final piece
-                    return nullptr;
+                    return result;
                 }
-                if (parent != nullptr)
-                    iput(*parent);
-                parent = current_inode;
+                if (result.parent != nullptr)
+                    iput(*result.parent);
+                result.parent = current_inode;
                 current_inode = *lookup_inode;
             }
 
             if (follow == Follow::Yes && IsSymLink(*current_inode)) {
-                if (auto result = FollowSymLink(parent, current_inode, depth); result != 0)
-                    return nullptr;
+                if (const auto r = FollowSymLink(result.parent, current_inode, depth); !r)
+                    return result::Error(r.error());
             }
 
-            return current_inode;
+            result.inode = current_inode;
+            return result;
         }
 
         result::MaybeInt FollowSymLink(Inode*& parent, Inode*& inode, int& depth)
@@ -111,24 +119,24 @@ namespace fs
             if (!result || *result == 0) return result::Error(error::Code::IOError);
             symlink[*result] = '\0';
 
-            char component[MaxPathLength];
-            Inode* newParent = nullptr;
-            auto next = Lookup(parent, symlink, Follow::Yes, newParent, component, depth);
-            if (next == nullptr) return result::Error(error::Code::NoEntry);
+            auto next = Lookup(parent, symlink, Follow::Yes, depth);
+            if (!next) return result::Error(next.error());
+            // XXX Doesn't this leak ??
+            if (next->inode == nullptr) return result::Error(error::Code::NoEntry);
             iput(*parent);
-            parent= newParent;
-            inode = next;
+            parent = next->parent;
+            inode = next->inode;
             return 0;
         }
 
-        Inode* namei2(const char* path, const Follow follow, Inode*& parent, char* component, fs::Inode* lookup_root = nullptr)
+        result::Maybe<LookupResult> namei2(const char* path, const Follow follow, fs::Inode* lookup_root = nullptr)
         {
             if (path[0] == '/')
                 lookup_root = rootInode;
             else if (lookup_root == nullptr)
                 lookup_root = process::GetCurrent().cwd;
             int depth = 0;
-            return Lookup(lookup_root, path, follow, parent, component, depth);
+            return Lookup(lookup_root, path, follow, depth);
         }
 
         bool LookupInodeByNumber(Inode& inode, ino_t inum, fs::DEntry& dentry)
@@ -273,43 +281,43 @@ namespace fs
         return s - reinterpret_cast<const char*>(src);
     }
 
-    Inode* namei(const char* path, const Follow follow, fs::Inode* parent_inode)
+    result::Maybe<Inode*> namei(const char* path, const Follow follow, fs::Inode* parent_inode)
     {
-        Inode* parent;
-        char component[MaxPathLength];
-        auto inode = namei2(path, follow, parent, component, parent_inode);
-        if (parent != nullptr)
-            iput(*parent);
-        if (inode != nullptr)
-            return inode;
-        return nullptr;
+        auto result = namei2(path, follow, parent_inode);
+        if (!result) return result::Error(result.error());
+        if (result->parent)
+            iput(*result->parent);
+        if (!result->inode)
+             return result::Error(error::Code::NoEntry);
+        return result->inode;
     }
 
     result::Maybe<Inode*> Open(const char* path, int flags, int mode)
     {
-        Inode* parent;
-        char component[MaxPathLength];
-        auto inode = namei2(path, Follow::No /* ? */, parent, component);
-        if (inode != nullptr) {
-            if (parent != nullptr)
-                fs::iput(*parent);
-            if ((flags & (O_CREAT | O_EXCL)) == (O_CREAT | O_EXCL))
+        auto lookup_result = namei2(path, Follow::No /* ? */);
+        if (!lookup_result) return result::Error(lookup_result.error());
+        if (lookup_result->inode) {
+            if (lookup_result->parent)
+                fs::iput(*lookup_result->parent);
+            if ((flags & (O_CREAT | O_EXCL)) == (O_CREAT | O_EXCL)) {
+                fs::iput(*lookup_result->inode);
                 return result::Error(error::Code::AlreadyExists);
-            if (flags & O_TRUNC) {
-                ext2::Truncate(*inode);
             }
-            return inode;
+            if (flags & O_TRUNC) {
+                ext2::Truncate(*lookup_result->inode);
+            }
+            return lookup_result->inode;
         }
-        if (parent == nullptr)
+        if (lookup_result->parent == nullptr)
             return result::Error(error::Code::NoEntry);
         if ((flags & O_CREAT) == 0)
             return result::Error(error::Code::NoEntry);
 
-        auto inum = ext2::AllocateInode(*parent);
+        auto inum = ext2::AllocateInode(*lookup_result->parent);
         if (inum == 0)
             return result::Error(error::Code::OutOfSpace);
 
-        auto result = fs::iget(parent->dev, inum);
+        auto result = fs::iget(lookup_result->parent->dev, inum);
         if (!result)
             return result::Error(result.error());
         auto newInode = *result;
@@ -321,88 +329,91 @@ namespace fs
         }
         fs::idirty(*newInode);
 
-        if (!ext2::AddEntryToDirectory(*parent, inum, EXT2_FT_REG_FILE, component)) {
+        if (!ext2::AddEntryToDirectory(*lookup_result->parent, inum, EXT2_FT_REG_FILE, lookup_result->component.data())) {
             // TODO deallocate inode
             return result::Error(error::Code::OutOfSpace);
         }
-        fs::idirty(*parent);
-        fs::iput(*parent);
+        fs::idirty(*lookup_result->parent);
+        fs::iput(*lookup_result->parent);
         return newInode;
     }
 
     result::MaybeInt Unlink(const char* path)
     {
-        Inode* parent;
-        char component[MaxPathLength];
-        Inode* inode = namei2(path, Follow::No, parent, component);
-        if (inode == nullptr) {
-            if (parent != nullptr)
-                fs::iput(*parent);
+        auto lookup_result = namei2(path, Follow::No);
+        if (!lookup_result) return result::Error(lookup_result.error());
+        if (!lookup_result->inode) {
+            if (lookup_result->parent != nullptr)
+                fs::iput(*lookup_result->parent);
             return result::Error(error::Code::NoEntry);
         }
 
-        if ((inode->ext2inode->i_mode & EXT2_S_IFMASK) == EXT2_S_IFDIR) {
-            fs::iput(*parent);
-            fs::iput(*inode);
+        if ((lookup_result->inode->ext2inode->i_mode & EXT2_S_IFMASK) == EXT2_S_IFDIR) {
+            fs::iput(*lookup_result->parent);
+            fs::iput(*lookup_result->inode);
             return result::Error(error::Code::PermissionDenied);
         }
 
-        if (!ext2::RemoveEntryFromDirectory(*parent, component)) {
-            fs::iput(*parent);
-            fs::iput(*inode);
+        if (!ext2::RemoveEntryFromDirectory(*lookup_result->parent, lookup_result->component.data())) {
+            fs::iput(*lookup_result->parent);
+            fs::iput(*lookup_result->inode);
             return result::Error(error::Code::IOError);
         }
-        fs::iput(*parent);
-        ext2::Unlink(*inode);
+        fs::iput(*lookup_result->parent);
+        ext2::Unlink(*lookup_result->inode);
         return 0;
     }
 
     result::MaybeInt Link(const char* source, const char* dest)
     {
-        auto sourceInode = namei(source, Follow::Yes);
-        if (sourceInode == nullptr)
-            return result::Error(error::Code::NoEntry);
+        auto source_inode = namei(source, Follow::Yes);
+        if (!source_inode) return result::Error(source_inode.error());
 
-        Inode* parent;
-        char component[MaxPathLength];
-        if (auto inode = namei2(dest, Follow::Yes, parent, component); inode != nullptr) {
-            if (parent != nullptr)
-                fs::iput(*parent);
+        auto lookup_result = namei2(dest, Follow::Yes);
+        if (!lookup_result) return result::Error(lookup_result.error());
+        if (lookup_result->inode) {
+            fs::iput(*lookup_result->parent);
+            fs::iput(*lookup_result->inode);
             return result::Error(error::Code::AlreadyExists);
         }
-        if (parent == nullptr)
+        if (!lookup_result->parent)
             return result::Error(error::Code::NoEntry);
 
         // XXX EXT2_FT_REG_FILE should be looked up
-        if (!ext2::AddEntryToDirectory(*parent, sourceInode->inum, EXT2_FT_REG_FILE, component)) {
+        if (!ext2::AddEntryToDirectory(*lookup_result->parent, (*source_inode)->inum, EXT2_FT_REG_FILE, lookup_result->component.data())) {
             return result::Error(error::Code::OutOfSpace);
         }
-        ++sourceInode->ext2inode->i_links_count;
-        fs::idirty(*sourceInode);
-        fs::iput(*sourceInode);
-        fs::iput(*parent);
+        ++(*source_inode)->ext2inode->i_links_count;
+        fs::idirty(**source_inode);
+        fs::iput(**source_inode);
+        fs::iput(*lookup_result->parent);
         return 0;
     }
 
     result::MaybeInt SymLink(const char* source, const char* dest)
     {
         Inode* parent;
-        char component[MaxPathLength];
-        if (auto inode = namei2(dest, Follow::Yes, parent, component); inode != nullptr) {
-            if (parent != nullptr)
-                fs::iput(*parent);
+        auto lookup_result = namei2(dest, Follow::Yes);
+        if (!lookup_result) return result::Error(lookup_result.error());
+        if (lookup_result->inode) {
+            fs::iput(*lookup_result->parent);
+            fs::iput(*lookup_result->inode);
             return result::Error(error::Code::AlreadyExists);
         }
-        if (parent == nullptr)
+        if (!lookup_result->parent)
             return result::Error(error::Code::NoEntry);
 
-        auto inum = ext2::AllocateInode(*parent);
-        if (inum == 0)
+        auto inum = ext2::AllocateInode(*lookup_result->parent);
+        if (inum == 0) {
+            fs::iput(*lookup_result->parent);
             return result::Error(error::Code::OutOfSpace);
+        }
 
-        auto result = fs::iget(parent->dev, inum);
-        if (!result)
+        auto result = fs::iget(lookup_result->parent->dev, inum);
+        if (!result) {
+            fs::iput(*lookup_result->parent);
             return result::Error(result.error());
+        }
         auto newInode = *result;
         {
             auto& e2i = *newInode->ext2inode;
@@ -414,69 +425,69 @@ namespace fs
         if (fs::Write(*newInode, source, 0, strlen(source)) != strlen(source)) {
             // XXX undo damage
             fs::iput(*newInode);
-            fs::iput(*parent);
+            fs::iput(*lookup_result->parent);
             return result::Error(error::Code::IOError);
         }
         fs::iput(*newInode);
 
-        if (!ext2::AddEntryToDirectory(*parent, inum, EXT2_FT_SYMLINK, component)) {
+        if (!ext2::AddEntryToDirectory(*parent, inum, EXT2_FT_SYMLINK, lookup_result->component.data())) {
             // TODO deallocate inode
+            fs::iput(*lookup_result->parent);
             return result::Error(error::Code::OutOfSpace);
         }
-        fs::idirty(*parent);
-        fs::iput(*parent);
+        fs::idirty(*lookup_result->parent);
+        fs::iput(*lookup_result->parent);
         return 0;
     }
 
     result::MaybeInt MakeDirectory(const char* path, int mode)
     {
-        Inode* parent;
-        char component[MaxPathLength];
-        if (auto inode = namei2(path, Follow::Yes, parent, component); inode != nullptr) {
-            fs::iput(*parent);
-            fs::iput(*inode);
+        auto lookup_result = namei2(path, Follow::Yes);
+        if (!lookup_result) return result::Error(lookup_result.error());
+        if (lookup_result->inode) {
+            fs::iput(*lookup_result->inode);
+            fs::iput(*lookup_result->parent);
             return result::Error(error::Code::AlreadyExists);
         }
-        if (parent == nullptr)
+        if (!lookup_result->parent)
             return result::Error(error::Code::NoEntry);
 
-        auto r = ext2::CreateDirectory(*parent, component, mode);
-        fs::iput(*parent);
+        auto r = ext2::CreateDirectory(*lookup_result->parent, lookup_result->component.data(), mode);
+        fs::iput(*lookup_result->parent);
         return r;
     }
 
     result::MaybeInt RemoveDirectory(const char* path)
     {
-        Inode* parent;
-        char component[MaxPathLength];
-        Inode* inode = namei2(path, Follow::Yes, parent, component);
-        if (inode == nullptr) {
-            if (parent != nullptr)
-                fs::iput(*parent);
+        auto lookup_result = namei2(path, Follow::Yes);
+        if (!lookup_result) return result::Error(lookup_result.error());
+        if (!lookup_result->inode) {
+            if (lookup_result->parent)
+                fs::iput(*lookup_result->parent);
             return result::Error(error::Code::NoEntry);
         }
 
-        if ((inode->ext2inode->i_mode & EXT2_S_IFMASK) != EXT2_S_IFDIR) {
-            fs::iput(*parent);
-            fs::iput(*inode);
+        if ((lookup_result->inode->ext2inode->i_mode & EXT2_S_IFMASK) != EXT2_S_IFDIR) {
+            fs::iput(*lookup_result->parent);
+            fs::iput(*lookup_result->inode);
             return result::Error(error::Code::NotADirectory);
         }
 
-        if (!IsDirectoryEmpty(*inode)) {
-            fs::iput(*parent);
-            fs::iput(*inode);
+        if (!IsDirectoryEmpty(*lookup_result->inode)) {
+            fs::iput(*lookup_result->parent);
+            fs::iput(*lookup_result->inode);
             return result::Error(error::Code::NotEmpty);
         }
 
-        if (!ext2::RemoveEntryFromDirectory(*parent, component)) {
-            fs::iput(*parent);
-            fs::iput(*inode);
+        if (!ext2::RemoveEntryFromDirectory(*lookup_result->parent, lookup_result->component.data())) {
+            fs::iput(*lookup_result->parent);
+            fs::iput(*lookup_result->inode);
             return result::Error(error::Code::IOError);
         }
-        --parent->ext2inode->i_links_count;
-        fs::idirty(*parent);
-        fs::iput(*parent);
-        return ext2::RemoveDirectory(*inode);
+        --lookup_result->parent->ext2inode->i_links_count;
+        fs::idirty(*lookup_result->parent);
+        fs::iput(*lookup_result->parent);
+        return ext2::RemoveDirectory(*lookup_result->inode);
     }
 
     result::MaybeInt ResolveDirectoryName(Inode& inode, char* buffer, int bufferSize)
@@ -548,22 +559,24 @@ namespace fs
 
     result::MaybeInt Mknod(const char* path, mode_t mode, dev_t dev)
     {
-        Inode* parent;
-        char component[MaxPathLength];
-        if (auto inode = namei2(path, Follow::Yes, parent, component); inode != nullptr) {
-            fs::iput(*parent);
-            fs::iput(*inode);
+        auto lookup_result = namei2(path, Follow::Yes);
+        if (!lookup_result) return result::Error(lookup_result.error());
+        if (lookup_result->inode) {
+            fs::iput(*lookup_result->parent);
+            fs::iput(*lookup_result->inode);
             return result::Error(error::Code::AlreadyExists);
         }
-        if (parent == nullptr)
+        if (!lookup_result->parent)
             return result::Error(error::Code::NoEntry);
 
         const auto type = mode & EXT2_S_IFMASK;
-        if (type != EXT2_S_IFBLK && type != EXT2_S_IFCHR)
+        if (type != EXT2_S_IFBLK && type != EXT2_S_IFCHR) {
+            fs::iput(*lookup_result->parent);
             return result::Error(error::Code::InvalidArgument);
+        }
 
-        const auto result = ext2::CreateSpecial(*parent, component, mode, dev);
-        fs::iput(*parent);
+        const auto result = ext2::CreateSpecial(*lookup_result->parent, lookup_result->component.data(), mode, dev);
+        fs::iput(*lookup_result->parent);
         if (result) {
             fs::iput(**result);
             return 0;
