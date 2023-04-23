@@ -190,8 +190,6 @@ namespace vm
     void FreeMappings(VMSpace& vs)
     {
         for(auto& m: vs.mappings) {
-            if (m.inode != nullptr)
-                fs::iput(*m.inode);
             for(auto& mp: m.pages) {
                 MapMemory(vs, mp.va, vm::PageSize, 0, 0);
             }
@@ -207,12 +205,11 @@ namespace vm
                 sourceMapping.pte_flags,
                 sourceMapping.va_start,
                 sourceMapping.va_end,
-                sourceMapping.inode,
+                fs::ReferenceInode(sourceMapping.inode),
                 sourceMapping.inode_offset,
                 sourceMapping.inode_length,
             });
             auto& destMapping = destVS.mappings.back();
-            if (destMapping.inode) fs::iref(*destMapping.inode);
 
             for(auto& p: sourceMapping.pages) {
                 CloneMappedPage(destVS, destMapping, p);
@@ -275,13 +272,12 @@ namespace vm
         return vs.mappings.back();
     }
 
-    Mapping& MapInode(VMSpace& vs, uint64_t va, uint64_t pteFlags, uint64_t mappingSize, fs::Inode& inode, uint64_t inodeOffset, uint64_t inodeSize)
+    Mapping& MapInode(VMSpace& vs, uint64_t va, uint64_t pteFlags, uint64_t mappingSize, fs::InodeRef inode, uint64_t inodeOffset, uint64_t inodeSize)
     {
         auto& mapping = Map(vs, va, pteFlags, mappingSize);
-        mapping.inode = &inode;
+        mapping.inode = std::move(inode);
         mapping.inode_offset = inodeOffset;
         mapping.inode_length = inodeSize;
-        fs::iref(*mapping.inode);
         return mapping;
     }
 

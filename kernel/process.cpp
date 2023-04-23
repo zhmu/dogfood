@@ -133,8 +133,7 @@ namespace process
         new_process->parent = current;
         new_process->umask = current->umask;
         file::CloneTable(*current, *new_process);
-        new_process->cwd = current->cwd;
-        fs::iref(*new_process->cwd);
+        new_process->cwd = fs::ReferenceInode(current->cwd);
 
         vm::Clone(new_process->vmspace);
         new_process->state = State::Runnable;
@@ -273,7 +272,9 @@ namespace process
         assert(init != nullptr);
         assert(init->pid == 1);
 
-        init->cwd = fs::namei("/", fs::Follow::Yes).value_or(nullptr);
+        auto cwd = fs::namei("/", fs::Follow::Yes, {});
+        assert(cwd);
+        init->cwd = std::move(*cwd);
         file::AllocateConsole(*init); // 0, stdin
         file::AllocateConsole(*init); // 1, stdout
         file::AllocateConsole(*init); // 2, stderr

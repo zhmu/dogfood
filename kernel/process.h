@@ -33,7 +33,7 @@ namespace process
         struct amd64::Context* context = nullptr;
         uint8_t fpu[512] __attribute__((aligned(16)));
         file::File files[maxFiles];
-        fs::Inode* cwd = nullptr;
+        fs::InodeRef cwd;
         vm::VMSpace vmspace;
         signal::State signal;
         ptrace::State ptrace;

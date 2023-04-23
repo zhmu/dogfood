@@ -77,14 +77,11 @@ namespace
                 auto& current = process::GetCurrent();
                 const auto mask = (~current.umask) & modeMask;
 
-                const auto result = fs::Open(path.get(), flags, mode & mask);
+                auto result = fs::Open(path.get(), flags, mode & mask);
                 if (!result) {
                     return MapError(result);
                 }
-                auto inode = *result;
-                const auto r = file::Open(current, *inode, flags);
-                fs::iput(*inode);
-                return r;
+                return file::Open(current, std::move(*result), flags);
             }
             case SYS_close: {
                 const auto file = file::FindByIndex(process::GetCurrent(), syscall::GetArgument<1>(*tf));
@@ -114,18 +111,18 @@ namespace
                 auto statBuf = syscall::GetArgument<3, stat*>(*tf);
                 const auto flags = syscall::GetArgument<4>(*tf);
 
-                fs::Inode* base_inode = nullptr;
+                fs::InodeRef base_inode;
                 const auto fd = syscall::GetArgument<1>(*tf);
                 if (fd == AT_FDCWD) {
-                    base_inode = process::GetCurrent().cwd;
+                    base_inode = fs::ReferenceInode(process::GetCurrent().cwd);
                 } else {
                     const auto file = file::FindByIndex(process::GetCurrent(), fd);
                     if (file == nullptr) return result::Error(error::Code::BadFileHandle);
-                    base_inode = file->f_inode;
+                    base_inode = fs::ReferenceInode(file->f_inode);
                 }
 
                 const auto follow = (flags & AT_SYMLINK_NOFOLLOW) ? fs::Follow::No : fs::Follow::Yes;
-                auto inode = fs::namei(path.get(), follow, base_inode);
+                auto inode = fs::namei(path.get(), follow, std::move(base_inode));
                 if (!inode) return result::Error(inode.error());
 
                 result::MaybeInt ret = 0;
@@ -135,7 +132,6 @@ namespace
                 } else {
                     ret = result::Error(error::Code::IOError);
                 }
-                fs::iput(**inode);
                 return ret;
             }
             case SYS_seek: {
@@ -237,15 +233,13 @@ namespace
             case SYS_chdir: {
                 const auto buf = syscall::GetArgument<1, char*>(*tf);
                 auto& current = process::GetCurrent();
-                auto inode = fs::namei(buf.get(), fs::Follow::Yes);
+                auto inode = fs::namei(buf.get(), fs::Follow::Yes, {});
                 if (!inode) return result::Error(inode.error());
                 if (((*inode)->ext2inode->i_mode & EXT2_S_IFDIR) == 0) {
-                    fs::iput(**inode);
                     return result::Error(error::Code::NotADirectory);
                 }
 
-                fs::iput(*current.cwd);
-                current.cwd = *inode;
+                current.cwd = std::move(*inode);
                 return 0;
             }
             case SYS_fchdir: {
@@ -256,9 +250,7 @@ namespace
                     return result::Error(error::Code::NotADirectory);
 
                 auto& current = process::GetCurrent();
-                fs::iput(*current.cwd);
-                current.cwd = file->f_inode;
-                fs::iref(*current.cwd);
+                current.cwd = fs::ReferenceInode(file->f_inode);
                 return 0;
             }
             case SYS_vmop:
@@ -291,13 +283,12 @@ namespace
                 const auto path = syscall::GetArgument<1, const char*>(*tf);
                 const auto uid = syscall::GetArgument<2, int>(*tf);
                 const auto gid = syscall::GetArgument<3, int>(*tf);
-                const auto inode = fs::namei(path.get(), fs::Follow::Yes);
+                const auto inode = fs::namei(path.get(), fs::Follow::Yes, {});
                 if (!inode) return result::Error(inode.error());
 
                 (*inode)->ext2inode->i_uid = uid;
                 (*inode)->ext2inode->i_gid = gid;
                 fs::idirty(**inode);
-                fs::iput(**inode);
                 return 0;
             }
             case SYS_umask: {
@@ -310,12 +301,11 @@ namespace
             case SYS_chmod: {
                 const auto path = syscall::GetArgument<1, const char*>(*tf);
                 auto mode = syscall::GetArgument<2, int>(*tf);
-                auto inode = fs::namei(path.get(), fs::Follow::Yes);
+                auto inode = fs::namei(path.get(), fs::Follow::Yes, {});
                 if (!inode) return result::Error(inode.error());
                 mode &= modeMask;
                 (*inode)->ext2inode->i_mode = ((*inode)->ext2inode->i_mode & ~modeMask) | mode;
                 fs::idirty(**inode);
-                fs::iput(**inode);
                 return 0;
             }
             case SYS_unlink: {
@@ -367,15 +357,12 @@ namespace
                 const auto path = syscall::GetArgument<1, const char*>(*tf);
                 auto buf = syscall::GetArgument<2, char*>(*tf);
                 const auto size = syscall::GetArgument<3, size_t>(*tf);
-                auto inode = fs::namei(path.get(), fs::Follow::No);
+                auto inode = fs::namei(path.get(), fs::Follow::No, {});
                 if (!inode) return result::Error(inode.error());
                 if (((*inode)->ext2inode->i_mode & EXT2_S_IFMASK) != EXT2_S_IFLNK) {
-                    fs::iput(**inode);
                     return result::Error(error::Code::InvalidArgument);
                 }
-                const auto numBytesRead = fs::Read(**inode, buf.get(), 0, size);
-                fs::iput(**inode);
-                return numBytesRead;
+                return fs::Read(**inode, buf.get(), 0, size);
             }
             case SYS_symlink: {
                 const auto oldPath = syscall::GetArgument<1, const char*>(*tf);

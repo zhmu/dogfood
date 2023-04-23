@@ -325,19 +325,18 @@ namespace ext2
         }
     }
 
-    void FreeInode(fs::Inode& inode)
+    void FreeInode(fs::InodeRef inode)
     {
-        const auto bgroup = (inode.inum - 1) / superblock.s_inodes_per_group;
-        const auto index = (inode.inum - 1) % superblock.s_inodes_per_group;
-        if (!FreeFromBitmap(inode.dev, bgroup, index, InodeStrategy{}))
+        const auto bgroup = (inode->inum - 1) / superblock.s_inodes_per_group;
+        const auto index = (inode->inum - 1) % superblock.s_inodes_per_group;
+        if (!FreeFromBitmap(inode->dev, bgroup, index, InodeStrategy{}))
             return;
 
         ++superblock.s_free_inodes_count;
-        UpdateSuperblock(inode.dev);
+        UpdateSuperblock(inode->dev);
 
-        memset(inode.ext2inode, 0, sizeof(on_disk::Inode));
-        fs::idirty(inode);
-        fs::iput(inode);
+        memset(inode->ext2inode, 0, sizeof(on_disk::Inode));
+        fs::idirty(*inode);
     }
 
     uint32_t* DetermineIndirect(on_disk::Inode& inode, unsigned int& inodeBlockNr, int& level)
@@ -579,7 +578,7 @@ namespace ext2
         auto result = fs::iget(parent.dev, inum);
         if (!result)
             return result::Error(result.error());
-        auto newInode = *result;
+        auto newInode = std::move(*result);
         {
             auto& e2i = *newInode->ext2inode;
             memset(&e2i, 0, sizeof(e2i));
@@ -613,20 +612,18 @@ namespace ext2
             newInode->dev, newInode->inum, [](auto& bg) { ++bg.bg_used_dirs_count; });
 
         fs::idirty(*newInode);
-        fs::iput(*newInode);
         return 0;
     }
 
-    void Unlink(fs::Inode& inode)
+    void Unlink(fs::InodeRef inode)
     {
-        if (--inode.ext2inode->i_links_count > 0) {
-            fs::idirty(inode);
-            fs::iput(inode);
+        if (--inode->ext2inode->i_links_count > 0) {
+            fs::idirty(*inode);
             return;
         }
 
-        FreeDataBlocks(inode);
-        FreeInode(inode);
+        FreeDataBlocks(*inode);
+        FreeInode(std::move(inode));
     }
 
     void Truncate(fs::Inode& inode)
@@ -636,20 +633,20 @@ namespace ext2
         FreeDataBlocks(inode);
     }
 
-    result::MaybeInt RemoveDirectory(fs::Inode& inode)
+    result::MaybeInt RemoveDirectory(fs::InodeRef inode)
     {
-        if (!ext2::RemoveEntryFromDirectory(inode, ".."))
+        if (!ext2::RemoveEntryFromDirectory(*inode, ".."))
             return result::Error(error::Code::IOError);
-        if (!ext2::RemoveEntryFromDirectory(inode, "."))
+        if (!ext2::RemoveEntryFromDirectory(*inode, "."))
             return result::Error(error::Code::IOError);
-        UpdateInodeBlockGroup(inode.dev, inode.inum, [](auto& bg) { --bg.bg_used_dirs_count; });
+        UpdateInodeBlockGroup(inode->dev, inode->inum, [](auto& bg) { --bg.bg_used_dirs_count; });
 
-        FreeDataBlocks(inode);
-        FreeInode(inode);
+        FreeDataBlocks(*inode);
+        FreeInode(std::move(inode));
         return 0;
     }
 
-    result::Maybe<fs::Inode*> CreateSpecial(fs::Inode& parent, const char* name, int mode, dev_t dev)
+    result::Maybe<fs::InodeRef> CreateSpecial(fs::Inode& parent, const char* name, int mode, dev_t dev)
     {
         auto inum = ext2::AllocateInode(parent);
         if (inum == 0)
@@ -665,7 +662,7 @@ namespace ext2
         auto result = fs::iget(parent.dev, inum);
         if (!result)
             return result::Error(result.error());
-        auto newInode = *result;
+        auto newInode = std::move(*result);
         {
             auto& e2i = *newInode->ext2inode;
             e2i = {};
@@ -676,14 +673,14 @@ namespace ext2
         fs::idirty(*newInode);
 
         if (!ext2::AddEntryToDirectory(parent, inum, ft, name)) {
-            FreeInode(*newInode);
+            FreeInode(std::move(newInode));
             return result::Error(error::Code::OutOfSpace);
         }
         fs::idirty(parent);
         return newInode;
     }
 
-    result::Maybe<fs::Inode*> Mount(fs::Device dev)
+    result::Maybe<fs::InodeRef> Mount(fs::Device dev)
     {
         // Piece the superblock together
         ReadBlocks(dev, 2, sizeof(on_disk::Superblock) / bio::BlockSize, &superblock);

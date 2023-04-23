@@ -42,12 +42,12 @@ namespace exec
             return result;
         }
 
-        bool LoadProgramHeaders(vm::VMSpace& vs, fs::Inode& inode, const Elf64_Ehdr& ehdr)
+        bool LoadProgramHeaders(vm::VMSpace& vs, fs::InodeRef inode, const Elf64_Ehdr& ehdr)
         {
             for (int ph = 0; ph < ehdr.e_phnum; ++ph) {
                 Elf64_Phdr phdr;
                 if (fs::Read(
-                        inode, reinterpret_cast<void*>(&phdr), ehdr.e_phoff + ph * sizeof(phdr),
+                        *inode, reinterpret_cast<void*>(&phdr), ehdr.e_phoff + ph * sizeof(phdr),
                         sizeof(phdr)) != sizeof(phdr)) {
                     return false;
                 }
@@ -64,7 +64,7 @@ namespace exec
                 const auto va = vm::RoundDownToPage(phdr.p_vaddr);
                 const auto fileOffset = vm::RoundDownToPage(phdr.p_offset);
                 const auto fileSz = phdr.p_filesz + (phdr.p_offset - fileOffset);
-                vm::MapInode(vs, va, pteFlags, phdr.p_memsz, inode, fileOffset, fileSz);
+                vm::MapInode(vs, va, pteFlags, phdr.p_memsz, fs::ReferenceInode(inode), fileOffset, fileSz);
             }
             return true;
         }
@@ -142,16 +142,14 @@ namespace exec
         const auto path = syscall::GetArgument<1, const char*>(tf);
         const auto argv = syscall::GetArgument<2, const char**>(tf);
         const auto envp = syscall::GetArgument<3, const char**>(tf);
-        auto inode = fs::namei(path.get(), fs::Follow::Yes);
+        auto inode = fs::namei(path.get(), fs::Follow::Yes, {});
         if (!inode) return result::Error(inode.error());
 
         Elf64_Ehdr ehdr;
         if (fs::Read(**inode, reinterpret_cast<void*>(&ehdr), 0, sizeof(ehdr)) != sizeof(ehdr)) {
-            fs::iput(**inode);
             return result::Error(error::Code::NotAnExecutable);
         }
         if (!VerifyHeader(ehdr)) {
-            fs::iput(**inode);
             return result::Error(error::Code::NotAnExecutable);
         }
 
@@ -161,8 +159,7 @@ namespace exec
         auto ustack = PrepareNewUserlandStack(argv.get(), envp.get());
         vm::FreeMappings(vs);
 
-        const auto phLoaded = LoadProgramHeaders(vs, **inode, ehdr);
-        fs::iput(**inode);
+        const auto phLoaded = LoadProgramHeaders(vs, std::move(*inode), ehdr);
         if (!phLoaded) {
             // TODO need to kill the process here
             return result::Error(error::Code::MemoryFault);

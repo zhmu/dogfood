@@ -4,6 +4,7 @@
 #include <vector>
 #include "page_allocator.h"
 #include "result.h"
+#include "fs.h"
 #include "types.h"
 
 namespace amd64
@@ -13,7 +14,6 @@ namespace amd64
     struct TrapFrame;
 }
 
-namespace fs { struct Inode; }
 namespace page_allocator { struct Page; }
 
 namespace vm
@@ -42,7 +42,7 @@ namespace vm
         uint64_t pte_flags{};
         uint64_t va_start{};
         uint64_t va_end{};
-        fs::Inode* inode = nullptr;
+        fs::InodeRef inode;
         uint64_t inode_offset{};
         uint64_t inode_length{};
         std::vector<MappedPage> pages;
@@ -67,7 +67,7 @@ namespace vm
     void SetupForInitProcess(VMSpace& vs, amd64::TrapFrame& tf);
 
     Mapping& Map(VMSpace& vs, uint64_t va, uint64_t pteFlags, uint64_t mappingSize);
-    Mapping& MapInode(VMSpace& vs, uint64_t va, uint64_t pteFlags, uint64_t mappingSize, fs::Inode& inode, uint64_t inodeOffset, uint64_t inodeSize);
+    Mapping& MapInode(VMSpace& vs, uint64_t va, uint64_t pteFlags, uint64_t mappingSize, fs::InodeRef inode, uint64_t inodeOffset, uint64_t inodeSize);
     void FreeMappings(VMSpace&);
     void Clone(VMSpace&);
 

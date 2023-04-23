@@ -2,6 +2,8 @@
 
 #include "types.h"
 #include "result.h"
+#include <memory>
+#include <optional>
 
 struct stat;
 
@@ -30,6 +32,15 @@ namespace fs
         ext2::on_disk::Inode* ext2inode = nullptr;
     };
 
+    namespace detail {
+        void PutInode(Inode&);
+
+        struct InodeDeref {
+            void operator()(Inode* ptr) { PutInode(*ptr); }
+        };
+    }
+    using InodeRef = std::unique_ptr<Inode, detail::InodeDeref>;
+
     struct DEntry {
         InodeNumber d_ino = 0;
         char d_name[MaxDirectoryEntryNameLength] = {};
@@ -42,18 +53,17 @@ namespace fs
     result::MaybeInt Read(Inode& inode, void* dst, off_t offset, unsigned int count);
     result::MaybeInt Write(fs::Inode& inode, const void* dst, off_t offset, unsigned int count);
 
-    result::Maybe<Inode*> iget(Device dev, InodeNumber inum);
-    void iput(Inode& inode);
-    void iref(Inode& inode);
+    result::Maybe<InodeRef> iget(Device dev, InodeNumber inum);
+    [[nodiscard]] InodeRef ReferenceInode(InodeRef&);
     void idirty(Inode& inode);
-    result::Maybe<Inode*> namei(const char* path, const Follow follow, fs::Inode* parent_inode = nullptr);
+    result::Maybe<InodeRef> namei(const char* path, const Follow follow, std::optional<fs::InodeRef> parent_inode);
     bool Stat(Inode& inode, stat& sbuf);
     result::MaybeInt ResolveDirectoryName(Inode& inode, char* buffer, int bufferSize);
     result::MaybeInt Link(const char* source, const char* dest);
     result::MaybeInt SymLink(const char* source, const char* dest);
     result::MaybeInt Mknod(const char* path, mode_t mode, dev_t dev);
 
-    result::Maybe<Inode*> Open(const char* path, int flags, int mode);
+    result::Maybe<InodeRef> Open(const char* path, int flags, int mode);
     result::MaybeInt MakeDirectory(const char* path, int mode);
     result::MaybeInt RemoveDirectory(const char* path);
     result::MaybeInt Unlink(const char* path);

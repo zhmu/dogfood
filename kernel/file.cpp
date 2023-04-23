@@ -37,9 +37,7 @@ namespace file
     {
         if (!file.f_in_use) return;
 
-        if (file.f_inode != nullptr)
-            fs::iput(*file.f_inode);
-
+        file.f_inode = {};
         if (file.f_pipe != nullptr) {
             if (file.f_flags & O_RDONLY)
                 --file.f_pipe->p_num_readers;
@@ -53,12 +51,17 @@ namespace file
         file = File{};
     }
 
-    void Dup(const File& source, File& dest)
+    void Dup(File& source, File& dest)
     {
         Free(dest);
-        dest = source;
-        if (dest.f_inode != nullptr)
-            fs::iref(*dest.f_inode);
+        dest = {
+            .f_in_use = source.f_in_use,
+            .f_flags = source.f_flags,
+            .f_inode = fs::ReferenceInode(source.f_inode),
+            .f_chardev = source.f_chardev,
+            .f_pipe = source.f_pipe,
+            .f_offset = source.f_offset,
+        };
         if (dest.f_pipe != nullptr) {
             if (dest.f_flags & O_RDONLY)
                 ++dest.f_pipe->p_num_readers;
@@ -68,10 +71,10 @@ namespace file
         dest.f_flags &= ~O_CLOEXEC;
     }
 
-    void CloneTable(const process::Process& parent, process::Process& child)
+    void CloneTable(process::Process& parent, process::Process& child)
     {
         for (int n = 0; n < process::maxFiles; ++n) {
-            const auto& parentFile = parent.files[n];
+            auto& parentFile = parent.files[n];
             if (!parentFile.f_in_use)
                 continue;
             if ((parentFile.f_flags & O_CLOEXEC) != 0)
@@ -148,19 +151,19 @@ namespace file
         return &file;
     }
 
-    result::MaybeInt Open(process::Process& proc, fs::Inode& inode, int flags)
+    result::MaybeInt Open(process::Process& proc, fs::InodeRef inode, int flags)
     {
         auto file = file::Allocate(proc);
         if (file == nullptr)
             return result::Error(error::Code::NoFile);
 
-        const auto type = inode.ext2inode->i_mode & EXT2_S_IFMASK;
+        const auto type = inode->ext2inode->i_mode & EXT2_S_IFMASK;
         switch(type) {
             case EXT2_S_IFBLK:
                 file::Free(*file);
                 return result::Error(error::Code::NoDevice);
             case EXT2_S_IFCHR: {
-                const auto dev = inode.ext2inode->i_block[0];
+                const auto dev = inode->ext2inode->i_block[0];
                 file::Free(*file);
                 auto char_dev = device::LookupCharacterDevice(dev);
                 if (!char_dev) return result::Error(error::Code::NoDevice);
@@ -168,8 +171,7 @@ namespace file
                 break;
             }
             default:
-                file->f_inode = &inode;
-                fs::iref(inode);
+                file->f_inode = std::move(inode);
                 break;
         }
         file->f_flags = flags;

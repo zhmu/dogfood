@@ -202,7 +202,7 @@ namespace ext2
 /* Values for old filesystems (that have the good old revision) */
 #define EXT2_GOOD_OLD_INODE_SIZE 128
 
-    result::Maybe<fs::Inode*> Mount(fs::Device dev);
+    result::Maybe<fs::InodeRef> Mount(fs::Device dev);
     void ReadInode(fs::Device dev, fs::InodeNumber inum, on_disk::Inode& inode);
     void WriteInode(fs::Inode& inode);
     uint32_t bmap(fs::Inode& inode, unsigned int inodeBlockNr, bool createIfNecessary);
@@ -212,9 +212,9 @@ namespace ext2
     uint32_t AllocateInode(fs::Inode& dirInode);
 
     result::MaybeInt CreateDirectory(fs::Inode& parent, const char* name, int mode);
-    result::MaybeInt RemoveDirectory(fs::Inode& inode);
-    void Unlink(fs::Inode& inode);
+    result::MaybeInt RemoveDirectory(fs::InodeRef inode);
+    void Unlink(fs::InodeRef inode);
     void Truncate(fs::Inode& inode);
-    result::Maybe<fs::Inode*> CreateSpecial(fs::Inode& parent, const char* name, int mode, dev_t dev);
+    result::Maybe<fs::InodeRef> CreateSpecial(fs::Inode& parent, const char* name, int mode, dev_t dev);
 
 } // namespace ext2
