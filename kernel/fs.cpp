@@ -172,11 +172,8 @@ namespace fs
     {
         Inode* available = nullptr;
         for (auto& inode : cache::inode) {
-            if (inode.refcount == 0) {
-                if (available == nullptr)
-                    available = &inode;
-                break;
-            }
+            if (inode.refcount == 0 && !available)
+                available = &inode;
             if (inode.dev != dev || inode.inum != inum)
                 continue;
             ++inode.refcount;
