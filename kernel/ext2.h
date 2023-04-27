@@ -216,5 +216,6 @@ namespace ext2
     void Unlink(fs::InodeRef inode);
     void Truncate(fs::Inode& inode);
     result::Maybe<fs::InodeRef> CreateSpecial(fs::Inode& parent, const char* name, int mode, dev_t dev);
+    result::Maybe<stat> Stat(fs::Inode& inode);
 
 } // namespace ext2

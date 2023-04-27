@@ -2,10 +2,9 @@
 
 #include "types.h"
 #include "result.h"
+#include <dogfood/stat.h>
 #include <memory>
 #include <optional>
-
-struct stat;
 
 namespace ext2::on_disk
 {
@@ -57,7 +56,7 @@ namespace fs
     [[nodiscard]] InodeRef ReferenceInode(InodeRef&);
     void idirty(Inode& inode);
     result::Maybe<InodeRef> namei(const char* path, const Follow follow, std::optional<fs::InodeRef> parent_inode);
-    bool Stat(Inode& inode, stat& sbuf);
+    result::Maybe<stat> Stat(Inode& inode);
     result::MaybeInt ResolveDirectoryName(Inode& inode, char* buffer, int bufferSize);
     result::MaybeInt Link(const char* source, const char* dest);
     result::MaybeInt SymLink(const char* source, const char* dest);

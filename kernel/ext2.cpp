@@ -692,4 +692,24 @@ namespace ext2
                               superblock.s_blocks_per_group;
         return fs::iget(dev, EXT2_ROOT_INO);
     }
+
+    result::Maybe<stat> Stat(fs::Inode& inode)
+    {
+        assert(inode.ext2inode != nullptr);
+        const auto& e2i = *inode.ext2inode;
+
+        stat st{};
+        st.st_dev = inode.dev;
+        st.st_ino = inode.inum;
+        st.st_mode = e2i.i_mode;
+        st.st_uid = e2i.i_uid;
+        st.st_size = e2i.i_size;
+        st.st_atime = e2i.i_atime;
+        st.st_ctime = e2i.i_ctime;
+        st.st_mtime = e2i.i_mtime;
+        st.st_gid = e2i.i_gid;
+        st.st_nlink = e2i.i_links_count;
+        st.st_blocks = e2i.i_blocks;
+        return st;
+    }
 } // namespace ext2

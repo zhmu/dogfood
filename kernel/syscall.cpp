@@ -13,7 +13,6 @@
 #include "lib.h"
 #include "vm.h"
 #include <dogfood/fcntl.h>
-#include <dogfood/stat.h>
 #include <dogfood/syscall.h>
 #include <dogfood/utsname.h>
 
@@ -101,8 +100,9 @@ namespace
                     // Assume this is the console
                     st.st_mode = EXT2_S_IFCHR | 0666;
                 } else {
-                    if (!fs::Stat(*file->f_inode, st))
-                        return result::Error(error::Code::IOError);
+                    auto result = fs::Stat(*file->f_inode);
+                    if (!result) return result::Error(result.error());
+                    st = *result;
                 }
                 return statBuf.Set(st);
             }
@@ -126,11 +126,10 @@ namespace
                 if (!inode) return result::Error(inode.error());
 
                 result::MaybeInt ret = 0;
-                stat st{};
-                if (fs::Stat(**inode, st)) {
-                    if (!statBuf.Set(st)) ret = result::Error(error::Code::MemoryFault);
+                if (const auto result = fs::Stat(**inode); result) {
+                    if (!statBuf.Set(*result)) ret = result::Error(error::Code::MemoryFault);
                 } else {
-                    ret = result::Error(error::Code::IOError);
+                    ret = result::Error(result.error());
                 }
                 return ret;
             }

@@ -5,7 +5,6 @@
 #include "lib.h"
 #include <dogfood/errno.h>
 #include <dogfood/fcntl.h>
-#include <dogfood/stat.h>
 
 namespace fs
 {
@@ -496,23 +495,11 @@ namespace fs
         return 0;
     }
 
-    bool Stat(Inode& inode, stat& sbuf)
+    result::Maybe<stat> Stat(Inode& inode)
     {
         if (inode.ext2inode == nullptr)
-            return false;
-        const auto& e2i = *inode.ext2inode;
-        sbuf.st_dev = inode.dev;
-        sbuf.st_ino = inode.inum;
-        sbuf.st_mode = e2i.i_mode;
-        sbuf.st_uid = e2i.i_uid;
-        sbuf.st_size = e2i.i_size;
-        sbuf.st_atime = e2i.i_atime;
-        sbuf.st_ctime = e2i.i_ctime;
-        sbuf.st_mtime = e2i.i_mtime;
-        sbuf.st_gid = e2i.i_gid;
-        sbuf.st_nlink = e2i.i_links_count;
-        sbuf.st_blocks = e2i.i_blocks;
-        return true;
+            return result::Error(error::Code::IOError);
+        return ext2::Stat(inode);
     }
 
     result::MaybeInt Mknod(const char* path, mode_t mode, dev_t dev)
