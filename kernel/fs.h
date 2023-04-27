@@ -68,4 +68,6 @@ namespace fs
     result::MaybeInt Unlink(const char* path);
 
     void CloneTable(const process::Process& parent, process::Process& child);
+
+    result::Maybe<fs::InodeRef> CreateRegular(fs::Inode& parent, const char* name, int mode);
 } // namespace fs

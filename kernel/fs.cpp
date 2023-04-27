@@ -308,28 +308,7 @@ namespace fs
         if ((flags & O_CREAT) == 0)
             return result::Error(error::Code::NoEntry);
 
-        auto inum = ext2::AllocateInode(*lookup_result->parent);
-        if (inum == 0)
-            return result::Error(error::Code::OutOfSpace);
-
-        auto result = fs::iget(lookup_result->parent->dev, inum);
-        if (!result)
-            return result::Error(result.error());
-        auto newInode = std::move(*result);
-        {
-            auto& e2i = *newInode->ext2inode;
-            e2i = {};
-            e2i.i_mode = EXT2_S_IFREG | mode;
-            e2i.i_links_count = 1;
-        }
-        fs::idirty(*newInode);
-
-        if (!ext2::AddEntryToDirectory(*lookup_result->parent, inum, EXT2_FT_REG_FILE, lookup_result->component.data())) {
-            // TODO deallocate inode
-            return result::Error(error::Code::OutOfSpace);
-        }
-        fs::idirty(*lookup_result->parent);
-        return newInode;
+        return ext2::CreateRegular(*lookup_result->parent, lookup_result->component.data(), mode);
     }
 
     result::MaybeInt Unlink(const char* path)
@@ -344,11 +323,10 @@ namespace fs
             return result::Error(error::Code::PermissionDenied);
         }
 
-        if (!ext2::RemoveEntryFromDirectory(*lookup_result->parent, lookup_result->component.data())) {
-            return result::Error(error::Code::IOError);
+        if (auto result = ext2::Unlink(*lookup_result->parent, lookup_result->component.data()); !result) {
+            return result::Error(result.error());
         }
-        ext2::Unlink(std::move(lookup_result->inode));
-        return 0;
+        return ext2::UnlinkInode(std::move(lookup_result->inode));
     }
 
     result::MaybeInt Link(const char* source, const char* dest)
@@ -364,13 +342,7 @@ namespace fs
         if (!lookup_result->parent)
             return result::Error(error::Code::NoEntry);
 
-        // XXX EXT2_FT_REG_FILE should be looked up
-        if (!ext2::AddEntryToDirectory(*lookup_result->parent, (*source_inode)->inum, EXT2_FT_REG_FILE, lookup_result->component.data())) {
-            return result::Error(error::Code::OutOfSpace);
-        }
-        ++(*source_inode)->ext2inode->i_links_count;
-        fs::idirty(**source_inode);
-        return 0;
+        return ext2::CreateLink(*lookup_result->parent, **source_inode, lookup_result->component.data());
     }
 
     result::MaybeInt SymLink(const char* source, const char* dest)
@@ -384,33 +356,8 @@ namespace fs
         if (!lookup_result->parent)
             return result::Error(error::Code::NoEntry);
 
-        auto inum = ext2::AllocateInode(*lookup_result->parent);
-        if (inum == 0) {
-            return result::Error(error::Code::OutOfSpace);
-        }
-
-        auto result = fs::iget(lookup_result->parent->dev, inum);
-        if (!result) {
-            return result::Error(result.error());
-        }
-        auto newInode = std::move(*result);
-        {
-            auto& e2i = *newInode->ext2inode;
-            e2i = {};
-            e2i.i_mode = EXT2_S_IFLNK | 0777;
-            e2i.i_links_count = 1;
-        }
-        fs::idirty(*newInode);
-        if (fs::Write(*newInode, source, 0, strlen(source)) != strlen(source)) {
-            // XXX undo damage
-            return result::Error(error::Code::IOError);
-        }
-
-        if (!ext2::AddEntryToDirectory(*parent, inum, EXT2_FT_SYMLINK, lookup_result->component.data())) {
-            // TODO deallocate inode
-            return result::Error(error::Code::OutOfSpace);
-        }
-        fs::idirty(*lookup_result->parent);
+        auto result = ext2::CreateSymlink(*lookup_result->parent, lookup_result->component.data(), dest);
+        if (!result) return result::Error(result.error());
         return 0;
     }
 
@@ -443,12 +390,10 @@ namespace fs
             return result::Error(error::Code::NotEmpty);
         }
 
-        if (!ext2::RemoveEntryFromDirectory(*lookup_result->parent, lookup_result->component.data())) {
+        if (!ext2::Unlink(*lookup_result->parent, lookup_result->component.data())) {
             return result::Error(error::Code::IOError);
         }
-        --lookup_result->parent->ext2inode->i_links_count;
-        fs::idirty(*lookup_result->parent);
-        return ext2::RemoveDirectory(std::move(lookup_result->inode));
+        return ext2::RemoveDirectory(*lookup_result->parent, std::move(lookup_result->inode));
     }
 
     result::MaybeInt ResolveDirectoryName(Inode& inode, char* buffer, int bufferSize)
@@ -526,7 +471,7 @@ namespace fs
 
     [[nodiscard]] InodeRef ReferenceInode(InodeRef& inode)
     {
-        if(!inode) return {};
+        if(!inode) { return {}; }
         assert(inode->refcount > 0);
         ++inode->refcount;
         return InodeRef{ inode.get() };

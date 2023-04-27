@@ -92,6 +92,8 @@ namespace ext2
         }
     } // namespace
 
+    result::MaybeInt AddEntryToDirectory(fs::Inode& dirInode, fs::InodeNumber inum, int type, const char* name);
+
     void ReadInode(fs::Device dev, fs::InodeNumber inum, on_disk::Inode& inode)
     {
         inum--; // inode 0 does not exist and is not stored
@@ -238,6 +240,26 @@ namespace ext2
         --superblock.s_free_inodes_count;
         UpdateSuperblock(dirInode.dev);
         return inum + 1;
+    }
+
+    result::Maybe<fs::InodeRef> CreateDirectoryEntry(fs::Inode& parent, uint16_t mode, int ft, const char* name)
+    {
+        auto inum = AllocateInode(parent);
+        if (inum == 0)
+            return result::Error(error::Code::OutOfSpace);
+
+        auto result = fs::iget(parent.dev, inum);
+        if (!result)
+            return result::Error(result.error());
+        auto newInode = std::move(*result);
+        *newInode->ext2inode = { .i_mode = mode, .i_links_count = 1 };
+        fs::idirty(*newInode);
+
+        if (!AddEntryToDirectory(parent, inum, ft, name)) {
+            // TODO deallocate inode
+            return result::Error(error::Code::OutOfSpace);
+        }
+        return newInode;
     }
 
     bool AllocateBlock(fs::Inode& inode, uint32_t& blockNum)
@@ -569,28 +591,15 @@ namespace ext2
         return false;
     }
 
-    result::MaybeInt CreateDirectory(fs::Inode& parent, const char* name, int mode)
+    result::MaybeInt CreateDirectory(fs::Inode& parent, const char* name, uint16_t mode)
     {
-        auto inum = ext2::AllocateInode(parent);
-        if (inum == 0)
-            return result::Error(error::Code::OutOfSpace);
-
-        auto result = fs::iget(parent.dev, inum);
+        auto result = CreateDirectoryEntry(parent, EXT2_S_IFDIR | mode, EXT2_FT_DIR, name);
         if (!result)
             return result::Error(result.error());
         auto newInode = std::move(*result);
-        {
-            auto& e2i = *newInode->ext2inode;
-            memset(&e2i, 0, sizeof(e2i));
-            e2i.i_mode = EXT2_S_IFDIR | mode;
-            e2i.i_links_count = 2; // '.' and entry in parent
-        }
+        newInode->ext2inode->i_links_count = 2; // '.' and entry in parent
 
-        if (!ext2::AddEntryToDirectory(parent, inum, EXT2_FT_DIR, name)) {
-            // TODO deallocate inode
-            return result::Error(error::Code::OutOfSpace);
-        }
-
+        // Write empty directory
         {
             ext2::on_disk::DirectoryEntry dirEntry{};
             dirEntry.rec_len = blockSize;
@@ -598,11 +607,12 @@ namespace ext2
                 return result::Error(error::Code::OutOfSpace); // TODO undo damage
             newInode->ext2inode->i_size = blockSize;
         }
+        fs::idirty(*newInode);
 
-        if (!ext2::AddEntryToDirectory(*newInode, inum, EXT2_FT_DIR, ".")) {
+        if (!AddEntryToDirectory(*newInode, newInode->inum, EXT2_FT_DIR, ".")) {
             return result::Error(error::Code::OutOfSpace); // TODO deallocate inode
         }
-        if (!ext2::AddEntryToDirectory(*newInode, parent.inum, EXT2_FT_DIR, "..")) {
+        if (!AddEntryToDirectory(*newInode, parent.inum, EXT2_FT_DIR, "..")) {
             return result::Error(error::Code::OutOfSpace); // TODO deallocate inode
         }
         ++parent.ext2inode->i_links_count;
@@ -610,20 +620,24 @@ namespace ext2
 
         UpdateInodeBlockGroup(
             newInode->dev, newInode->inum, [](auto& bg) { ++bg.bg_used_dirs_count; });
-
-        fs::idirty(*newInode);
         return 0;
     }
 
-    void Unlink(fs::InodeRef inode)
+    result::MaybeInt Unlink(fs::Inode& parent, const char* name)
+    {
+        return RemoveEntryFromDirectory(parent, name);
+    }
+
+    result::MaybeInt UnlinkInode(fs::InodeRef inode)
     {
         if (--inode->ext2inode->i_links_count > 0) {
             fs::idirty(*inode);
-            return;
+            return 0;
         }
 
         FreeDataBlocks(*inode);
         FreeInode(std::move(inode));
+        return 0;
     }
 
     void Truncate(fs::Inode& inode)
@@ -633,25 +647,24 @@ namespace ext2
         FreeDataBlocks(inode);
     }
 
-    result::MaybeInt RemoveDirectory(fs::InodeRef inode)
+    result::MaybeInt RemoveDirectory(fs::Inode& parent, fs::InodeRef inode)
     {
-        if (!ext2::RemoveEntryFromDirectory(*inode, ".."))
+        if (!RemoveEntryFromDirectory(*inode, ".."))
             return result::Error(error::Code::IOError);
-        if (!ext2::RemoveEntryFromDirectory(*inode, "."))
+        if (!RemoveEntryFromDirectory(*inode, "."))
             return result::Error(error::Code::IOError);
         UpdateInodeBlockGroup(inode->dev, inode->inum, [](auto& bg) { --bg.bg_used_dirs_count; });
 
         FreeDataBlocks(*inode);
         FreeInode(std::move(inode));
+
+        --parent.ext2inode->i_links_count;
+        fs::idirty(parent);
         return 0;
     }
 
-    result::Maybe<fs::InodeRef> CreateSpecial(fs::Inode& parent, const char* name, int mode, dev_t dev)
+    result::Maybe<fs::InodeRef> CreateSpecial(fs::Inode& parent, const char* name, uint16_t mode, dev_t dev)
     {
-        auto inum = ext2::AllocateInode(parent);
-        if (inum == 0)
-            return result::Error(error::Code::OutOfSpace);
-
         int ft = 0;
         switch(mode & EXT2_S_IFMASK) {
             case EXT2_S_IFBLK: ft = EXT2_FT_BLKDEV; break;
@@ -659,24 +672,12 @@ namespace ext2
             default: return result::Error(error::Code::InvalidArgument);
         }
 
-        auto result = fs::iget(parent.dev, inum);
+        auto result = CreateDirectoryEntry(parent, mode, ft, name);
         if (!result)
             return result::Error(result.error());
         auto newInode = std::move(*result);
-        {
-            auto& e2i = *newInode->ext2inode;
-            e2i = {};
-            e2i.i_mode = mode;
-            e2i.i_links_count = 1;
-            e2i.i_block[0] = dev;
-        }
+        newInode->ext2inode->i_block[0] = static_cast<uint32_t>(dev);
         fs::idirty(*newInode);
-
-        if (!ext2::AddEntryToDirectory(parent, inum, ft, name)) {
-            FreeInode(std::move(newInode));
-            return result::Error(error::Code::OutOfSpace);
-        }
-        fs::idirty(parent);
         return newInode;
     }
 
@@ -711,5 +712,34 @@ namespace ext2
         st.st_nlink = e2i.i_links_count;
         st.st_blocks = e2i.i_blocks;
         return st;
+    }
+
+    result::Maybe<fs::InodeRef> CreateRegular(fs::Inode& parent, const char* name, uint16_t mode)
+    {
+        return CreateDirectoryEntry(parent, EXT2_S_IFREG | mode, EXT2_FT_REG_FILE, name);
+    }
+
+    result::Maybe<fs::InodeRef> CreateSymlink(fs::Inode& parent, const char* name, const char* target)
+    {
+        auto result = CreateDirectoryEntry(parent, EXT2_S_IFLNK | 0777, EXT2_FT_SYMLINK, name);
+        if (!result)
+            return result::Error(result.error());
+        auto newInode = std::move(*result);
+        if (fs::Write(*newInode, target, 0, strlen(target)) != strlen(target)) {
+            // XXX undo damage
+            return result::Error(error::Code::IOError);
+        }
+        return newInode;
+    }
+
+    result::MaybeInt CreateLink(fs::Inode& parent, fs::Inode& source, const char* name)
+    {
+        int ft = EXT2_FT_REG_FILE; // TODO
+        if (!ext2::AddEntryToDirectory(parent, source.inum, ft, name)) {
+            return result::Error(error::Code::OutOfSpace);
+        }
+        ++source.ext2inode->i_links_count;
+        fs::idirty(source);
+        return 0;
     }
 } // namespace ext2

@@ -207,15 +207,17 @@ namespace ext2
     void WriteInode(fs::Inode& inode);
     uint32_t bmap(fs::Inode& inode, unsigned int inodeBlockNr, bool createIfNecessary);
     bool ReadDirectory(fs::Inode& dirInode, off_t& offset, fs::DEntry& dentry);
-    result::MaybeInt AddEntryToDirectory(fs::Inode& dirInode, fs::InodeNumber inum, int type, const char* name);
-    result::MaybeInt RemoveEntryFromDirectory(fs::Inode& dirInode, const char* name);
-    uint32_t AllocateInode(fs::Inode& dirInode);
 
-    result::MaybeInt CreateDirectory(fs::Inode& parent, const char* name, int mode);
-    result::MaybeInt RemoveDirectory(fs::InodeRef inode);
-    void Unlink(fs::InodeRef inode);
+    result::MaybeInt CreateDirectory(fs::Inode& parent, const char* name, uint16_t mode);
+    result::MaybeInt RemoveDirectory(fs::Inode& parent, fs::InodeRef inode);
+    result::MaybeInt Unlink(fs::Inode& inode, const char* name);
+    result::MaybeInt UnlinkInode(fs::InodeRef inode);
     void Truncate(fs::Inode& inode);
-    result::Maybe<fs::InodeRef> CreateSpecial(fs::Inode& parent, const char* name, int mode, dev_t dev);
     result::Maybe<stat> Stat(fs::Inode& inode);
+
+    result::Maybe<fs::InodeRef> CreateSpecial(fs::Inode& parent, const char* name, uint16_t mode, dev_t dev);
+    result::Maybe<fs::InodeRef> CreateRegular(fs::Inode& parent, const char* name, uint16_t mode);
+    result::Maybe<fs::InodeRef> CreateSymlink(fs::Inode& parent, const char* name, const char* target);
+    result::MaybeInt CreateLink(fs::Inode& parent, fs::Inode& source, const char* name);
 
 } // namespace ext2
