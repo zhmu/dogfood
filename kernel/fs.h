@@ -49,13 +49,14 @@ namespace fs
 
     void Initialize();
     void MountRootFileSystem();
+    result::MaybeInt Sync(Inode* inode);
     result::MaybeInt Read(Inode& inode, void* dst, off_t offset, unsigned int count);
-    result::MaybeInt Write(fs::Inode& inode, const void* dst, off_t offset, unsigned int count);
+    result::MaybeInt Write(Inode& inode, const void* dst, off_t offset, unsigned int count);
 
     result::Maybe<InodeRef> iget(Device dev, InodeNumber inum);
     [[nodiscard]] InodeRef ReferenceInode(InodeRef&);
     void idirty(Inode& inode);
-    result::Maybe<InodeRef> namei(const char* path, const Follow follow, std::optional<fs::InodeRef> parent_inode);
+    result::Maybe<InodeRef> namei(const char* path, const Follow follow, std::optional<InodeRef> parent_inode);
     result::Maybe<stat> Stat(Inode& inode);
     result::MaybeInt ResolveDirectoryName(Inode& inode, char* buffer, int bufferSize);
     result::MaybeInt Link(const char* source, const char* dest);
@@ -69,5 +70,5 @@ namespace fs
 
     void CloneTable(const process::Process& parent, process::Process& child);
 
-    result::Maybe<fs::InodeRef> CreateRegular(fs::Inode& parent, const char* name, int mode);
+    result::Maybe<InodeRef> CreateRegular(Inode& parent, const char* name, int mode);
 } // namespace fs

@@ -42,5 +42,6 @@ namespace bio
 
     BufferRef ReadBlock(int dev, BlockNumber blockNumber);
     void WriteBlock(BufferRef buf);
+    int Sync();
 
 } // namespace bio

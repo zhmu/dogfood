@@ -399,6 +399,16 @@ namespace
                 const auto dev = syscall::GetArgument<3, dev_t>(*tf);
                 return fs::Mknod(path.get(), mode, dev);
             }
+            case SYS_fsync: {
+                file::File* file = nullptr;
+                const auto fd = syscall::GetArgument<1, int>(*tf);
+                if (fd >= 0) {
+                    file = file::FindByIndex(process::GetCurrent(), fd);
+                    if (file == nullptr)
+                        return result::Error(error::Code::BadFileHandle);
+                }
+                return fs::Sync(file ? file->f_inode.get() : nullptr);
+            }
         }
         Print("[", process::GetCurrent().pid, "] unsupported syscall ",
             syscall::GetNumber(*tf), " " , syscall::GetArgument<1>(*tf),

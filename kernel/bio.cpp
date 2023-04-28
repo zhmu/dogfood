@@ -36,6 +36,13 @@ namespace bio
             uint64_t first_lba = -1;
         };
         std::array<BlockDevice, 4> blockDevice;
+
+        bool CommitBuffer(Buffer& buffer)
+        {
+            if ((buffer.flags & flag::Dirty) == 0) return false;
+            ide::PerformIO(buffer);
+            return true;
+        }
     }
 
     BlockDevice* FindBlockDevice(int device)
@@ -74,7 +81,8 @@ namespace bio
 
         // Sacrifice the least-recently used block (walks circular list backwards)
         for (auto buf = cache::head.prev; buf != &cache::head; buf = buf->prev) {
-            if (buf->refCount == 0 && (buf->flags & flag::Dirty) == 0) {
+            if (buf->refCount == 0) {
+                CommitBuffer(*buf);
                 auto bdev = FindBlockDevice(dev);
                 assert(bdev != nullptr);
                 buf->dev = dev;
@@ -101,7 +109,6 @@ namespace bio
     {
         assert(buf);
         buf->flags |= flag::Dirty;
-        ide::PerformIO(*buf);
     }
 
     namespace detail
@@ -115,6 +122,15 @@ namespace bio
                 cache::ClaimBuffer(buf);
             }
         }
+    }
+
+    int Sync()
+    {
+        int n = 0;
+        for (auto buf = cache::head.next; buf != &cache::head; buf = buf->next) {
+            if (CommitBuffer(*buf)) ++n;
+        }
+        return n;
     }
 
 } // namespace bio

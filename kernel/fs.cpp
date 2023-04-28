@@ -3,6 +3,7 @@
 #include "ext2.h"
 #include "process.h"
 #include "lib.h"
+#include "debug.h"
 #include <dogfood/errno.h>
 #include <dogfood/fcntl.h>
 
@@ -10,6 +11,7 @@ namespace fs
 {
     namespace
     {
+        constexpr debug::Trace<false> Debug;
         constexpr inline Device rootDeviceNumber = 2;
         constexpr inline int maxSymLinkDepth = 10;
 
@@ -151,6 +153,13 @@ namespace fs
             return false;
         }
 
+        bool CommitInode(fs::Inode& inode)
+        {
+            if (!inode.dirty) return false;
+            ext2::WriteInode(inode);
+            inode.dirty = false;
+            return true;
+        }
     } // namespace
 
     void Initialize()
@@ -172,8 +181,10 @@ namespace fs
     {
         Inode* available = nullptr;
         for (auto& inode : cache::inode) {
-            if (inode.refcount == 0 && !available)
+            if (inode.refcount == 0 && !available) {
+                CommitInode(inode);
                 available = &inode;
+            }
             if (inode.dev != dev || inode.inum != inum)
                 continue;
             ++inode.refcount;
@@ -195,8 +206,7 @@ namespace fs
         void PutInode(Inode& inode)
         {
             assert(inode.refcount > 0);
-            if (--inode.refcount == 0 && inode.dirty)
-                ext2::WriteInode(inode);
+            --inode.refcount;
         }
     }
 
@@ -209,8 +219,7 @@ namespace fs
     void idirty(Inode& inode)
     {
         assert(inode.refcount > 0);
-        // inode.dirty = true;
-        ext2::WriteInode(inode);
+        inode.dirty = true;
     }
 
     result::MaybeInt Read(fs::Inode& inode, void* dst, off_t offset, unsigned int count)
@@ -472,5 +481,20 @@ namespace fs
         assert(inode->refcount > 0);
         ++inode->refcount;
         return InodeRef{ inode.get() };
+    }
+
+    result::MaybeInt Sync(fs::Inode* inode)
+    {
+        if (inode) {
+            CommitInode(*inode);
+            return 0;
+        }
+        int n = 0;
+        for (auto& inode : cache::inode) {
+            if (CommitInode(inode)) ++n;
+        }
+        const auto m = bio::Sync();
+        Debug("fs::Sync: ", n, " inodes and ", m, " bios\n");
+        return 0;
     }
 } // namespace fs
