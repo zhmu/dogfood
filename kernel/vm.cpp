@@ -2,6 +2,7 @@
 #include "x86_64/amd64.h"
 #include "x86_64/paging.h"
 #include "lib.h"
+#include "debug.h"
 #include "page_allocator.h"
 #include "process.h"
 #include "syscall.h"
@@ -11,7 +12,6 @@
 #include <algorithm>
 #include <utility>
 
-static constexpr inline auto DEBUG_VM = false;
 static constexpr inline uint64_t initCodeBase = 0x8000000;
 
 extern "C" void* initcode;
@@ -22,6 +22,8 @@ namespace vm
 {
     namespace
     {
+        constexpr debug::Trace<false> Debug;
+
         bool IsActive(VMSpace& vs)
         {
             return amd64::read_cr3() == vs.pageDirectory;
@@ -51,23 +53,27 @@ namespace vm
                 auto page = page_allocator::AllocateOne();
                 if (!page)
                     return false;
-                memset(page->GetData(), 0, vm::PageSize);
 
-                const auto readOffset = va - mapping.va_start;
-                int bytesToRead = vm::PageSize;
-                if (readOffset + bytesToRead > mapping.inode_length)
-                    bytesToRead = mapping.inode_length - readOffset;
+                if (mapping.inode) {
+                    const auto readOffset = va - mapping.va_start;
+                    int bytesToRead = vm::PageSize;
+                    if (readOffset + bytesToRead > mapping.inode_length) {
+                        bytesToRead = std::max(0, static_cast<int>(mapping.inode_length - readOffset));
+                        memset(page->GetData() + bytesToRead, 0, vm::PageSize - bytesToRead);
+                    }
 
-                if constexpr (DEBUG_VM) {
-                    Print(
+                    Debug(
                         "HandleMappingPageFault: va ", print::Hex{virt},
                         " inum ", mapping.inode->inum,
                         " offset ", print::Hex{mapping.inode_offset + readOffset}, ", ",
                         bytesToRead, " bytes\n");
-                }
-                if (bytesToRead > 0 &&
-                    fs::Read(*mapping.inode, page->GetData(), mapping.inode_offset + readOffset, bytesToRead) != bytesToRead) {
-                    return false;
+                    if (bytesToRead > 0 &&
+                        fs::Read(*mapping.inode, page->GetData(), mapping.inode_offset + readOffset, bytesToRead) != bytesToRead) {
+                        return false;
+                    }
+                } else {
+                    Debug("HandleMappingPageFault: va ", print::Hex{virt}, " no inode\n");
+                    memset(page->GetData(), 0, vm::PageSize);
                 }
 
                 const auto pagePhysicalAddr = page->GetPhysicalAddress();
