@@ -3,6 +3,7 @@
 #include "elf.h"
 #include "fs.h"
 #include "lib.h"
+#include "debug.h"
 #include "page_allocator.h"
 #include "process.h"
 #include "syscall.h"
@@ -12,10 +13,9 @@
 
 namespace exec
 {
-
     namespace
     {
-        inline constexpr auto DEBUG_EXEC = false;
+        constexpr debug::Trace<false> Debug;
 
         bool VerifyHeader(const Elf64_Ehdr& ehdr)
         {
@@ -54,12 +54,10 @@ namespace exec
                 if (phdr.p_type != PT_LOAD)
                     continue;
 
-                if constexpr (DEBUG_EXEC) {
-                    Print("phdr ", ph, ": type ", phdr.p_type, " offset ",
-                        print::Hex{phdr.p_offset}, " vaddr ", print::Hex{phdr.p_vaddr},
-                        " memsz ", phdr.p_memsz, " filesz ", phdr.p_filesz,
-                        " flags ", print::Hex{phdr.p_flags}, "\n");
-                }
+                Debug("phdr ", ph, ": type ", phdr.p_type, " offset ",
+                    print::Hex{phdr.p_offset}, " vaddr ", print::Hex{phdr.p_vaddr},
+                    " memsz ", phdr.p_memsz, " filesz ", phdr.p_filesz,
+                    " flags ", print::Hex{phdr.p_flags}, "\n");
                 const auto pteFlags = MapElfFlagsToVM(phdr.p_flags);
                 const auto va = vm::RoundDownToPage(phdr.p_vaddr);
                 const auto fileOffset = vm::RoundDownToPage(phdr.p_offset);
