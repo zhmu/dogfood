@@ -23,6 +23,7 @@ namespace vm
     namespace
     {
         constexpr debug::Trace<false> Debug;
+        constexpr inline uint64_t kstackCanaryValue = 0x3141'5926'5358'9793;
 
         bool IsActive(VMSpace& vs)
         {
@@ -136,6 +137,7 @@ namespace vm
         auto va = RoundDownToPage(va_start);
         auto pa = phys;
         const auto va_end = RoundDownToPage(va_start + length - 1);
+
         do {
             auto pte = amd64::paging::FindPTE(pml4, va, [&]() {
                 const auto new_page = AllocateMDPage(vs);
@@ -150,6 +152,7 @@ namespace vm
 
     void Activate(VMSpace& vs)
     {
+        assert(*reinterpret_cast<uint64_t*>(vs.kernelStack) == kstackCanaryValue);
         amd64::write_cr3(vs.pageDirectory);
     }
 
@@ -161,6 +164,7 @@ namespace vm
         // Allocate kernel stack
         auto kstack = AllocateMDPage(vs);
         vs.kernelStack = kstack;
+        *reinterpret_cast<uint64_t*>(vs.kernelStack) = kstackCanaryValue;
 
         // Create page directory
         auto pageDirectory = AllocateMDPage(vs);
