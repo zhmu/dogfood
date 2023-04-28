@@ -19,6 +19,7 @@ namespace page_allocator { struct Page; }
 namespace vm
 {
     inline constexpr unsigned int PageSize = 4096;
+    inline constexpr unsigned int KernelStackSizeOrder = 1; // 8KB
 
     inline constexpr uint64_t Page_P = (1UL << 0);
     inline constexpr uint64_t Page_RW = (1UL << 1); // 1 = r/w, 0 = r/0

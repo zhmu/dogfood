@@ -35,9 +35,9 @@ namespace process
                 proc.pid = next_pid++;
 
                 vm::InitializeVMSpace(proc.vmspace);
-                proc.rsp0 = reinterpret_cast<uint64_t>(proc.vmspace.kernelStack) + vm::PageSize;
+                proc.rsp0 = reinterpret_cast<uint64_t>(proc.vmspace.kernelStack) + (vm::PageSize << vm::KernelStackSizeOrder);
 
-                auto sp = static_cast<char*>(proc.vmspace.kernelStack) + vm::PageSize;
+                auto sp = reinterpret_cast<char*>(proc.rsp0);
                 // Allocate trap frame for trap_return()
                 {
                     sp -= sizeof(amd64::TrapFrame);

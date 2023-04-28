@@ -35,14 +35,14 @@ namespace vm
             return process::GetCurrent().vmspace;
         }
 
-        char* AllocateMDPage(VMSpace& vs)
+        char* AllocateMDPage(VMSpace& vs, int order = 0)
         {
-            auto new_page = page_allocator::AllocateOne();
+            auto new_page = page_allocator::AllocateOrder(order);
             assert(new_page);
 
             auto ptr = new_page->GetData();
             vs.mdPages.push_back(std::move(new_page));
-            memset(ptr, 0, vm::PageSize);
+            memset(ptr, 0, vm::PageSize << order);
             return reinterpret_cast<char*>(ptr);
         }
 
@@ -162,7 +162,7 @@ namespace vm
         assert(vs.mdPages.empty());
 
         // Allocate kernel stack
-        auto kstack = AllocateMDPage(vs);
+        auto kstack = AllocateMDPage(vs, KernelStackSizeOrder);
         vs.kernelStack = kstack;
         *reinterpret_cast<uint64_t*>(vs.kernelStack) = kstackCanaryValue;
 
