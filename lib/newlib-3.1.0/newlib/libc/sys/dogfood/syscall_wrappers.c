@@ -232,6 +232,7 @@ SYSCALL1(sigpending, int, sigset_t*);
 SYSCALL2(sigwait, int, const sigset_t*, int*);
 SYSCALL1(pipe, int, int*);
 SYSCALL3(mknod, int, const char*, mode_t, dev_t);
+SYSCALL1(fsync, int, int)
 
 int killpg(pid_t pgrp, int sig)
 {
@@ -258,8 +259,6 @@ int getmntinfo(struct statfs** mntbufp, int mode)
     errno = ENOSYS;
     return -1;
 }
-
-int fsync(int fd) { return 0; }
 
 struct servent* getservbyname(const char* name, const char* proto) { return NULL; }
 
@@ -550,3 +549,9 @@ unsigned int minor(dev_t dev)
 {
     return (dev >> DOGFOOD_DEV_MINOR_SHIFT) & DOGFOOD_DEV_MINOR_MASK;
 }
+
+void sync()
+{
+    fsync(-1);
+}
+
