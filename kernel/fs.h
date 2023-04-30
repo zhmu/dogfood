@@ -58,7 +58,7 @@ namespace fs
     void idirty(Inode& inode);
     result::Maybe<InodeRef> namei(const char* path, const Follow follow, std::optional<InodeRef> parent_inode);
     result::Maybe<stat> Stat(Inode& inode);
-    result::MaybeInt ResolveDirectoryName(Inode& inode, char* buffer, int bufferSize);
+    result::MaybeInt ResolveDirectoryName(InodeRef& inode, char* buffer, int bufferSize);
     result::MaybeInt Link(const char* source, const char* dest);
     result::MaybeInt SymLink(const char* source, const char* dest);
     result::MaybeInt Mknod(const char* path, mode_t mode, dev_t dev);

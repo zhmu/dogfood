@@ -182,7 +182,11 @@ namespace fs
         Inode* available = nullptr;
         for (auto& inode : cache::inode) {
             if (inode.refcount == 0 && !available) {
-                CommitInode(inode);
+                if (CommitInode(inode)) {
+                    // CommitInode() may sleep, and upon returning the
+                    // inode might not be available anymore
+                    continue;
+                }
                 available = &inode;
             }
             if (inode.dev != dev || inode.inum != inum)
@@ -193,6 +197,7 @@ namespace fs
 
         if (available == nullptr)
             return result::Error(error::Code::NoFile);
+        assert(available->refcount == 0);
         available->dev = dev;
         available->inum = inum;
         available->refcount = 1;
@@ -208,12 +213,6 @@ namespace fs
             assert(inode.refcount > 0);
             --inode.refcount;
         }
-    }
-
-    void iref(Inode& inode)
-    {
-        assert(inode.refcount > 0);
-        ++inode.refcount;
     }
 
     void idirty(Inode& inode)
@@ -402,15 +401,14 @@ namespace fs
         return ext2::RemoveDirectory(*lookup_result->parent, std::move(lookup_result->inode));
     }
 
-    result::MaybeInt ResolveDirectoryName(Inode& inode, char* buffer, int bufferSize)
+    result::MaybeInt ResolveDirectoryName(InodeRef& inode, char* buffer, int bufferSize)
     {
-        if (inode.ext2inode == nullptr || (inode.ext2inode->i_mode & EXT2_S_IFDIR) == 0)
+        if (inode->ext2inode == nullptr || (inode->ext2inode->i_mode & EXT2_S_IFDIR) == 0)
             return result::Error(error::Code::NotADirectory);
         if (bufferSize < 2)
             return result::Error(error::Code::NameTooLong);
 
-        auto current = InodeRef{ &inode };
-        ++current->refcount;
+        auto current = ReferenceInode(inode);
 
         int currentPosition = bufferSize - 1;
         buffer[currentPosition] = '\0';

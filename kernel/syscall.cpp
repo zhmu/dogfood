@@ -227,7 +227,7 @@ namespace
                 auto buf = syscall::GetArgument<1, char*>(*tf);
                 const auto len = syscall::GetArgument<2>(*tf);
                 auto& current = process::GetCurrent();
-                return fs::ResolveDirectoryName(*current.cwd, buf.get(), len);
+                return fs::ResolveDirectoryName(current.cwd, buf.get(), len);
             }
             case SYS_chdir: {
                 const auto buf = syscall::GetArgument<1, char*>(*tf);
