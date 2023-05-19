@@ -14,3 +14,6 @@
 #define PTRACE_SYSCALL  4
 #define PTRACE_GETREGS  5
 #define PTRACE_PEEK     6
+#define PTRACE_CONT     7
+#define PTRACE_SETOPTIONS 8
+# define PTRACE_O_TRACEFORK (1 << 0)

@@ -26,6 +26,7 @@ namespace process
         int pid = -1;
         int umask = 0;
         Process* parent = nullptr;
+        Process* real_parent = nullptr;
         WaitChannel waitChannel{};
         //
         uint64_t rsp0 = 0;

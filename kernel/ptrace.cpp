@@ -58,8 +58,11 @@ namespace ptrace
         if (req == PTRACE_ATTACH) {
             auto& current = process::GetCurrent();
             if (&current == proc) return result::Error(error::Code::PermissionDenied); // can't trace self
-            // TODO: maybe change parent?
+            if (proc->ptrace.traced) return result::Error(error::Code::PermissionDenied); // already traced
+            // Change parent to the current process (tracer); upon ptrace
+            // detach/exit, we'll revert to the original parent
             proc->ptrace.traced = true;
+            proc->parent = &current;
             return 0;
         }
 
@@ -71,6 +74,8 @@ namespace ptrace
             case PTRACE_DETACH:
                 proc->ptrace.traced = false;
                 proc->ptrace.traceSyscall = false;
+                proc->ptrace.traceFork = false;
+                proc->parent = proc->real_parent; // TODO this could be nullptr?
                 break;
             case PTRACE_SYSCALL:
                 proc->ptrace.traceSyscall = true;
@@ -105,6 +110,19 @@ namespace ptrace
                 ur.fs = 0;
                 ur.gs = 0;
                 return regsPtr.Set(ur);
+            }
+            case PTRACE_SETOPTIONS: {
+                auto dataPtr = syscall::GetArgument<4, char*>(tf);
+                uint64_t data = reinterpret_cast<uint64_t>(dataPtr.get());
+                proc->ptrace.traceFork = (data & PTRACE_O_TRACEFORK) != 0;
+                return 0;
+            }
+            case PTRACE_CONT: {
+                auto dataPtr = syscall::GetArgument<4, char*>(tf);
+                uint64_t data = reinterpret_cast<uint64_t>(dataPtr.get());
+                proc->ptrace.signal = data;
+                proc->state = process::State::Runnable;
+                return 0;
             }
             case PTRACE_PEEK:
                 return result::Error(error::Code::InvalidArgument);

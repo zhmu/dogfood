@@ -133,6 +133,7 @@ namespace process
         if (new_process == nullptr)
             return result::Error(error::Code::OutOfSpace);
         new_process->parent = current;
+        new_process->real_parent = current;
         new_process->umask = current->umask;
         file::CloneTable(*current, *new_process);
         new_process->cwd = fs::ReferenceInode(current->cwd);
@@ -158,6 +159,17 @@ namespace process
         new_process->trapFrame->r15 = tf.r15;
         new_process->trapFrame->rbp = tf.rbp;
         assert(((new_process->trapFrame->rsp - 8) & 0xf) == 0);
+
+        if (current->ptrace.traceFork) {
+            new_process->ptrace.traced = true;
+            new_process->ptrace.signal = SIGSTOP;
+            // Override the new process' parent to _our_ parent. This process
+            // is tracing the current process and hence it must trace the new
+            // child process
+            new_process->parent = current->parent;
+            new_process->state = process::State::Stopped;
+            signal::Send(*new_process->parent, SIGCHLD);
+        }
         return new_process->pid;
     }
 
@@ -239,6 +251,10 @@ namespace process
         auto state = interrupts::SaveAndDisable();
         current->state = State::Zombie;
         for (auto& proc : process) {
+            if (proc.real_parent == current) {
+                proc.real_parent = NULL;
+            }
+
             if (proc.parent == current) {
                 proc.parent = &process[0]; // init
                 assert(proc.parent->pid == 1);
