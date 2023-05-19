@@ -34,5 +34,6 @@ namespace error {
         NoChild = ECHILD,
         ResultTooLarge = ERANGE,
         OutOfMemory = ENOMEM,
+        Interrupted = EINTR,
     };
 }

@@ -1,4 +1,5 @@
 #include "process.h"
+#include "debug.h"
 #include "x86_64/amd64.h"
 #include "lib.h"
 #include "exec.h"
@@ -8,6 +9,7 @@
 #include <dogfood/errno.h>
 #include <dogfood/procinfo.h>
 #include <dogfood/wait.h>
+#include <utility>
 
 extern "C" void switch_to(amd64::Context** prevContext, amd64::Context* newContext);
 extern "C" void* trap_return;
@@ -18,6 +20,7 @@ namespace process
 {
     namespace
     {
+        constexpr debug::Trace<false> Debug;
         inline constexpr size_t maxProcesses = 32;
         Process process[maxProcesses];
         Process* current = nullptr;
@@ -72,7 +75,6 @@ namespace process
             }
             return next;
         }
-
 
         void DestroyZombieProcess(Process& proc)
         {
@@ -165,6 +167,7 @@ namespace process
         auto statLocPtr = syscall::GetArgument<2, int*>(tf);
         const auto options = syscall::GetArgument<3, int>(tf);
 
+        Debug("WaitPID: pid ", current->pid, ": pid ", pid, " options ", options, "\n");
         while (true) {
             auto state = interrupts::SaveAndDisable();
             bool have_children = false;
@@ -179,32 +182,42 @@ namespace process
                     const auto setOkay = !statLocPtr || statLocPtr.Set(W_MAKE(W_STATUS_STOPPED, proc.ptrace.signal));
                     proc.ptrace.signal = 0;
                     interrupts::Restore(state);
-                    if (setOkay) return pid;
+                    Debug("WaitPID: pid ", current->pid, ": got stopped proc ", proc.pid, "\n");
+                    if (setOkay) return proc.pid;
                     return result::Error(error::Code::MemoryFault);
                 }
 
                 if (proc.state == State::Zombie) {
-                    const auto pid = proc.pid;
                     const auto setOkay = !statLocPtr || statLocPtr.Set(W_MAKE(W_STATUS_EXITED, 0));
                     DestroyZombieProcess(proc);
                     interrupts::Restore(state);
-                    if (setOkay) return pid;
+                    Debug("WaitPID: pid ", current->pid, ": got zombie proc ", proc.pid, "\n");
+                    if (setOkay) return proc.pid;
                     return result::Error(error::Code::MemoryFault);
                 }
             }
             if (!have_children) {
                 interrupts::Restore(state);
+                Debug("WaitPID: pid ", current->pid, ": no children!\n");
                 return result::Error(error::Code::NoChild);
             }
 
             if (options & WNOHANG) {
                 interrupts::Restore(state);
+                Debug("WaitPID: pid ", current->pid, ": not blocking!\n");
                 return 0;
             }
 
+            Debug("WaitPID: pid ", current->pid, ": sleeping\n");
             Sleep(&process);
+            Debug("WaitPID: pid ", current->pid, ": back\n");
+
+            if (signal::HasPending(*current)) {
+                Debug("WaitPID: pid ", current->pid, ": interrupted by signal\n");
+                return result::Error(error::Code::Interrupted);
+            }
         }
-        // NOTREACHED
+        std::unreachable();
     }
 
     result::MaybeInt Exit(amd64::TrapFrame& tf)
@@ -228,6 +241,8 @@ namespace process
         }
         interrupts::Restore(state);
 
+        // TODO We may likely get rid of the Wakeup() as the signal we are
+        // queueing should wake the parent up regardless
         Wakeup(&process);
 
         Yield();
