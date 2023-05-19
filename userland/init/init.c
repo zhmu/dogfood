@@ -19,9 +19,13 @@ int main(int argc, char* argv[])
     for(;;) {
         int pid = fork();
         if (pid != 0) {
-            waitpid(-1, (int*)0,0);
-            fprintf(stderr, "%s: child died, will restart\n", argv[0]);
-            continue;
+            for(;;) {
+                int childpid = waitpid(-1, NULL, 0);
+                if (childpid > 0) {
+                    fprintf(stderr, "%s: child %d died, will restart\n", argv[0], childpid);
+                    break;
+                }
+            }
         }
         execve("/bin/sh", child_argv, child_envp);
         abort();
