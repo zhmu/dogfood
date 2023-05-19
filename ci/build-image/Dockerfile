@@ -10,7 +10,7 @@ RUN apt-get update && apt-get upgrade -y && \
     apt-get install --no-install-recommends -y ninja-build \
     gettext texinfo autoconf automake make \
     gcc build-essential bison flex wget ca-certificates \
-    e2fsprogs dosfstools mtools && \
+    e2fsprogs dosfstools mtools pkg-config && \
     rm -rf /var/lib/apt/lists/*
 
 # Compile CMake ourselves; the version provided in stretch is too old for us (we need
