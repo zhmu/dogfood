@@ -2,7 +2,7 @@
 
 #ifndef BUILDING_TESTS
 typedef __int16_t __dev_t;
-typedef __uint32_t __pid_t;
+typedef __int32_t __pid_t;
 typedef __uint16_t __uid_t;
 typedef __uint16_t __gid_t;
 typedef __uint32_t __id_t;
