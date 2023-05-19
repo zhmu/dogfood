@@ -31,6 +31,8 @@ namespace signal {
     };
 
     bool Send(process::Process&, int signo);
+    bool HasPending(process::Process&);
+
     result::MaybeInt kill(amd64::TrapFrame& tf);
     result::MaybeInt sigaction(amd64::TrapFrame& tf);
     result::MaybeInt sigprocmask(amd64::TrapFrame& tf);

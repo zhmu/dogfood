@@ -58,6 +58,7 @@
  * - Nested signals
  * - Masking
  */
+
 namespace signal {
     namespace
     {
@@ -70,15 +71,24 @@ namespace signal {
         }
 
         template<typename T>
-        std::optional<int> ExtractAndResetPendingSignal(T& pending)
+        std::optional<int> ExtractPendingSignalBit(T& pending)
         {
             const auto value = pending.to_ullong();
             if (!value) return {};
 
             const auto bits = std::numeric_limits<decltype(value)>::digits;
             const auto bit = (bits - 1) - std::countl_zero(value);
-            pending.reset(bit);
-            return bit + 1;
+            return bit;
+        }
+
+        template<typename T>
+        std::optional<int> ExtractAndResetPendingSignal(T& pending)
+        {
+            const auto bit = ExtractPendingSignalBit(pending);
+            if (!bit) return {};
+
+            pending.reset(*bit);
+            return *bit + 1;
         }
 
         enum class DefaultAction {
@@ -164,6 +174,11 @@ namespace signal {
         // Syscall return will handle the signal, via deliver_signal()
         // TODO should we also handle it in interrupts?
         return true;
+    }
+
+    bool HasPending(process::Process& proc)
+    {
+        return ExtractPendingSignalBit(proc.signal.pending).has_value();
     }
 
     result::MaybeInt kill(amd64::TrapFrame& tf)
@@ -260,15 +275,17 @@ namespace signal {
             const auto pending_signal = ExtractAndResetPendingSignal(proc.signal.pending);
             if (!pending_signal) break;
             int signo = *pending_signal;
-            Debug("handling signal ", signo, "\n");
+            Debug("DeliverSignal(", proc.pid, "): delivering pending signal ", signo, "\n");
 
             if (proc.ptrace.traced && signo != SIGKILL) {
                 // Ask the debugger what is to be done with the signal
+                Debug("DeliverSignal(", proc.pid, ", ", signo, "): ptrace'd, relaying to parent ", proc.parent->pid, "\n");
                 proc.ptrace.signal = signo;
                 proc.state = process::State::Stopped;
                 signal::Send(*proc.parent, SIGCHLD);
                 process::Yield();
                 signo = std::exchange(proc.ptrace.signal, 0);
+                Debug("DeliverSignal(", proc.pid, "): ptrace'd, back from yield, signo is now ", signo, "\n");
                 if (!signo) continue;
 
                 if (signo == SIGSTOP) continue; // ignore SIGSTOP
@@ -277,10 +294,8 @@ namespace signal {
             const auto index = SignalNumberToIndex(signo);
             assert(index);
             const auto action = proc.signal.action[*index];
-            Debug(">> delivering signal ", signo, " to pid ", proc.pid, " -> action flags ", action.flags, " mask ", action.mask, " handler ", action.handler, "\n");
-
+            Debug("DeliverSignal(", proc.pid, ", ", signo, "): action flags ", action.flags, " mask ", action.mask, " handler ", action.handler, "\n");
             if (signo != SIGKILL && action.handler == SIG_IGN) {
-                Debug(" ignored, SIG_IGN\n");
                 continue;
             }
 
@@ -302,9 +317,6 @@ namespace signal {
                 }
             } else {
                 newTF = tf;
-                Debug("INVOKE previous tf ", &tf, " rsp ", print::Hex{tf.rsp}, " rip ", print::Hex{tf.rip}, "\n");
-                Debug("INVOKE handler ", action.handler, "\n");
-                Debug("rsp ", print::Hex{newTF.rsp}, "\n");
 
                 // Create siginfo_t and return address on the userland stack
                 // TODO this could fault
