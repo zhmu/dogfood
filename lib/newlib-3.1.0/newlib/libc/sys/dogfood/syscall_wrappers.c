@@ -233,6 +233,7 @@ SYSCALL2(sigwait, int, const sigset_t*, int*);
 SYSCALL1(pipe, int, int*);
 SYSCALL3(mknod, int, const char*, mode_t, dev_t);
 SYSCALL1(fsync, int, int)
+SYSCALL5(select, int, int, fd_set*, fd_set*, fd_set*, struct timeval*)
 
 int killpg(pid_t pgrp, int sig)
 {
@@ -328,18 +329,6 @@ struct group* getgrent(void) { return NULL; }
 void setgrent(void) {}
 
 void endgrent(void) {}
-
-int select(int nfds, fd_set* readfds, fd_set* writefds, fd_set* exceptfds, struct timeval* timeout)
-{
-    errno = ENOSYS;
-    return -1;
-}
-
-int pselect(int nfds, fd_set* readfds, fd_set* writefds, fd_set* exceptfds, const struct timespec* timeout, const sigset_t* set)
-{
-    errno = ENOSYS;
-    return -1;
-}
 
 int getrlimit(int resource, struct rlimit* rlim)
 {
