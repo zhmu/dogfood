@@ -231,6 +231,11 @@ namespace process
 
         vm::FreeMappings(current->vmspace);
 
+        // Wake up our parent
+        Debug("Exit: pid ", current->pid, " sending signal to ", current->parent->pid, "\n");
+        // TODO handle SA_NOCLDSTOP here
+        signal::Send(*current->parent, SIGCHLD);
+
         auto state = interrupts::SaveAndDisable();
         current->state = State::Zombie;
         for (auto& proc : process) {
