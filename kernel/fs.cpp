@@ -26,7 +26,7 @@ namespace fs
 
         result::MaybeInt FollowSymLink(InodeRef& parent, InodeRef& inode, int& depth);
 
-        bool IsolatePathComponent(const char*& path, std::array<char, MaxDirectoryEntryNameLength>& component)
+        result::Maybe<bool> IsolatePathComponent(const char*& path, std::array<char, MaxDirectoryEntryNameLength>& component)
         {
             while (*path == '/')
                 ++path;
@@ -34,10 +34,10 @@ namespace fs
                 return false;
 
             auto componentBegin = path;
-            while (*path != '/' && *path != '\0')
-                ++path;
-            const auto len = path - componentBegin;
-            assert(len + 1 < component.size());
+            size_t len = 0;
+            while (*path != '/' && *path != '\0' && len < component.size())
+                ++path, ++len;
+            assert(len < component.size());
             memcpy(component.data(), componentBegin, len);
             component[len] = '\0';
             return true;
@@ -81,7 +81,10 @@ namespace fs
         {
             assert(current_inode);
             LookupResult result;
-            while (IsolatePathComponent(path, result.component)) {
+            while(true) {
+                const auto isolate_result = IsolatePathComponent(path, result.component);
+                if (!isolate_result) return result::Error(isolate_result.error());
+                if (!*isolate_result) break;
                 if (const auto r = FollowSymLink(result.parent, current_inode, depth); !r) {
                     return result::Error(r.error());
                 }
